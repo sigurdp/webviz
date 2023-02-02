@@ -1,7 +1,7 @@
-import { workbench } from "@/core";
+import { ModuleRegistry } from "@/core/";
 import { Button } from "@/lib/components/Button";
 
-const module = workbench.registerModule("MyModule");
+const module = ModuleRegistry.registerModule("MyModule");
 
 module.view = (props) => {
     const currentField =

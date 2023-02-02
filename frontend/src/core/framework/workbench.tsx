@@ -1,5 +1,7 @@
-import { Module, ModuleInstance } from "./module";
+import { ModuleInstance } from "./module";
 import { StateStore } from "./state-store";
+import { ModuleRegistry } from "./ModuleRegistry";
+import { WorkbenchServices } from "./WorkbenchServices";
 
 let workbenchInstance: Workbench | undefined;
 
@@ -12,23 +14,24 @@ export enum WorkbenchEvent {
 
 export type WorkbenchContext = {
     useWorkbenchStateValue: <T>(key: string) => T;
+    workbenchServices: WorkbenchServices;
 };
 
 class Workbench {
-    private registeredModules: Module[];
     private moduleInstances: ModuleInstance[];
     private _activeModuleId: string;
     private _importedModules: string[];
     private layout: string[];
     private stateStore: StateStore;
+    private _workbenchServices: WorkbenchServices;
 
     constructor() {
-        this.registeredModules = [];
         this.moduleInstances = [];
         this._importedModules = [];
         this._activeModuleId = "";
         this.layout = [];
         this.stateStore = new StateStore();
+        this._workbenchServices = new WorkbenchServices();
 
         if (workbenchInstance) {
             throw new Error("Workbench already exists");
@@ -39,6 +42,10 @@ class Workbench {
 
     public getStateStore(): StateStore {
         return this.stateStore;
+    }
+
+    public getWorkbenchServices(): WorkbenchServices {
+        return this._workbenchServices;
     }
 
     public get activeModuleId(): string {
@@ -60,12 +67,6 @@ class Workbench {
 
     public getModuleInstances(): ModuleInstance[] {
         return this.moduleInstances;
-    }
-
-    public registerModule(name: string): Module {
-        const module = new Module(name);
-        this.registeredModules.push(module);
-        return module;
     }
 
     public makeLayout(layout: string[]): void {
@@ -121,9 +122,7 @@ class Workbench {
     }
 
     private addModuleInstance(moduleName: string): void {
-        const module = this.registeredModules.find(
-            (m) => m.name === moduleName
-        );
+        const module = ModuleRegistry.getModule(moduleName);
         if (!module) {
             throw new Error(`Module ${moduleName} not found`);
         }
@@ -137,10 +136,7 @@ class Workbench {
     }
 
     private replaceLoadingModuleInstances(moduleName: string): void {
-        const module = this.registeredModules.find(
-            (m) => m.name === moduleName
-        );
-
+        const module = ModuleRegistry.getModule(moduleName);
         if (!module) {
             throw new Error(`Module ${moduleName} not found`);
         }
@@ -156,5 +152,6 @@ class Workbench {
     }
 }
 
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!
 const workbench = new Workbench();
 export { workbench };

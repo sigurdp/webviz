@@ -7,6 +7,7 @@ import { useWorkbenchModuleInstances } from "@/core/hooks/useWorkbenchModules";
 
 const workbenchContext: WorkbenchContext = {
     useWorkbenchStateValue: workbench.getStateStore().useStateValue(),
+    workbenchServices: workbench.getWorkbenchServices()
 };
 
 export const Settings: React.FC = () => {

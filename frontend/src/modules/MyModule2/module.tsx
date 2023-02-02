@@ -1,7 +1,7 @@
-import { workbench } from "@/core";
+import { ModuleRegistry } from "@/core/";
 import { Input } from "@/lib/components/Input";
 
-const module = workbench.registerModule("MyModule2");
+const module = ModuleRegistry.registerModule("MyModule2");
 
 module.view = (props) => {
     const text = props.moduleContext.useModuleStateValue<string>(

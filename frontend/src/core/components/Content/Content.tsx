@@ -5,10 +5,11 @@ import { WorkbenchContext, workbench } from "@/core/framework/workbench";
 import { useWorkbenchActiveModuleId } from "@/core/hooks/useWorkbenchActiveModuleId";
 import { useWorkbenchModuleInstances } from "@/core/hooks/useWorkbenchModules";
 
-workbench.makeLayout(["MyModule", "MyModule2", "MyModule"]);
+workbench.makeLayout(["MyModule", "MyModule2", "SigModuleA", "SigModuleB"]);
 
 const workbenchContext: WorkbenchContext = {
     useWorkbenchStateValue: workbench.getStateStore().useStateValue(),
+    workbenchServices: workbench.getWorkbenchServices()
 };
 
 export const Content: React.FC = () => {
