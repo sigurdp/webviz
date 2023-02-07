@@ -12,7 +12,10 @@ function App() {
     const workbench = new Workbench();
 
     React.useEffect(() => {
-        workbench.makeLayout(["MyModule", "MyModule2", "MyModule"]);
+        //workbench.makeLayout(["MyModule", "MyModule2", "MyModule"]);
+        //workbench.makeLayout(["MyModule", "MyModule2", "MyModule", "SigModuleA", "SigModuleB"]);
+        workbench.makeLayout(["SigExpModule"]);
+        //workbench.makeLayout(["SigYrModule"]);
     }, []);
 
     return (
