@@ -3,6 +3,7 @@ import Plot from "react-plotly.js";
 
 import { ModuleFCProps } from "@framework/Module";
 import { useSubscribedValue } from "@framework/WorkbenchServices";
+import { useElementSize } from "@lib/hooks/useElementSize";
 
 import Plotly from "plotly.js";
 import { PlotData } from "plotly.js";
@@ -19,6 +20,8 @@ interface MyPlotData extends Partial<PlotData> {
 
 //-----------------------------------------------------------------------------------------------------------
 export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProps<SigPlotlyState>) {
+    const wrapperDivRef = React.useRef<HTMLDivElement>(null);
+    const wrapperDivSize = useElementSize(wrapperDivRef);
     const caseUuid = useSubscribedValue("navigator.caseId", workbenchServices);
     const ensembleName = moduleContext.useStoreValue("ensembleName");
     const vectorName = moduleContext.useStoreValue("vectorName");
@@ -120,7 +123,8 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
     }
 
     const layout: Partial<Plotly.Layout> = {
-        autosize: true,
+        width: wrapperDivSize.width, 
+        height: wrapperDivSize.height - 150,
         title: vectorName?.toUpperCase(),
         // shapes: [
         //     {
@@ -140,7 +144,7 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
     };
 
     return (
-        <>
+        <div className="w-full h-full" ref={wrapperDivRef}>
             <br />
             ensembleName: {ensembleName ?? "---"}
             <br />
@@ -153,11 +157,9 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
             <Plot
                 data={tracesDataArr}
                 layout={layout}
-                useResizeHandler={true}
-                style={{ width: "100%", height: "100%" }}
                 onHover={handleHover}
                 onUnhover={handleUnHover}
             />
-        </>
+        </div>
     );
 }

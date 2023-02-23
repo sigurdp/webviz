@@ -9,8 +9,12 @@ import { CustomQueryClientProvider } from "@framework/providers/QueryClientProvi
 
 import "./modules/registerAllModules.ts";
 
-const layout: LayoutElement[] = [];
-//["SigPlotlyModule", "SigPlotlyModule"]
+//const layout: LayoutElement[] = [];
+const layout: LayoutElement[] = [{ moduleName: "SigPlotlyModule", relX: 0, relY: 0, relHeight: 1, relWidth: 1 }];
+// const layout: LayoutElement[] = [
+//     { moduleName: "SigPlotlyModule", relX: 0, relY: 0, relHeight: 0.5, relWidth: 1 },
+//     { moduleName: "SigPlotlyModule", relX: 0, relY: 0.5, relHeight: 0.5, relWidth: 1 },
+// ];
 
 function App() {
     const workbench = new Workbench();
