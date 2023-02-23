@@ -124,7 +124,7 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
 
     const layout: Partial<Plotly.Layout> = {
         width: wrapperDivSize.width, 
-        height: wrapperDivSize.height - 150,
+        height: wrapperDivSize.height,
         title: vectorName?.toUpperCase(),
         // shapes: [
         //     {
@@ -144,8 +144,8 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
     };
 
     return (
-        <div className="w-full h-full" ref={wrapperDivRef}>
-            <br />
+        <div className="w-full h-full flex flex-col">
+            <div>
             ensembleName: {ensembleName ?? "---"}
             <br />
             vectorName: {vectorName ?? "---"}
@@ -154,12 +154,15 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
             vector status: {vectorQuery.status}
             <br />
             statistics status: {statisticsQuery.status}
+            </div>
+            <div className="flex-grow h-0" ref={wrapperDivRef}>
             <Plot
                 data={tracesDataArr}
                 layout={layout}
                 onHover={handleHover}
                 onUnhover={handleUnHover}
             />
+            </div>
         </div>
     );
 }
