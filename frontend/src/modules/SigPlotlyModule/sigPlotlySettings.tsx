@@ -1,7 +1,7 @@
 import React from "react";
 import { UseQueryResult, useQuery } from "react-query";
 
-import { Frequency, VectorDescription } from "@api";
+import { Frequency, VectorDescription, Ensemble } from "@api";
 import { apiService } from "@framework/ApiService";
 import { ModuleFCProps } from "@framework/Module";
 import { useSubscribedValue } from "@framework/WorkbenchServices";
@@ -43,12 +43,32 @@ export function SigPlotlySettings({ moduleContext, workbenchServices }: ModuleFC
             if (vectorArr.length > 0) {
                 setVectorName(vectorArr[vectorArr.length - 1].name);
             }
+            else {
+                setVectorName(null);
+            }
         },
         select: function capVectorArrayTo50Entries(vectorArr) {
             console.log("capVectorArrayTo50Entries()");
             return vectorArr.slice(0, 50);
         },
     });
+
+    function makeEnsemblesListItems(ensemblesQuery: UseQueryResult<Ensemble[]>): ListBoxItem[] {
+        const itemArr: ListBoxItem[] = [];
+        if (ensemblesQuery.isSuccess && ensemblesQuery.data.length > 0) {
+            for (const ens of ensemblesQuery.data) {
+                itemArr.push({ value: ens.name, label: ens.name });
+            }
+        } else {
+            itemArr.push({ value: "", label: `${ensemblesQuery.status.toString()}...`, disabled: true });
+        }
+        return itemArr;
+    }
+
+    function handleEnsembleSelectionChange(ensembleName: string) {
+        console.log("handleVectorSelectionChange()");
+        setEnsembleName(ensembleName);
+    }
 
     function makeVectorListItems(vectorsQuery: UseQueryResult<VectorDescription[]>): ListBoxItem[] {
         const itemArr: ListBoxItem[] = [];
@@ -102,6 +122,14 @@ export function SigPlotlySettings({ moduleContext, workbenchServices }: ModuleFC
 
     return (
         <>
+            <label>Ensemble:</label>
+            <ListBox
+                items={makeEnsemblesListItems(ensemblesQuery)}
+                selectedItem={ensembleName ?? ""}
+                onSelect={handleEnsembleSelectionChange}
+            />
+
+            <br />
             <label>Vector:</label>
             <ListBox
                 items={makeVectorListItems(vectorsQuery)}
