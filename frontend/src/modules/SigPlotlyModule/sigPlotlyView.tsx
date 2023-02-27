@@ -60,14 +60,17 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
     );
 
     const tracesDataArr: MyPlotData[] = [];
+    let unitString = "";
 
     if (vectorQuery.data && vectorQuery.data.length > 0) {
         let highlightedTrace: MyPlotData | null = null;
+        unitString = vectorQuery.data[0].unit;
         for (let i = 0; i < Math.min(vectorQuery.data.length, 10); i++) {
             const vec = vectorQuery.data[i];
             const isHighlighted = vec.realization === highlightRealization ? true : false;
             const curveColor = vec.realization === highlightRealization ? "red" : "green";
             const lineWidth = vec.realization === highlightRealization ? 3 : 1;
+            const lineShape = vec.is_rate ? "vh" : "linear";
             const trace: MyPlotData = {
                 x: vec.timestamps,
                 y: vec.values,
@@ -76,7 +79,7 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
                 legendrank: vec.realization,
                 type: "scatter",
                 mode: "lines",
-                line: { color: curveColor, width: lineWidth },
+                line: { color: curveColor, width: lineWidth, shape: lineShape},
             };
 
             if (isHighlighted) {
@@ -92,6 +95,7 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
     }
 
     if (showStatistics && statisticsQuery.data) {
+        const lineShape = statisticsQuery.data.is_rate ? "vh" : "linear";
         for (const statValueObj of statisticsQuery.data.value_objects) {
             const trace: MyPlotData = {
                 x: statisticsQuery.data.timestamps,
@@ -100,7 +104,7 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
                 legendrank: -1,
                 type: "scatter",
                 mode: "lines",
-                line: { color: "lightblue", width: 2, dash: "dot" },
+                line: { color: "lightblue", width: 2, dash: "dot", shape: lineShape},
             };
             tracesDataArr.push(trace);
         }
@@ -125,7 +129,7 @@ export function SigPlotlyView({ moduleContext, workbenchServices }: ModuleFCProp
     const layout: Partial<Plotly.Layout> = {
         width: wrapperDivSize.width, 
         height: wrapperDivSize.height,
-        title: vectorName?.toUpperCase(),
+        title: `${vectorName?.toUpperCase()} - ${unitString}`,
         // shapes: [
         //     {
         //         type: "line",
