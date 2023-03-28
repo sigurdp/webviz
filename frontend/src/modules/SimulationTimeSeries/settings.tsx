@@ -26,10 +26,17 @@ export function settings({ moduleContext, workbenchServices }: ModuleFCProps<Sta
     const [resampleFrequency, setResamplingFrequency] = moduleContext.useStoreState("resamplingFrequency");
     const [showStatistics, setShowStatistics] = moduleContext.useStoreState("showStatistics");
 
+    const [followSyncedSummaryVector, setFollowSyncedVectorName] = React.useState(false);
+    const syncedSummaryVector = useSubscribedValue("global.syncedSummaryVector", workbenchServices);
+
     const firstEnsemble = ensembles && ensembles.length > 0 ? ensembles[0] : null;
     const vectorsQuery = useVectorsQuery(firstEnsemble?.caseUuid, firstEnsemble?.ensembleName);
 
-    const renderVectorName = fixupVectorName(userSelectedVectorName, vectorsQuery.data);
+    let candidateVectorName = userSelectedVectorName;
+    if (followSyncedSummaryVector && syncedSummaryVector && syncedSummaryVector.vectorName) {
+        candidateVectorName = syncedSummaryVector.vectorName;
+    }
+    const renderVectorName = fixupVectorName(candidateVectorName, vectorsQuery.data);
 
     React.useEffect(
         function propagateVectorSpecToView() {
@@ -51,6 +58,7 @@ export function settings({ moduleContext, workbenchServices }: ModuleFCProps<Sta
         console.log("handleVectorSelectionChange()");
         const newName = selectedVecNames.length > 0 ? selectedVecNames[0] : "";
         setUserSelectedVectorName(newName);
+        workbenchServices.publishGlobalData("global.syncedSummaryVector", { vectorName: newName });
     }
 
     function handleFrequencySelectionChange(newFreqStr: string) {
@@ -73,6 +81,11 @@ export function settings({ moduleContext, workbenchServices }: ModuleFCProps<Sta
         const rangeArr = parseRealizationRangeString(event.target.value, 200);
         console.log(rangeArr);
         moduleContext.stateStore.setValue("realizationsToInclude", rangeArr.length > 0 ? rangeArr : null);
+    }
+
+    function handleFollowSyncedVectorCheckboxChange(_event: React.ChangeEvent<HTMLInputElement>, checked: boolean) {
+        console.log("handleFollowSyncedVectorNameCheckboxChange() " + checked);
+        setFollowSyncedVectorName(checked);
     }
 
     return (
@@ -103,6 +116,8 @@ export function settings({ moduleContext, workbenchServices }: ModuleFCProps<Sta
             <Label text="Realizations">
                 <Input onChange={handleRealizationRangeTextChanged} />
             </Label>
+            <Checkbox label="Follow synced vector" checked={followSyncedSummaryVector} onChange={handleFollowSyncedVectorCheckboxChange} />
+            Synced vec: {followSyncedSummaryVector ? syncedSummaryVector?.vectorName : "DISABLED"}
         </>
     );
 }

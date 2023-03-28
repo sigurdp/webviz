@@ -14,6 +14,8 @@ export type GlobalTopicDefinitions = {
     "global.infoMessage": string;
     "global.hoverRealization": { realization: number };
     "global.hoverTimestamp": { timestamp: number };
+
+    "global.syncedSummaryVector": { vectorName: string };
 };
 
 export type AllTopicDefinitions = NavigatorTopicDefinitions & GlobalTopicDefinitions;
