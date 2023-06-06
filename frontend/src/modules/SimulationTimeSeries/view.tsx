@@ -2,13 +2,16 @@ import React from "react";
 import Plot from "react-plotly.js";
 
 import { ModuleFCProps } from "@framework/Module";
+import { SelectItem } from "@framework/SelectionService";
 import { useSubscribedValue } from "@framework/WorkbenchServices";
 import { useElementSize } from "@lib/hooks/useElementSize";
+import { isoStringToTimestampUtcMs } from "@shared-utils/timeUtils";
 
-import { Layout, PlotData, PlotHoverEvent, PlotMouseEvent } from "plotly.js";
+import { ButtonClickEvent, Layout, PlotData, PlotHoverEvent, PlotMouseEvent } from "plotly.js";
 
 import { useStatisticalVectorDataQuery, useVectorDataQuery } from "./queryHooks";
 import { State } from "./state";
+import ContinuousLegendWrapper from "@webviz/subsurface-components/dist/components/ColorLegends/WebVizContinuousLegend";
 
 interface MyPlotData extends Partial<PlotData> {
     realizationNumber?: number | null;
@@ -58,6 +61,9 @@ export const view = ({ moduleContext, workbenchServices }: ModuleFCProps<State>)
     // const highlightedTrace
     const handleHover = (e: PlotHoverEvent) => {
         if (e.xvals.length > 0 && typeof e.xvals[0]) {
+            console.log("Value is: ", e.xvals[0]);
+            console.log("index is: ", e.points[0].pointIndex);
+            console.log("Indexed data is is: ", e.points[0].data.x[e.points[0].pointIndex]);
             workbenchServices.publishGlobalData("global.hoverTimestamp", { timestamp: e.xvals[0] as number });
         }
         const curveData = e.points[0].data as MyPlotData;
@@ -74,6 +80,32 @@ export const view = ({ moduleContext, workbenchServices }: ModuleFCProps<State>)
         workbenchServices.publishGlobalData("global.hoverRealization", { realization: -1 });
     }
 
+    const handleSelection = (e: Readonly<Plotly.PlotMouseEvent>) => {
+        console.log("handleSelection", e);
+
+        const selectedItems: SelectItem[] = [];
+
+        const curveData = e.points[0].data as MyPlotData;
+        if (typeof curveData.realizationNumber === "number" && vectorSpec) {
+            selectedItems.push({
+                itemType: "realization",
+                caseUuid: vectorSpec.caseUuid,
+                ensembleName: vectorSpec.ensembleName,
+                realization: curveData.realizationNumber,
+            });
+        }
+
+        const xValFromPlot = e.points[0].x;
+        if (typeof xValFromPlot === "string") {
+            const timestampMs = isoStringToTimestampUtcMs(xValFromPlot);
+            if (timestampMs > 0) {
+                selectedItems.push({ itemType: "timestamp", timestampUtcMs: timestampMs });
+            }
+        }
+
+        workbenchServices.getSelectionService().setSelection(selectedItems);
+    };
+
     const tracesDataArr: MyPlotData[] = [];
     let unitString = "";
 
@@ -86,6 +118,12 @@ export const view = ({ moduleContext, workbenchServices }: ModuleFCProps<State>)
             const curveColor = vec.realization === subscribedPlotlyRealization?.realization ? "red" : "green";
             const lineWidth = vec.realization === subscribedPlotlyRealization?.realization ? 3 : 1;
             const lineShape = vec.is_rate ? "vh" : "linear";
+
+            // const tsarr = new Float32Array(vec.timestamps.length);
+            // for (let i = 0; i < vec.timestamps.length; i++) {
+            //     tsarr[i] = isoStringToTimestampUtcMs(vec.timestamps[i]);
+            // }
+
             const trace: MyPlotData = {
                 x: vec.timestamps,
                 y: vec.values,
@@ -120,6 +158,7 @@ export const view = ({ moduleContext, workbenchServices }: ModuleFCProps<State>)
                 type: "scatter",
                 mode: "lines",
                 line: { color: "lightblue", width: 2, dash: "dot", shape: lineShape },
+
             };
             tracesDataArr.push(trace);
         }
@@ -135,6 +174,7 @@ export const view = ({ moduleContext, workbenchServices }: ModuleFCProps<State>)
         width: wrapperDivSize.width,
         height: wrapperDivSize.height,
         title: title,
+        xaxis: { type: 'date' }
     };
 
     if (subscribedPlotlyTimeStamp) {
@@ -163,6 +203,7 @@ export const view = ({ moduleContext, workbenchServices }: ModuleFCProps<State>)
                 config={{ scrollZoom: true }}
                 onHover={handleHover}
                 onUnhover={handleUnHover}
+                onClick={handleSelection}
             />
             <div className="absolute bottom-5 right-5 italic text-pink-400">{moduleContext.getInstanceIdString()}</div>
         </div>

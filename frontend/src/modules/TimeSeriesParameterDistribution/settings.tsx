@@ -13,6 +13,8 @@ import { Label } from "@lib/components/Label";
 import { Select, SelectOption } from "@lib/components/Select";
 import { Ensemble } from "@shared-types/ensemble";
 
+import { isoStringToTimestampUtcMs, timestampUtcMsToIsoString, timestampUtcMsToIsoStringNoTz } from "@shared-utils/timeUtils";
+
 import { useGetParameterNamesQuery, useTimeStepsQuery, useVectorsQuery } from "./queryHooks";
 import { State } from "./state";
 
@@ -51,6 +53,27 @@ export function settings({ moduleContext, workbenchServices }: ModuleFCProps<Sta
     if (computedVectorName && computedVectorName !== selectedVectorName) {
         setSelectedVectorName(computedVectorName);
     }
+
+    React.useEffect(
+        function subscribeToSelectionService() {
+            const selService = workbenchServices.getSelectionService();
+            function handleWorkbenchSelectionChanged() {
+                console.log("handleWorkbenchSelectionChanged()");
+                const selectedItem = selService.getItemOfType("timestamp");
+                if (selectedItem?.itemType === "timestamp" && timeStepsQuery.data?.length) {
+                    console.log("Looking for time step matching: ", selectedItem.timestampUtcMs);
+                    const matchingTimeStr = timeStepsQuery.data.find((aTimeStr) => selectedItem.timestampUtcMs === isoStringToTimestampUtcMs(aTimeStr));
+                    if (matchingTimeStr) {
+                        console.log("Setting time step to: ", matchingTimeStr, " from selection service");
+                        setTimeStep(matchingTimeStr);
+                    }
+                }
+            }
+            const unsubscribeFunc = selService.subscribeToSelectionChanged(handleWorkbenchSelectionChanged);
+            return unsubscribeFunc;
+        },
+        [workbenchServices, timeStepsQuery.data]
+    );
 
     React.useEffect(
         function propagateVectorSpecToView() {

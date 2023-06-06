@@ -5,6 +5,7 @@ import { Ensemble } from "@shared-types/ensemble";
 import { isEqual } from "lodash";
 
 import { Workbench } from "./Workbench";
+import { SelectionService } from "./SelectionService";
 
 export type NavigatorTopicDefinitions = {
     "navigator.ensembles": Ensemble[];
@@ -35,11 +36,13 @@ export class WorkbenchServices {
     protected _workbench: Workbench;
     protected _subscribersMap: Map<string, Set<CallbackFunction<any>>>;
     protected _topicValueCache: Map<string, any>;
+    private _selectionService: SelectionService;
 
     protected constructor(workbench: Workbench) {
         this._workbench = workbench;
         this._subscribersMap = new Map();
         this._topicValueCache = new Map();
+        this._selectionService = new SelectionService(this);
     }
 
     subscribe<T extends keyof AllTopicDefinitions>(topic: T, callbackFn: CallbackFunction<T>) {
@@ -81,6 +84,10 @@ export class WorkbenchServices {
         for (const callbackFn of subscribersSet) {
             callbackFn(value);
         }
+    }
+
+    getSelectionService() {
+        return this._selectionService;
     }
 }
 
