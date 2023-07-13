@@ -3,6 +3,9 @@ import { VectorRealizationData_api, VectorStatisticData_api } from "@api";
 import { apiService } from "@framework/ApiService";
 import { UseQueryResult, useQuery } from "@tanstack/react-query";
 
+import { timestampUtcMsToIsoString, isoStringToTimestampUtcMs, isoStringArrayToTimestampUtcMs } from "@framework/utils/TimestampUtils";
+
+
 const STALE_TIME = 60 * 1000;
 const CACHE_TIME = 60 * 1000;
 
@@ -19,13 +22,29 @@ export function useVectorsQuery(
     });
 }
 
+interface VectorRealizationDataSig extends VectorRealizationData_api {
+    timestampMsArr: Float64Array;
+    valuesArr: Float32Array;
+}
+
+function transformTimeStampsAndValues(data: VectorRealizationData_api[]): VectorRealizationDataSig[] {
+    console.log("transformTimeStamps");
+    return data.map((vec) => {
+        return {
+            ...vec,
+            timestampMsArr: isoStringArrayToTimestampUtcMs(vec.timestamps),
+            valuesArr: new Float32Array(vec.values),
+        };
+    });
+}
+
 export function useVectorDataQuery(
     caseUuid: string | undefined,
     ensembleName: string | undefined,
     vectorName: string | undefined,
     resampleFrequency: Frequency_api | null,
     realizationsToInclude: number[] | null
-): UseQueryResult<Array<VectorRealizationData_api>> {
+): UseQueryResult<Array<VectorRealizationDataSig>> {
     const allOrNonEmptyRealArr = realizationsToInclude === null || realizationsToInclude.length > 0 ? true : false;
     return useQuery({
         queryKey: [
@@ -44,6 +63,7 @@ export function useVectorDataQuery(
                 resampleFrequency ?? undefined,
                 realizationsToInclude ?? undefined
             ),
+        select: transformTimeStampsAndValues,
         staleTime: STALE_TIME,
         cacheTime: CACHE_TIME,
         enabled: caseUuid && ensembleName && vectorName && allOrNonEmptyRealArr ? true : false,
@@ -79,6 +99,9 @@ export function useStatisticalVectorDataQuery(
             ),
         staleTime: STALE_TIME,
         cacheTime: CACHE_TIME,
-        enabled: allowEnable && caseUuid && ensembleName && vectorName && resampleFrequency && allOrNonEmptyRealArr ? true : false,
+        enabled:
+            allowEnable && caseUuid && ensembleName && vectorName && resampleFrequency && allOrNonEmptyRealArr
+                ? true
+                : false,
     });
 }

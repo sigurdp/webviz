@@ -35,6 +35,7 @@ export class WorkbenchServices {
     protected _workbench: Workbench;
     protected _subscribersMap: Map<string, Set<CallbackFunction<any>>>;
     protected _topicValueCache: Map<string, any>;
+    private _sigTimeoutID: any = null
 
     protected constructor(workbench: Workbench) {
         this._workbench = workbench;
@@ -73,6 +74,24 @@ export class WorkbenchServices {
         }
 
         this._topicValueCache.set(topic, value);
+
+        if (topic === "global.hoverRealization") {
+            if (this._sigTimeoutID) {
+                clearTimeout(this._sigTimeoutID);
+            }
+
+            this._sigTimeoutID = setTimeout(() => {
+                const subscribersSet = this._subscribersMap.get(topic);
+                if (!subscribersSet) {
+                    return;
+                }
+                for (const callbackFn of subscribersSet) {
+                    callbackFn(value);
+                }
+            }, 100);
+
+            return;
+        }
 
         const subscribersSet = this._subscribersMap.get(topic);
         if (!subscribersSet) {
