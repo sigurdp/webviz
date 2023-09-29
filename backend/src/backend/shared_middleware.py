@@ -12,7 +12,7 @@ def add_shared_middlewares(app: FastAPI) -> None:
 
     # Add out custom middleware to enforce that user is logged in
     # Also redirects to /login endpoint for some select paths
-    unprotected_paths = ["/logged_in_user", "/alive", "/openapi.json"]
+    unprotected_paths = ["/logged_in_user", "/alive", "/openapi.json", "/siga"]
     paths_redirected_to_login = ["/", "/alive_protected"]
     app.add_middleware(
         EnforceLoggedInMiddleware,

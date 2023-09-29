@@ -12,6 +12,14 @@ from src.backend.auth.auth_helper import AuthHelper, AuthenticatedUser
 from src.backend.primary.user_session_proxy import proxy_to_user_session
 from src.services.graph_access.graph_access import GraphApiAccess
 
+
+
+from fastapi import BackgroundTasks
+from src.backend.caching import redis_client
+from src.backend.caching import aio_cache
+
+
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -89,3 +97,31 @@ async def user_session_container(
 ) -> StreamingResponse:
     """Get information about user session container (note that one is started if not already running)."""
     return await proxy_to_user_session(request, authenticated_user)
+
+
+
+async def writeToRedisTask(key:str, value:str):
+    res = await redis_client.set(key, value)
+    print(f"background task write result {value=} {res=}")
+   
+
+
+@router.get("/siga")
+async def siga(value:str, background_tasks: BackgroundTasks) -> str:
+    print(f"siga route  {value=}")
+    
+    print(f"Ping successful: {await redis_client.ping()}")
+
+    #res = await redis_client.set("sigkey1", value)
+    res = await redis_client.set("sigkey1", value)
+    print(f"{res=}")
+
+    await aio_cache.set("sigkey1", value)
+
+    #await redisClient.close()
+
+    background_tasks.add_task(writeToRedisTask, "sigkey2", str(datetime.datetime.now()))
+
+    return f"siga: {datetime.datetime.now()}"
+
+

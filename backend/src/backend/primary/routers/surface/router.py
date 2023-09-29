@@ -1,5 +1,8 @@
 import logging
 from typing import List, Union, Optional
+import io
+import xtgeo
+import numpy as np
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -17,6 +20,9 @@ from src.backend.auth.auth_helper import AuthHelper
 
 from . import converters
 from . import schemas
+
+from src.backend.caching import CACHE
+
 
 
 LOGGER = logging.getLogger(__name__)
@@ -51,7 +57,7 @@ def get_surface_directory(
 
 
 @router.get("/realization_surface_data/")
-def get_realization_surface_data(
+async def get_realization_surface_data(
     authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
     case_uuid: str = Query(description="Sumo case uuid"),
     ensemble_name: str = Query(description="Ensemble name"),
@@ -62,17 +68,35 @@ def get_realization_surface_data(
 ) -> schemas.SurfaceData:
     timer = PerfTimer()
 
-    access = SurfaceAccess(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    xtgeo_surf = access.get_realization_surface_data(
-        real_num=realization_num, name=name, attribute=attribute, time_or_interval_str=time_or_interval
-    )
+    cache_key = f"surf_data_response_{case_uuid}_{ensemble_name}_{realization_num}_{name}_{attribute}_{time_or_interval}"
+
+    # cached_surf_data_response = await CACHE.get_Any(cache_key)
+    # if cached_surf_data_response:
+    #     LOGGER.debug(f"Loaded surface from cache, total time: {timer.elapsed_ms()}ms")
+    #     return cached_surf_data_response
+
+    cached_xtgeo_surf = await CACHE.get_RegularSurface(cache_key)
+    xtgeo_surf = cached_xtgeo_surf
+
+    if not xtgeo_surf:
+        access = SurfaceAccess(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
+        xtgeo_surf = access.get_realization_surface_data(
+            real_num=realization_num, name=name, attribute=attribute, time_or_interval_str=time_or_interval
+        )
 
     if not xtgeo_surf:
         raise HTTPException(status_code=404, detail="Surface not found")
 
+    xtgeo_surf.values = xtgeo_surf.values.astype(np.float32)
+
     surf_data_response = converters.to_api_surface_data(xtgeo_surf)
 
-    LOGGER.debug(f"Loaded static surface and created image, total time: {timer.elapsed_ms()}ms")
+    #await CACHE.set_Any(cache_key, surf_data_response)
+
+    if not cached_xtgeo_surf:
+        await CACHE.set_RegularSurface(cache_key, xtgeo_surf)
+
+    LOGGER.debug(f"Loaded surface, total time: {timer.elapsed_ms()}ms")
 
     return surf_data_response
 
