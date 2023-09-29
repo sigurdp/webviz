@@ -6,6 +6,7 @@ import httpx
 import starsessions
 from starlette.responses import StreamingResponse
 from fastapi import APIRouter, HTTPException, Request, status, Depends, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from src.backend.auth.auth_helper import AuthHelper, AuthenticatedUser
@@ -105,10 +106,9 @@ async def writeToRedisTask(key:str, value:str):
     print(f"background task write result {value=} {res=}")
    
 
-
-@router.get("/siga")
-async def siga(value:str, background_tasks: BackgroundTasks) -> str:
-    print(f"siga route  {value=}")
+@router.get("/sig_test")
+async def sig_test(value:str, background_tasks: BackgroundTasks) -> str:
+    print(f"sig_test route  {value=}")
     
     print(f"Ping successful: {await redis_client.ping()}")
 
@@ -122,6 +122,37 @@ async def siga(value:str, background_tasks: BackgroundTasks) -> str:
 
     background_tasks.add_task(writeToRedisTask, "sigkey2", str(datetime.datetime.now()))
 
-    return f"siga: {datetime.datetime.now()}"
+    return f"sig_test: {datetime.datetime.now()}"
+
+
+@router.get("/sig_list")
+async def sig_clear(namespace:str | None = None) -> str:
+    print(f"sig_list route  {namespace=}")
+
+    pattern = "*"
+    if namespace:
+        pattern = f"{namespace}:*"
+
+    
+    keys = await redis_client.keys(pattern)
+    print(f"{keys=}")
+
+    html = "<ul>"
+    for key in keys:
+        html += f"<li>{key}</li>"
+    html += "</ul>"
+
+    return HTMLResponse(html)
+
+
+
+@router.get("/sig_clear")
+async def sig_clear(namespace:str) -> str:
+    print(f"sig_clear route  {namespace=}")
+
+    await aio_cache.clear(namespace=namespace)
+
+    return f"sig_clear: {namespace=} {datetime.datetime.now()=}"
+
 
 

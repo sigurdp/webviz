@@ -102,8 +102,8 @@ class Cache:
 
 redis_client = redis.Redis.from_url(config.REDIS_URL)
 
-aio_cache = RedisCache(endpoint="redis", port=6379, namespace="comprCache3", serializer=CompressedPickleSerializer())
-#aio_cache = RedisCache(endpoint="redis", port=6379, namespace="uncomprCache", serializer=PickleSerializer())
+#aio_cache = RedisCache(endpoint="redis", port=6379, namespace="comprCache3", serializer=CompressedPickleSerializer())
+aio_cache = RedisCache(endpoint="redis", port=6379, namespace="uncomprCache", serializer=PickleSerializer())
 
 CACHE = Cache(aio_cache)
 
