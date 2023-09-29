@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 from src.services.smda_access.types import StratigraphicSurface
 from src.services.sumo_access.surface_types import SurfaceMeta as SumoSurfaceMeta
-from src.services.utils.b64 import b64_encode_float_array_as_float32
+from src.services.utils.b64 import b64_encode_float_array_as_float32, b64_encode_float_array_using_scale_offset
 from src.services.utils.surface_to_float32 import surface_to_float32_numpy_array
 
 from . import schemas
@@ -31,7 +31,8 @@ def to_api_surface_data(xtgeo_surf: xtgeo.RegularSurface) -> schemas.SurfaceData
     """
 
     float32_np_arr: NDArray[np.float32] = surface_to_float32_numpy_array(xtgeo_surf)
-    values_b64arr = b64_encode_float_array_as_float32(float32_np_arr)
+    #values_b64arr = b64_encode_float_array_as_float32(float32_np_arr)
+    values_b64arr = b64_encode_float_array_using_scale_offset(float32_np_arr)
 
     return schemas.SurfaceData(
         x_ori=xtgeo_surf.xori,

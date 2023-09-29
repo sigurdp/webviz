@@ -37,6 +37,22 @@ export function b64DecodeFloatArray(base64Arr: B64FloatArray_api):  Float32Array
             return new Float32Array(arrayBuffer);
         case B64FloatArray_api.element_type.FLOAT64:
             return new Float64Array(arrayBuffer);
+        case B64FloatArray_api.element_type.FLOAT32_AS_UINT16:
+            const uintArr = new Uint16Array(arrayBuffer);
+            const offset = base64Arr.offset ?? 0.0;
+            const scale = base64Arr.intToFloatScale ?? 1.0;
+
+            function mapUintToFloat(uint_val: number): number {
+                if (uint_val === 65535) {
+                    return NaN;
+                }
+                else {
+                    return offset + uint_val*scale;
+                }
+            }
+
+            const floatArr = Float32Array.from(uintArr, mapUintToFloat);
+            return floatArr;
         default:
             throw new Error(`Unknown element_type: ${base64Arr.element_type}`);
     }
