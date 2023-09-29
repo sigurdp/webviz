@@ -22,6 +22,7 @@ from . import converters
 from . import schemas
 
 from src.backend.caching import CACHE
+from fastapi import BackgroundTasks
 
 
 
@@ -58,6 +59,7 @@ def get_surface_directory(
 
 @router.get("/realization_surface_data/")
 async def get_realization_surface_data(
+    background_tasks: BackgroundTasks,
     authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
     case_uuid: str = Query(description="Sumo case uuid"),
     ensemble_name: str = Query(description="Ensemble name"),
@@ -94,7 +96,8 @@ async def get_realization_surface_data(
     #await CACHE.set_Any(cache_key, surf_data_response)
 
     if not cached_xtgeo_surf:
-        await CACHE.set_RegularSurface(cache_key, xtgeo_surf)
+        background_tasks.add_task(CACHE.set_RegularSurface, cache_key, xtgeo_surf)
+        #await CACHE.set_RegularSurface(cache_key, xtgeo_surf)
 
     LOGGER.debug(f"Loaded surface, total time: {timer.elapsed_ms()}ms")
 
