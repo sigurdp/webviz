@@ -21,7 +21,7 @@ from src.backend.auth.auth_helper import AuthHelper
 from . import converters
 from . import schemas
 
-from src.backend.caching import CACHE
+from src.backend.caching import get_cache
 from fastapi import BackgroundTasks
 
 
@@ -70,14 +70,16 @@ async def get_realization_surface_data(
 ) -> schemas.SurfaceData:
     timer = PerfTimer()
 
-    cache_key = f"surf_data_response_{case_uuid}_{ensemble_name}_{realization_num}_{name}_{attribute}_{time_or_interval}"
+    cache = get_cache(authenticated_user)
+    cache_key = f"surface:{case_uuid}_{ensemble_name}_{realization_num}_{name}_{attribute}_{time_or_interval}"
 
+    # cache_key = f"surf_data_response_{case_uuid}_{ensemble_name}_{realization_num}_{name}_{attribute}_{time_or_interval}"
     # cached_surf_data_response = await CACHE.get_Any(cache_key)
     # if cached_surf_data_response:
     #     LOGGER.debug(f"Loaded surface from cache, total time: {timer.elapsed_ms()}ms")
     #     return cached_surf_data_response
 
-    cached_xtgeo_surf = await CACHE.get_RegularSurface(cache_key)
+    cached_xtgeo_surf = await cache.get_RegularSurface(cache_key)
     xtgeo_surf = cached_xtgeo_surf
 
     if not xtgeo_surf:
@@ -96,7 +98,7 @@ async def get_realization_surface_data(
     #await CACHE.set_Any(cache_key, surf_data_response)
 
     if not cached_xtgeo_surf:
-        background_tasks.add_task(CACHE.set_RegularSurface, cache_key, xtgeo_surf)
+        background_tasks.add_task(cache.set_RegularSurface, cache_key, xtgeo_surf)
         #await CACHE.set_RegularSurface(cache_key, xtgeo_surf)
 
     LOGGER.debug(f"Loaded surface, total time: {timer.elapsed_ms()}ms")
