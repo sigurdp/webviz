@@ -49,59 +49,7 @@ class CompressedPickleSerializer(PickleSerializer):
         return self._coreSerializer.loads(decompressed)
 
 
-
-class Cache:
-    def __init__(self, aio_cache: BaseCache):
-        self._cache = aio_cache
-
-    async def set_Any(self, key: str, obj: Any) -> bool:
-        timer = PerfTimer()
-        res = await self._cache.set(key, obj)
-        LOGGER.debug(f"##### set_Any() took: {timer.elapsed_ms()}ms")
-        return res
-    
-    async def get_Any(self, key: str) -> Any:
-        timer = PerfTimer()
-        res = await self._cache.get(key)
-        LOGGER.debug(f"##### get_Any() data={'yes' if res is not None else 'no'} took: {timer.elapsed_ms()}ms")
-        return res
-    
-    async def set_RegularSurface(self, key: str, surf: xtgeo.RegularSurface)-> bool:
-        timer = PerfTimer()
-        byte_io = io.BytesIO()
-        surf.to_file(byte_io, fformat=XTGEO_FILE_FORMAT)
-        byte_io.seek(0)
-        the_bytes = byte_io.getvalue()
-        res = await self._cache.set(key, the_bytes)
-        LOGGER.debug(f"##### set_RegularSurface() ({(len(the_bytes)/1024):.2f}KB) took: {timer.elapsed_ms()}ms")
-        return res
-
-    async def get_RegularSurface(self, key: str) -> xtgeo.RegularSurface | None:
-        timer = PerfTimer()
-
-        cached_bytes = await self._cache.get(key)
-        #print(f"{type(cached_bytes)=}")
-        
-        if cached_bytes is None:
-            LOGGER.debug(f"##### get_RegularSurface() data=no took: {timer.elapsed_ms()}ms")
-            return None
-        
-        try:
-            surf = xtgeo.surface_from_file(io.BytesIO(cached_bytes), fformat=XTGEO_FILE_FORMAT)
-        except Exception as e:
-            LOGGER.debug(f"##### get_RegularSurface() data=convException took: {timer.elapsed_ms()}ms")
-            return None
-        
-        if surf is None:
-            LOGGER.debug(f"##### get_RegularSurface() data=convFailes took: {timer.elapsed_ms()}ms")
-            return None
-
-        LOGGER.debug(f"##### get_RegularSurface() data=yes ({(len(cached_bytes)/1024):.2f}KB) took: {timer.elapsed_ms()}ms")
-
-        return surf
-
-
-class Cache:
+class UserCache:
     def __init__(self, aio_cache: BaseCache, authenticated_user: AuthenticatedUser):
         self._cache = aio_cache
         self.authenticated_user_id = authenticated_user.get_user_id()
@@ -161,6 +109,6 @@ redis_client = redis.Redis.from_url(config.REDIS_URL)
 #aio_cache = RedisCache(endpoint="redis", port=6379, namespace="comprCache3", serializer=CompressedPickleSerializer())
 aio_cache = RedisCache(endpoint="redis", port=6379, namespace="uncomprCache", serializer=PickleSerializer())
 
-def get_cache(authenticated_user: AuthenticatedUser) -> Cache:
-    return Cache(aio_cache, authenticated_user)
+def get_user_cache(authenticated_user: AuthenticatedUser) -> UserCache:
+    return UserCache(aio_cache, authenticated_user)
 
