@@ -101,7 +101,7 @@ async def get_realization_surface_data(
         background_tasks.add_task(cache.set_RegularSurface, cache_key, xtgeo_surf)
         # await CACHE.set_RegularSurface(cache_key, xtgeo_surf)
 
-    LOGGER.debug(f"Loaded surface, total time: {perf_metrics.get_elapsed_ms()}ms ({perf_metrics.get_as_string()})")
+    LOGGER.debug(f"Loaded realization surface in:: {perf_metrics.get_elapsed_ms()}ms ({perf_metrics.get_as_string()})")
 
     return surf_data_response
 
@@ -118,23 +118,30 @@ def get_statistical_surface_data(
 ) -> schemas.SurfaceData:
     timer = PerfTimer()
 
-    access = SurfaceAccess(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-
     service_stat_func_to_compute = StatisticFunction.from_string_value(statistic_function)
-    if service_stat_func_to_compute is not None:
-        xtgeo_surf = access.get_statistical_surface_data(
-            statistic_function=service_stat_func_to_compute,
-            name=name,
-            attribute=attribute,
-            time_or_interval_str=time_or_interval,
-        )
+    if service_stat_func_to_compute is None:
+        raise HTTPException(status_code=404, detail="Invalid statistic requested")
+
+    access = SurfaceAccess(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
+    xtgeo_surf = access.get_statistical_surface_data(
+        statistic_function=service_stat_func_to_compute,
+        name=name,
+        attribute=attribute,
+        time_or_interval_str=time_or_interval,
+    )
+    et_calc_ms = timer.lap_ms()
 
     if not xtgeo_surf:
         raise HTTPException(status_code=404, detail="Could not find or compute surface")
 
-    surf_data_response = converters.to_api_surface_data(xtgeo_surf)
+    surf_data_response: schemas.SurfaceData = converters.to_api_surface_data(xtgeo_surf)
+    et_convert_ms = timer.lap_ms()
 
-    LOGGER.debug(f"Calculated statistical dynamic surface and created image, total time: {timer.elapsed_ms()}ms")
+    LOGGER.debug(
+        f"Calculated statistical surface in: {timer.elapsed_ms()}ms ("
+        f"calc={et_calc_ms}ms, "
+        f"convert={et_convert_ms}ms)"
+    )
 
     return surf_data_response
 
@@ -176,10 +183,10 @@ def get_property_surface_resampled_to_static_surface(
     resampled_surface = converters.resample_property_surface_to_mesh_surface(xtgeo_surf_mesh, xtgeo_surf_property)
     perf_metrics.register_lap("resample")
 
-    surf_data_response = converters.to_api_surface_data(resampled_surface)
+    surf_data_response: schemas.SurfaceData = converters.to_api_surface_data(resampled_surface)
     perf_metrics.register_lap("conv")
 
-    LOGGER.debug(f"Loaded property surface, total time: {perf_metrics.get_elapsed_ms()}ms ({perf_metrics.get_as_string()})")
+    LOGGER.debug(f"Loaded property surface in: {perf_metrics.get_elapsed_ms()}ms ({perf_metrics.get_as_string()})")
 
     return surf_data_response
 
