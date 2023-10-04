@@ -31,6 +31,7 @@ logging.basicConfig(
 logging.getLogger("src.services.sumo_access").setLevel(level=logging.DEBUG)
 logging.getLogger("src.backend").setLevel(level=logging.DEBUG)
 logging.getLogger("src.backend.caching").setLevel(level=logging.DEBUG)
+logging.getLogger("src.backend.primary.routers.surface").setLevel(level=logging.DEBUG)
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -66,7 +67,6 @@ authHelper = AuthHelper()
 app.include_router(authHelper.router)
 app.include_router(general_router)
 
-
 # This middleware instance approximately measures execution time of the route handler itself
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total-exec-route")
 
@@ -74,7 +74,7 @@ add_shared_middlewares(app)
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
-# This middleware instance measures execution time of the endpoints, including the cost of all middleware
+# This middleware instance measures execution time of the endpoints, including the cost of other middleware
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total")
 
 

@@ -4,7 +4,7 @@ import logging
 from typing import Any
 import xtgeo
 import numpy as np
-from src.backend import config
+from src import config
 from src.services.utils.perf_timer import PerfTimer
 import redis.asyncio as redis
 from aiocache import RedisCache, BaseCache
@@ -28,11 +28,11 @@ class CompressedPickleSerializer(PickleSerializer):
     # store/retrieve values
     DEFAULT_ENCODING = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._coreSerializer = PickleSerializer()
 
-    def dumps(self, value):
+    def dumps(self, value: Any) -> bytes | None:
         ser_value_bytes = self._coreSerializer.dumps(value)
         if ser_value_bytes is None:
             return None
@@ -40,7 +40,7 @@ class CompressedPickleSerializer(PickleSerializer):
         compressed = zlib.compress(ser_value_bytes)
         return compressed
 
-    def loads(self, value):
+    def loads(self, value: Any) -> Any | None:
         try:
             decompressed = zlib.decompress(value)
         except Exception as e:

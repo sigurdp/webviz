@@ -101,7 +101,7 @@ async def user_session_container(
 
 
 
-async def writeToRedisTask(key:str, value:str):
+async def writeToRedisTask(key:str, value:str) -> None:
     res = await redis_client.set(key, value)
     print(f"background task write result {value=} {res=}")
    
@@ -126,7 +126,7 @@ async def sig_test(value:str, background_tasks: BackgroundTasks) -> str:
 
 
 @router.get("/sig_list")
-async def sig_clear(namespace:str | None = None) -> str:
+async def sig_list(namespace:str | None = None) -> HTMLResponse:
     print(f"sig_list route  {namespace=}")
 
     pattern = "*"
