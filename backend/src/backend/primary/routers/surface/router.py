@@ -20,6 +20,7 @@ from src.backend.utils.perf_metrics import PerfMetrics
 from . import converters
 from . import schemas
 
+import asyncio
 from src.backend.caching import get_user_cache
 from src.backend.utils.perf_metrics import PerfMetrics
 from fastapi import BackgroundTasks
@@ -54,6 +55,85 @@ def get_surface_directory(
     sorted_stratigraphic_surfaces = sort_stratigraphic_names_by_hierarchy(strat_units)
 
     return converters.to_api_surface_directory(sumo_surf_dir, sorted_stratigraphic_surfaces)
+
+
+
+"""
+EXPERIMENT with using async io for fetching many surfaces from cache
+"""
+"""
+@router.get("/realization_surface_data/")
+async def get_realization_surface_data(
+    response: Response,
+    background_tasks: BackgroundTasks,
+    authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
+    case_uuid: str = Query(description="Sumo case uuid"),
+    ensemble_name: str = Query(description="Ensemble name"),
+    realization_num: int = Query(description="Realization number"),
+    name: str = Query(description="Surface name"),
+    attribute: str = Query(description="Surface attribute"),
+    time_or_interval: Optional[str] = Query(None, description="Time point or time interval string"),
+) -> schemas.SurfaceData:
+    perf_metrics = PerfMetrics(response)
+
+    cache = get_user_cache(authenticated_user)
+
+    # # cache_key = f"surf_data_response_{case_uuid}_{ensemble_name}_{realization_num}_{name}_{attribute}_{time_or_interval}"
+    # # cached_surf_data_response = await CACHE.get_Any(cache_key)
+    # # if cached_surf_data_response:
+    # #     LOGGER.debug(f"Loaded surface from cache, total time: {timer.elapsed_ms()}ms")
+    # #     return cached_surf_data_response
+
+    # cached_xtgeo_surf = await cache.get_RegularSurface(cache_key)
+    # xtgeo_surf = cached_xtgeo_surf
+    # perf_metrics.record_lap("cache")
+
+    access = SurfaceAccess(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
+
+    #xtgeo_surf = access.get_realization_surface_data(real_num=0, name=name, attribute=attribute, time_or_interval_str=time_or_interval)
+
+    num_reals = 50
+
+    cache_awaitables = []
+    for real in range(0, num_reals):
+        cache_key = f"surface:{case_uuid}_{ensemble_name}_Real{real}_{name}_{attribute}_{time_or_interval}"
+        cache_awaitables.append(cache.get_RegularSurface(cache_key))
+    surf_arr = await asyncio.gather(*cache_awaitables)
+
+    perf_metrics.record_lap("get-surfs-from-cache")
+
+    for real in range(0, num_reals):
+        if surf_arr[real] is None:
+            surf_arr[real] = access.get_realization_surface_data(real_num=real, name=name, attribute=attribute, time_or_interval_str=time_or_interval)
+
+    perf_metrics.record_lap("get-missing-surfs")
+
+
+    # surf_arr = []
+    # for real in range(0, num_reals):
+    #     xtgeo_surf = access.get_realization_surface_data(real_num=real, name=name, attribute=attribute, time_or_interval_str=time_or_interval)
+    #     surf_arr.append(xtgeo_surf)
+
+    # perf_metrics.record_lap("get-surfs")
+
+    awaitables = []
+    for real in range(0, num_reals):
+        cache_key = f"surface:{case_uuid}_{ensemble_name}_Real{real}_{name}_{attribute}_{time_or_interval}"
+        awaitables.append(cache.set_RegularSurface(cache_key, surf_arr[real]))
+
+    ret_arr = await asyncio.gather(*awaitables)
+
+
+    perf_metrics.record_lap("write-cache")
+
+    surf_data_response = converters.to_api_surface_data(surf_arr[0])
+    perf_metrics.record_lap("convert")
+
+    LOGGER.debug(f"Loaded realization surface in: {perf_metrics.to_string()}")
+
+    return surf_data_response
+"""
+
 
 
 @router.get("/realization_surface_data/")

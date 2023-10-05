@@ -96,7 +96,7 @@ class UserCache:
             return None
         
         if surf is None:
-            LOGGER.debug(f"##### get_RegularSurface() data=convFailes took: {timer.elapsed_ms()}ms")
+            LOGGER.debug(f"##### get_RegularSurface() data=convFailed took: {timer.elapsed_ms()}ms")
             return None
 
         LOGGER.debug(f"##### get_RegularSurface() data=yes ({(len(cached_bytes)/1024):.2f}KB) took: {timer.elapsed_ms()}ms")
