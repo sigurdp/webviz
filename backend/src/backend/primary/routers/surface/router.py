@@ -1,7 +1,9 @@
 import logging
 from typing import List, Union, Optional
 
+import asyncio
 import numpy as np
+import xtgeo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 
@@ -68,7 +70,7 @@ async def get_realization_surface_data(
     perf_metrics = PerfMetrics(response)
 
     access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    xtgeo_surf = access.get_realization_surface_data(
+    xtgeo_surf = await access.get_realization_surface_data(
         real_num=realization_num, name=name, attribute=attribute, time_or_interval_str=time_or_interval
     )
     perf_metrics.record_lap("get-surf")
@@ -140,12 +142,12 @@ async def get_property_surface_resampled_to_static_surface(
     perf_metrics = PerfMetrics(response)
 
     access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    xtgeo_surf_mesh = access.get_realization_surface_data(
+    xtgeo_surf_mesh = await access.get_realization_surface_data(
         real_num=realization_num_mesh, name=name_mesh, attribute=attribute_mesh
     )
     perf_metrics.record_lap("mesh-surf")
 
-    xtgeo_surf_property = access.get_realization_surface_data(
+    xtgeo_surf_property = await access.get_realization_surface_data(
         real_num=realization_num_property,
         name=name_property,
         attribute=attribute_property,
@@ -211,6 +213,7 @@ async def get_property_surface_resampled_to_statistical_static_surface(
 
 @router.post("/surface_intersections/")
 async def get_surface_intersections(
+    response: Response,
     authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
     case_uuid: str = Query(description="Sumo case uuid"),
     ensemble_name: str = Query(description="Ensemble name"),
@@ -218,8 +221,10 @@ async def get_surface_intersections(
     attribute: str = Query(description="Surface attribute"),
     cutting_plane: schemas.CuttingPlane = Body(embed=True),
 ) -> List[schemas.SurfaceIntersectionData]:
+    perf_metrics = PerfMetrics(response)
     access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    intersections = []
+    perf_metrics.record_lap("access")
+
     fence_arr = np.array(
         [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
     ).T
@@ -228,16 +233,33 @@ async def get_surface_intersections(
     #     authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name
     # )
     # reals = iteration_inspector.get_realizations()
-    reals = range(0, 10)
+
+    reals = range(0, 50)
+
+    coro_arr = []
+    real_arr = []
     for real in reals:
-        try:
-            print(f"Getting surface {name} with attribute {attribute}-{real}")
-            xtgeo_surf = access.get_realization_surface_data(real_num=real, name=name, attribute=attribute)
+        real_arr.append(real)
+        coro_arr.append(access.get_realization_surface_data(real_num=real, name=name, attribute=attribute))
+
+    perf_metrics.record_lap("issue-requests")
+
+    res_arr: List[xtgeo.RegularSurface | None] = await asyncio.gather(*coro_arr)
+    perf_metrics.record_lap("wait-for-requests")
+
+    intersections = []
+    for idx, xtgeo_surf in enumerate(res_arr):
+        if xtgeo_surf is not None:
+            print(f"Cutting surface {name} with attribute {attribute}-{real_arr[idx]}")
             line = xtgeo_surf.get_randomline(fence_arr)
             intersections.append(
                 schemas.SurfaceIntersectionData(name=f"{name}", hlen_arr=line[:, 0].tolist(), z_arr=line[:, 1].tolist())
             )
-        except AttributeError:
-            print(f"Could not find surface {name} with attribute {attribute}-{real}")
+        else:
+            print(f"Skipping surface {name} with attribute {attribute}-{real_arr[idx]}")    
+
+    perf_metrics.record_lap("cutting")
+
+    LOGGER.debug(f"Intersected {len(res_arr)} surfaces in: {perf_metrics.to_string()}")
 
     return intersections
