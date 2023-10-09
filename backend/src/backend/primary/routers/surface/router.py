@@ -234,8 +234,50 @@ async def get_surface_intersections(
     # )
     # reals = iteration_inspector.get_realizations()
 
-    reals = range(0, 50)
+    reals = range(0, 20)
 
+    queue = asyncio.Queue()
+    intersections = []
+
+    producer_task = asyncio.create_task(item_producer(queue, reals, name, attribute))
+
+    worker_tasks = []
+    for i in range(5):
+        task = asyncio.create_task(worker(f"worker-{i}", queue, access, fence_arr, intersections))
+        worker_tasks.append(task)
+
+    perf_metrics.record_lap("setup")
+
+    await asyncio.gather(producer_task, *worker_tasks)
+
+    LOGGER.debug(f"Intersected {len(intersections)} surfaces in: {perf_metrics.to_string()}")
+
+    return intersections
+
+
+
+    """
+    coro_arr = []
+    for real in reals:
+        coro_arr.append(_process_one_surface(access, real, name, attribute, fence_arr))
+
+    perf_metrics.record_lap("issue-requests")
+
+    res_arr = await asyncio.gather(*coro_arr)
+    perf_metrics.record_lap("wait-for-processing")
+
+    intersections = []
+    for isect_data in res_arr:
+        if isect_data is not None:
+            intersections.append(isect_data)
+
+    LOGGER.debug(f"Intersected {len(res_arr)} surfaces in: {perf_metrics.to_string()}")
+
+    return intersections
+    """
+
+
+    """
     coro_arr = []
     real_arr = []
     for real in reals:
@@ -263,3 +305,34 @@ async def get_surface_intersections(
     LOGGER.debug(f"Intersected {len(res_arr)} surfaces in: {perf_metrics.to_string()}")
 
     return intersections
+    """
+
+async def item_producer(queue, reals, name: str, attribute: str):
+    for real in reals:
+        await queue.put({"real_num": real, "name": name, "attribute": attribute})
+
+
+async def worker(name, queue, access: SurfaceAccess, fence_arr: np.ndarray, intersections: List[schemas.SurfaceIntersectionData]):
+    while not queue.empty():
+        item = await queue.get()
+
+        isect_data = await _process_one_surface(access, item["real_num"], item["name"], item["attribute"], fence_arr)
+        if isect_data is not None:
+            intersections.append(isect_data)
+
+        # Notify the queue that the "work item" has been processed.
+        queue.task_done()
+
+
+async def _process_one_surface(access: SurfaceAccess, real_num: int, name: str, attribute: str, fence_arr: np.ndarray) -> schemas.SurfaceIntersectionData | None:
+
+    print(f"Downloading surface {name} with attribute {attribute}-{real_num}")
+    xtgeo_surf = await access.get_realization_surface_data(real_num=real_num, name=name, attribute=attribute)
+    if xtgeo_surf is None:
+        print(f"Skipping surface {name} with attribute {attribute}-{real_num}")
+        return None
+    
+    print(f"Cutting surface {name} with attribute {attribute}-{real_num}")
+    line = xtgeo_surf.get_randomline(fence_arr)
+    
+    return schemas.SurfaceIntersectionData(name=f"{name}", hlen_arr=line[:, 0].tolist(), z_arr=line[:, 1].tolist())
