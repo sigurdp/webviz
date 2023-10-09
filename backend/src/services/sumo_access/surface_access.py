@@ -91,7 +91,6 @@ class SurfaceAccess(SumoEnsemble):
         )
 
         surf_count = await surface_collection.length_async()
-        et_locate_ms = timer.lap_ms()
         if surf_count == 0:
             LOGGER.warning(f"No realization surface found in Sumo for {addr_str}")
             return None
@@ -99,20 +98,24 @@ class SurfaceAccess(SumoEnsemble):
             LOGGER.warning(f"Multiple ({surf_count}) surfaces found in Sumo for: {addr_str}. Returning first surface.")
 
         sumo_surf: Surface = await surface_collection.getitem_async(0)
-        et_get_ms = timer.lap_ms()
+        et_locate_ms = timer.lap_ms()
 
         byte_stream: BytesIO = await sumo_surf.blob_async
         et_download_ms = timer.lap_ms()
 
         xtgeo_surf = xtgeo.surface_from_file(byte_stream)
-        et_import_ms = timer.lap_ms()
+        et_xtgeo_read_ms = timer.lap_ms()
+
+        size_mb = byte_stream.getbuffer().nbytes/(1024*1024)
+        nx = xtgeo_surf.ncol
+        ny = xtgeo_surf.nrow
 
         LOGGER.debug(
             f"Got realization surface from Sumo in: {timer.elapsed_ms()}ms ("
             f"locate={et_locate_ms}ms, "
-            f"get={et_get_ms}ms, "
             f"download={et_download_ms}ms, "
-            f"import={et_import_ms}ms) "
+            f"xtgeo_read={et_xtgeo_read_ms}ms) "
+            f"[{nx}x{ny}, {size_mb:.2f}MB] "
             f"({addr_str})"
         )
 
