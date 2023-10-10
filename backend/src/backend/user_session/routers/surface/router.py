@@ -1,5 +1,6 @@
 import logging
 from typing import List, Union, Optional
+from typing import Annotated
 
 import asyncio
 import numpy as np
@@ -45,19 +46,18 @@ def post_sigtest(
     return "sig_test"
 
 
-@router.post("/calc_surf_intersections")
-async def post_calc_surf_intersections(
+@router.post("/calc_surf_intersections_fetch_first")
+async def post_calc_surf_intersections_fetch_first(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
     response: Response,
-    authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
-    case_uuid: str = Query(description="Sumo case uuid"),
-    ensemble_name: str = Query(description="Ensemble name"),
-    name: str = Query(description="Surface names"),
-    attribute: str = Query(description="Surface attribute"),
-    num_reals: int = Query(description="Number of realizations to intersect"),
-    num_workers: int = Query(description="Number of workers to use"),
+    case_uuid: str,
+    ensemble_name: str,
+    name: str,
+    attribute: str,
+    num_reals: int,
     cutting_plane: schemas.CuttingPlane = Body(embed=True),
 ) ->  List[schemas.SurfaceIntersectionData]:
-    print("!!!!!!!!!!!!!!!!!!!!!! post_calc_surf_intersections() started")
+    print("!!!!!!!!!!!!!!!!!!!!!! post_calc_surf_intersections_fetch_first() started")
     
     perf_metrics = PerfMetrics(response)
     access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
@@ -67,7 +67,7 @@ async def post_calc_surf_intersections(
         [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
     ).T
 
-    LOGGER.debug(f"{num_reals=}  {num_workers=}")
+    LOGGER.debug(f"{num_reals=}")
 
     reals = range(0, num_reals)
 
@@ -97,6 +97,85 @@ async def post_calc_surf_intersections(
 
     LOGGER.debug(f"Intersected {len(res_arr)} surfaces in: {perf_metrics.to_string()}")
 
-    print("!!!!!!!!!!!!!!!!!!!!!! post_calc_surf_intersections() finished")
+    print("!!!!!!!!!!!!!!!!!!!!!! post_calc_surf_intersections_fetch_first() finished")
 
     return intersections
+
+
+@router.post("/calc_surf_intersections_queue")
+async def post_calc_surf_intersections_queue(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    response: Response,
+    case_uuid: str,
+    ensemble_name: str,
+    name: str,
+    attribute: str,
+    num_reals: int,
+    num_workers: int,
+    cutting_plane: schemas.CuttingPlane = Body(embed=True),
+) ->  List[schemas.SurfaceIntersectionData]:
+    
+    print("!!!!!!!!!!!!!!!!!!!!!! post_calc_surf_intersections_queue() started")
+
+    perf_metrics = PerfMetrics(response)
+    access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
+    perf_metrics.record_lap("access")
+
+    fence_arr = np.array(
+        [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
+    ).T
+
+    LOGGER.debug(f"{num_reals=}  {num_workers=}")
+
+    reals = range(0, num_reals)
+
+    queue = asyncio.Queue()
+    intersections = []
+
+    producer_task = asyncio.create_task(item_producer(queue, reals, name, attribute))
+
+    worker_tasks = []
+    for i in range(num_workers):
+        task = asyncio.create_task(worker(f"worker-{i}", queue, access, fence_arr, intersections))
+        worker_tasks.append(task)
+
+    perf_metrics.record_lap("setup")
+
+    await asyncio.gather(producer_task, *worker_tasks)
+
+    LOGGER.debug(f"Intersected {len(intersections)} surfaces in: {perf_metrics.to_string()}")
+
+    print("!!!!!!!!!!!!!!!!!!!!!! post_calc_surf_intersections_queue() finished")
+
+    return intersections
+
+
+async def item_producer(queue, reals, name: str, attribute: str):
+    for real in reals:
+        await queue.put({"real_num": real, "name": name, "attribute": attribute})
+
+
+async def worker(name, queue, access: SurfaceAccess, fence_arr: np.ndarray, intersections: List[schemas.SurfaceIntersectionData]):
+    while not queue.empty():
+        item = await queue.get()
+
+        isect_data = await _process_one_surface(access, item["real_num"], item["name"], item["attribute"], fence_arr)
+        if isect_data is not None:
+            intersections.append(isect_data)
+
+        # Notify the queue that the "work item" has been processed.
+        queue.task_done()
+
+
+async def _process_one_surface(access: SurfaceAccess, real_num: int, name: str, attribute: str, fence_arr: np.ndarray) -> schemas.SurfaceIntersectionData | None:
+
+    print(f"Downloading surface {name} with attribute {attribute}-{real_num}")
+    xtgeo_surf = await access.get_realization_surface_data(real_num=real_num, name=name, attribute=attribute)
+    if xtgeo_surf is None:
+        print(f"Skipping surface {name} with attribute {attribute}-{real_num}")
+        return None
+    
+    print(f"Cutting surface {name} with attribute {attribute}-{real_num}")
+    line = xtgeo_surf.get_randomline(fence_arr)
+    
+    return schemas.SurfaceIntersectionData(name=f"{name}", hlen_arr=line[:, 0].tolist(), z_arr=line[:, 1].tolist())
