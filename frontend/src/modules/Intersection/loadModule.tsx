@@ -7,6 +7,8 @@ import { view } from "./view";
 const defaultState: state = {
     wellBoreAddress: { uwi: "55/33-A-4", uuid: "drogon_horizontal", type: "smda" },
     surfaceAddress: null,
+    numReals: 10,
+    numWorkers: 5,
     viewSettings: {
         showGridParameter: false,
         showSeismic: true,

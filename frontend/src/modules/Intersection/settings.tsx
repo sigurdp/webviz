@@ -39,6 +39,9 @@ export function settings({ moduleContext, workbenchSession, workbenchServices }:
     const [selectedSurfaceName, setSelectedSurfaceName] = React.useState<string | null>(null);
     const [selectedSurfaceAttribute, setSelectedSurfaceAttribute] = React.useState<string | null>(null);
 
+    const [numReals, setNumReals] = moduleContext.useStoreState("numReals");
+    const [numWorkers, setNumWorkers] = moduleContext.useStoreState("numWorkers");
+
     const syncedSettingKeys = moduleContext.useSyncedSettingKeys();
     const syncHelper = new SyncSettingsHelper(syncedSettingKeys, workbenchServices);
     const ensembleSet = useEnsembleSet(workbenchSession);
@@ -164,6 +167,16 @@ export function settings({ moduleContext, workbenchSession, workbenchServices }:
         }
     };
 
+    function handleNumRealsChanged(event: React.ChangeEvent<HTMLInputElement>) {
+        const num = parseInt(event.target.value, 10);
+        setNumReals(num);
+    }
+
+    function handleNumWorkersChanged(event: React.ChangeEvent<HTMLInputElement>) {
+        const num = parseInt(event.target.value, 10);
+        setNumWorkers(num);
+    }
+
     function handleExtensionChange(event: React.ChangeEvent<HTMLInputElement>) {
         const extension = parseInt(event.target.value, 10);
         if (extension >= 0) {
@@ -256,6 +269,15 @@ export function settings({ moduleContext, workbenchSession, workbenchServices }:
                     </Label>
                 </ApiStateWrapper>
             </CollapsibleGroup>
+            
+            <Label text="numReals">
+                <Input type={"number"} value={numReals} onChange={handleNumRealsChanged} />
+            </Label>
+
+            <Label text="numWorkers">
+                <Input type={"number"} value={numWorkers} onChange={handleNumWorkersChanged} />
+            </Label>
+
             <CollapsibleGroup expanded={false} title="View settings">
                 <Label text="Extension">
                     <Input type={"number"} value={viewSettings?.extension} onChange={handleExtensionChange} />

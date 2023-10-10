@@ -2,10 +2,14 @@ import logging
 from typing import List, Union, Optional
 
 import asyncio
+import httpx
 import numpy as np
 import xtgeo
+import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response, Request
+from src.backend.primary.user_session_proxy import proxy_to_user_session
+from src.backend.primary.user_session_proxy import get_user_session_base_url
 
 from src.services.sumo_access.surface_access import SurfaceAccess
 from src.services.smda_access.stratigraphy_access import StratigraphyAccess
@@ -213,28 +217,78 @@ async def get_property_surface_resampled_to_statistical_static_surface(
 
 @router.post("/surface_intersections/")
 async def get_surface_intersections(
+    request: Request,
     response: Response,
     authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
     case_uuid: str = Query(description="Sumo case uuid"),
     ensemble_name: str = Query(description="Ensemble name"),
     name: str = Query(description="Surface names"),
     attribute: str = Query(description="Surface attribute"),
+    num_reals: int = Query(None, description="Number of realizations to intersect"),
+    num_workers: int = Query(None, description="Number of workers to use"),
     cutting_plane: schemas.CuttingPlane = Body(embed=True),
 ) -> List[schemas.SurfaceIntersectionData]:
-    perf_metrics = PerfMetrics(response)
-    access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    perf_metrics.record_lap("access")
 
-    fence_arr = np.array(
-        [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
-    ).T
+    # perf_metrics = PerfMetrics(response)
+    # access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
+    # perf_metrics.record_lap("access")
+
+    # fence_arr = np.array(
+    #     [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
+    # ).T
 
     # iteration_inspector = IterationInspector.from_case_uuid(
     #     authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name
     # )
     # reals = iteration_inspector.get_realizations()
 
-    reals = range(0, 20)
+    intersections = await execute_usersession_job_calc_surf_intersections(
+        request,
+        authenticated_user,
+        case_uuid,
+        ensemble_name,
+        name,
+        attribute,
+        num_reals,
+        num_workers,
+        cutting_plane,
+    )
+
+    return intersections
+
+
+    # query_params = {
+    #     "case_uuid": case_uuid,
+    #     "ensemble_name": ensemble_name,
+    #     "name": name,
+    #     "attribute": attribute,
+    #     "num_reals": num_reals,
+    #     "num_workers": num_workers,
+    # }
+
+    # # Add query parameters to the request URL
+    # updated_request = Request(
+    #     scope={
+    #         "type": "http",
+    #         "method": request.method,
+    #         "path": request.url.path,
+    #         "query_string": request.url.include_query_params(**query_params).query.encode("utf-8"),
+    #         "body": request.body,
+    #         "headers": request.headers.raw,
+    #     },
+    #     receive=request._receive,  # pylint: disable=protected-access
+    # )
+
+    # response = await proxy_to_user_session(updated_request, authenticated_user)
+    # return response
+
+
+
+
+    """
+    LOGGER.debug(f"{num_reals=}  {num_workers=}")
+
+    reals = range(0, num_reals)
 
     queue = asyncio.Queue()
     intersections = []
@@ -242,7 +296,7 @@ async def get_surface_intersections(
     producer_task = asyncio.create_task(item_producer(queue, reals, name, attribute))
 
     worker_tasks = []
-    for i in range(5):
+    for i in range(num_workers):
         task = asyncio.create_task(worker(f"worker-{i}", queue, access, fence_arr, intersections))
         worker_tasks.append(task)
 
@@ -253,7 +307,7 @@ async def get_surface_intersections(
     LOGGER.debug(f"Intersected {len(intersections)} surfaces in: {perf_metrics.to_string()}")
 
     return intersections
-
+    """
 
 
     """
@@ -336,3 +390,113 @@ async def _process_one_surface(access: SurfaceAccess, real_num: int, name: str, 
     line = xtgeo_surf.get_randomline(fence_arr)
     
     return schemas.SurfaceIntersectionData(name=f"{name}", hlen_arr=line[:, 0].tolist(), z_arr=line[:, 1].tolist())
+
+
+# --------------------------------------------------------------------------------------
+async def execute_usersession_job_calc_surf_intersections(
+    fastApiRequest: Request,
+    authenticated_user: AuthenticatedUser,
+    case_uuid: str,
+    ensemble_name: str,
+    name: str,
+    attribute: str,
+    num_reals: int,
+    num_workers: int,
+    cutting_plane: schemas.CuttingPlane,
+) -> List[schemas.SurfaceIntersectionData]:
+
+    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_intersections() started")
+
+    query_params = {
+        "case_uuid": case_uuid,
+        "ensemble_name": ensemble_name,
+        "name": name,
+        "attribute": attribute,
+        "num_reals": num_reals,
+        "num_workers": num_workers,
+    }
+
+    # print("------------------------------")
+    # print(f"{cutting_plane.model_dump()=}")
+    # print("------------------------------")
+
+    base_url = await get_user_session_base_url(authenticated_user)
+    url = httpx.URL(path="/surface/calc_surf_intersections")
+    client = httpx.AsyncClient(base_url=base_url)
+    job_req = client.build_request(
+        method="POST",
+        url=url,
+        params=query_params,
+        #json={"cutting_plane": cutting_plane.model_dump()},
+        data=json.dumps({"cutting_plane": cutting_plane.model_dump()}),
+        cookies=fastApiRequest.cookies,
+        timeout=600,
+    )
+
+    print("------------------------------")
+    print(f"{url=}")
+    print(f"{job_req=}")
+    #print(f"{job_req.content=}")
+    print("------------------------------")
+
+    job_resp = await client.send(job_req)
+
+    #print(f"{job_resp.text=} {job_resp.status_code=}")
+
+    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_intersections() finished")
+
+    return job_resp.json()
+
+
+# --------------------------------------------------------------------------------------
+async def execute_usersession_job_sigtest(
+    fastApiRequest: Request,
+    authenticated_user: AuthenticatedUser,
+    case_uuid: str,
+    ensemble_name: str,
+    name: str,
+    attribute: str,
+    num_reals: int,
+    num_workers: int,
+    cutting_plane: schemas.CuttingPlane,
+) -> None:
+
+    print(">>>>>>>>>>>>>>>>> execute_usersession_job_sigtest() started")
+
+    query_params = {
+        "case_uuid": case_uuid,
+        "ensemble_name": ensemble_name,
+        "name": name,
+        "attribute": attribute,
+        "num_reals": num_reals,
+        "num_workers": num_workers,
+    }
+
+    # print("------------------------------")
+    # print(f"{cutting_plane.model_dump()=}")
+    # print("------------------------------")
+
+    base_url = await get_user_session_base_url(authenticated_user)
+    url = httpx.URL(path="/surface/sigtest")
+    client = httpx.AsyncClient(base_url=base_url)
+    job_req = client.build_request(
+        method="POST",
+        url=url,
+        params=query_params,
+        #json={"cutting_plane": cutting_plane.model_dump()},
+        data=json.dumps({"cutting_plane": cutting_plane.model_dump()}),
+        cookies=fastApiRequest.cookies,
+        timeout=600,
+    )
+
+    print("------------------------------")
+    print(f"{url=}")
+    print(f"{job_req=}")
+    #print(f"{job_req.content=}")
+    print("------------------------------")
+
+    job_resp = await client.send(job_req)
+
+    print(f"{job_resp.text=} {job_resp.status_code=}")
+
+    print(">>>>>>>>>>>>>>>>> execute_usersession_job_sigtest() finished")

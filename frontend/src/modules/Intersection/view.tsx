@@ -40,6 +40,9 @@ export function view({ moduleContext, workbenchSession, workbenchSettings, workb
     const [wellBoreAddress] = moduleContext.useStoreState("wellBoreAddress");
     const [surfaceAddress] = moduleContext.useStoreState("surfaceAddress");
 
+    const [numReals] = moduleContext.useStoreState("numReals");
+    const [numWorkers] = moduleContext.useStoreState("numWorkers");
+
     const [viewSettings] = moduleContext.useStoreState("viewSettings");
     const [pixiContext, setPixiContext] = React.useState<PixiRenderApplication | null>(null);
     const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -88,6 +91,8 @@ export function view({ moduleContext, workbenchSession, workbenchSettings, workb
     const surfaceIntersectionsQuery = useSurfaceIntersectionsQuery(
         surfaceAddress,
         cuttingPlane,
+        numReals,
+        numWorkers,
         surfaceAddress && cuttingPlane && viewSettings.showSurfaces ? true : false
     );
 

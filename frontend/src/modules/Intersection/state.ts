@@ -9,6 +9,8 @@ export interface state {
     wellBoreAddress: Wellbore | null;
     // seismicAddress: SeismicAddress | null;
     surfaceAddress: SurfaceAddress | null;
+    numReals: number;
+    numWorkers: number;
     // gridParameterAddress: GridParameterAddress | null;
     viewSettings: IntersectionViewSettings;
 }

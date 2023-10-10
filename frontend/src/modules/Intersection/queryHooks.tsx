@@ -35,6 +35,8 @@ export function useGetWellTrajectories(wellUuids: string[] | undefined): UseQuer
 export function useSurfaceIntersectionsQuery(
     surfaceAddress: SurfaceAddress | null,
     cuttingPlane: CuttingPlane_api | null,
+    numReals: number,
+    numWorkers: number,
     enabled: boolean
 ): UseQueryResult<SurfaceIntersectionData_api[]> {
     function dummyApiCall(): Promise<SurfaceIntersectionData_api[]> {
@@ -67,6 +69,8 @@ export function useSurfaceIntersectionsQuery(
             surfaceAddress.ensemble,
             surfaceAddress.name,
             surfaceAddress.attribute,
+            numReals,
+            numWorkers,
             bodyCuttingPlane,
         ];
         queryFn = () =>
@@ -75,7 +79,9 @@ export function useSurfaceIntersectionsQuery(
                 surfaceAddress.ensemble,
                 surfaceAddress.name,
                 surfaceAddress.attribute,
-                bodyCuttingPlane
+                bodyCuttingPlane,
+                numReals,
+                numWorkers
             );
     } else {
         throw new Error("Invalid surface address type");

@@ -205,6 +205,8 @@ export class SurfaceService {
      * @param name Surface names
      * @param attribute Surface attribute
      * @param requestBody
+     * @param numReals Number of realizations to intersect
+     * @param numWorkers Number of workers to use
      * @returns SurfaceIntersectionData Successful Response
      * @throws ApiError
      */
@@ -214,6 +216,8 @@ export class SurfaceService {
         name: string,
         attribute: string,
         requestBody: Body_get_surface_intersections,
+        numReals?: number,
+        numWorkers?: number,
     ): CancelablePromise<Array<SurfaceIntersectionData>> {
         return this.httpRequest.request({
             method: 'POST',
@@ -223,6 +227,8 @@ export class SurfaceService {
                 'ensemble_name': ensembleName,
                 'name': name,
                 'attribute': attribute,
+                'num_reals': numReals,
+                'num_workers': numWorkers,
             },
             body: requestBody,
             mediaType: 'application/json',

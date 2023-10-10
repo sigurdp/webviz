@@ -128,3 +128,11 @@ async def proxy_to_user_session(request: Request, authenticated_user: Authentica
         headers=job_resp.headers,
         background=BackgroundTask(job_resp.aclose),
     )
+
+
+async def get_user_session_base_url(authenticated_user: AuthenticatedUser) -> str:
+    base_url = await RADIX_JOB_SCHEDULER_INSTANCE.get_base_url(
+        authenticated_user._user_id  # pylint: disable=protected-access
+    )
+    return base_url
+

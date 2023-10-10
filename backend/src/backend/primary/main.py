@@ -29,8 +29,8 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logging.getLogger("src.services.sumo_access").setLevel(level=logging.DEBUG)
+logging.getLogger("src.services.sumo_access.surface_access").setLevel(level=logging.DEBUG)
 logging.getLogger("src.backend.primary.routers.surface").setLevel(level=logging.DEBUG)
-logging.getLogger("src.services.sumo_access.SurfaceAccess").setLevel(level=logging.DEBUG)
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
