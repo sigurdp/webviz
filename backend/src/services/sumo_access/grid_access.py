@@ -41,7 +41,7 @@ class GridAccess(SumoEnsemble):
         )
         et_blob_id_ms = timer.lap_ms()
 
-        stream = self._sumo_client.get(f"/objects('{geometry_blob_id}')/blob")
+        stream = await self._sumo_client.get_async(f"/objects('{geometry_blob_id}')/blob")
         size_mb = len(stream)/(1024*1024)
         et_fetch_ms = timer.lap_ms()
 
