@@ -239,6 +239,11 @@ async def get_large_download(
 
     reals = range(0, 20)
 
+    print("=====================================")
+    print(authenticated_user.get_sumo_access_token())
+    print("=====================================")
+
+
     coro_arr = []
     for real in reals:
         coro_arr.append(get_grid_geometry(
@@ -299,35 +304,8 @@ async def get_surface_intersections(
 
     perf_metrics = PerfMetrics(response)
 
-    # intersections = await execute_usersession_job_calc_surf_intersections_fetch_first(
-    #     request,
-    #     authenticated_user,
-    #     case_uuid,
-    #     ensemble_name,
-    #     name,
-    #     attribute,
-    #     num_reals,
-    #     cutting_plane,
-    # )
-
-    # return intersections
-
-
-    # intersections = await execute_usersession_job_calc_surf_intersections_queue(
-    #     request,
-    #     authenticated_user,
-    #     case_uuid,
-    #     ensemble_name,
-    #     name,
-    #     attribute,
-    #     num_reals,
-    #     num_workers,
-    #     cutting_plane,
-    # )
-
-    # return intersections
-
-    intersections = await _calc_surf_intersections_aiomulti(
+    intersections = await execute_usersession_job_calc_surf_isec_experiments(
+        request,
         authenticated_user,
         case_uuid,
         ensemble_name,
@@ -339,6 +317,20 @@ async def get_surface_intersections(
     )
 
     LOGGER.debug(f"Intersected {len(intersections)} surfaces in: {perf_metrics.to_string()}")
+
+    return intersections
+
+    # intersections = await _calc_surf_intersections_aiomulti(
+    #     authenticated_user,
+    #     case_uuid,
+    #     ensemble_name,
+    #     name,
+    #     attribute,
+    #     num_reals,
+    #     num_workers,
+    #     cutting_plane,
+    # )
+
 
     return intersections
 
@@ -448,7 +440,7 @@ async def _calc_surf_intersections_aiomulti(
 
 
 # --------------------------------------------------------------------------------------
-async def execute_usersession_job_calc_surf_intersections_queue(
+async def execute_usersession_job_calc_surf_isec_experiments(
     fastApiRequest: Request,
     authenticated_user: AuthenticatedUser,
     case_uuid: str,
@@ -460,7 +452,7 @@ async def execute_usersession_job_calc_surf_intersections_queue(
     cutting_plane: schemas.CuttingPlane,
 ) -> List[schemas.SurfaceIntersectionData]:
 
-    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_intersections_queue() started")
+    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_isec_experiments() started")
 
     query_params = {
         "case_uuid": case_uuid,
@@ -472,7 +464,7 @@ async def execute_usersession_job_calc_surf_intersections_queue(
      }
 
     base_url = await get_user_session_base_url(authenticated_user)
-    url = httpx.URL(path="/surface/calc_surf_intersections_queue")
+    url = httpx.URL(path="/surface/calc_surf_isec_experiments")
     client = httpx.AsyncClient(base_url=base_url)
     job_req = client.build_request(
         method="POST",
@@ -486,7 +478,7 @@ async def execute_usersession_job_calc_surf_intersections_queue(
 
     job_resp = await client.send(job_req)
 
-    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_intersections_queue() finished")
+    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_isec_experiments() finished")
 
     return job_resp.json()
 

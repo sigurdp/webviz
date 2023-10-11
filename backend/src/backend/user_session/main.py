@@ -17,6 +17,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logging.getLogger("src.backend.user_session").setLevel(level=logging.DEBUG)
+logging.getLogger("src.backend.experiments").setLevel(level=logging.DEBUG)
 logging.getLogger("src.services.sumo_access.surface_access").setLevel(level=logging.DEBUG)
 
 app = FastAPI(default_response_class=ORJSONResponse)
