@@ -31,6 +31,7 @@ class GridAccess(SumoEnsemble):
 
     async def get_grid_geometry(self, grid_name: str, realization: int) -> xtgeo.Grid:
         timer = PerfTimer()
+
         geometry_blob_id = await get_grid_geometry_blob_id(
             self._sumo_client,
             self._case_uuid,
@@ -38,9 +39,18 @@ class GridAccess(SumoEnsemble):
             realization,
             grid_name,
         )
+        et_blob_id_ms = timer.lap_ms()
+
         stream = self._sumo_client.get(f"/objects('{geometry_blob_id}')/blob")
+        size_mb = len(stream)/(1024*1024)
+        et_fetch_ms = timer.lap_ms()
+
         print(f"{grid_name} {realization} {geometry_blob_id} in {round(timer.lap_s(),2)}s")
+
         grid_geom = xtgeo.grid_from_file(BytesIO(stream))
+        et_load_ms = timer.lap_ms()
+
+        print(f"!!!!!!!! get_grid_geometry() got {size_mb:.2f}MB {grid_name=} {realization=} in {round(timer.elapsed_s(),2)}s  (blob_id={et_blob_id_ms}ms, fetch={et_fetch_ms}ms, load={et_load_ms}ms)")
 
         return grid_geom
 
@@ -48,6 +58,7 @@ class GridAccess(SumoEnsemble):
         self, grid_name: str, grid_parameter_name: str, realization: int
     ) -> xtgeo.GridProperty:
         timer = PerfTimer()
+
         parameter_blob_id = await get_grid_parameter_blob_id(
             self._sumo_client,
             self._case_uuid,
@@ -56,9 +67,19 @@ class GridAccess(SumoEnsemble):
             grid_name,
             grid_parameter_name,
         )
+        et_blob_id_ms = timer.lap_ms()
+
         stream = self._sumo_client.get(f"/objects('{parameter_blob_id}')/blob")
+        size_mb = len(stream)/(1024*1024)
+        et_fetch_ms = timer.lap_ms()
+
         print(f"{grid_name} {grid_parameter_name} {realization} {parameter_blob_id} in {round(timer.lap_s(),2)}s")
+
         grid_param = xtgeo.gridproperty_from_file(BytesIO(stream))
+        et_load_ms = timer.lap_ms()
+
+        print(f"!!!!!!!! get_grid_parameter() got {size_mb:.2f}MB {grid_name=} {realization=} {grid_parameter_name=} in {round(timer.elapsed_s(),2)}s  (blob_id={et_blob_id_ms}ms, fetch={et_fetch_ms}ms, load={et_load_ms}ms)")
+
         return grid_param
 
     async def grids_have_equal_nxnynz(self, grid_name: str) -> bool:

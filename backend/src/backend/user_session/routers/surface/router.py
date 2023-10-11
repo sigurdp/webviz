@@ -125,7 +125,9 @@ async def post_calc_surf_intersections_queue(
         [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
     ).T
 
+    LOGGER.debug("====================================")
     LOGGER.debug(f"{num_reals=}  {num_workers=}")
+    LOGGER.debug("====================================")
 
     reals = range(0, num_reals)
 
