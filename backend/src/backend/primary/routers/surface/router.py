@@ -237,24 +237,44 @@ async def get_large_download(
     print(f"{real=}")
     print(f"{dummy=}")
 
-    gridgeo = await get_grid_geometry(
-        authenticated_user=authenticated_user,
-        case_uuid="c619f32d-3ada-4e5e-8d3c-330f940e88f8",
-        grid_name="Geogrid",
-        ensemble_name="iter-0",
-        realization=real)
-    
-    print(f"{type(gridgeo)=}")
+    reals = range(0, 20)
 
-    prop = await get_grid_parameter(
-        authenticated_user=authenticated_user,
-        case_uuid="c619f32d-3ada-4e5e-8d3c-330f940e88f8",
-        grid_name="Geogrid",
-        ensemble_name="iter-0",
-        realization=real,
-        parameter_name="FACIES")
+    coro_arr = []
+    for real in reals:
+        coro_arr.append(get_grid_geometry(
+            authenticated_user=authenticated_user,
+            case_uuid="c619f32d-3ada-4e5e-8d3c-330f940e88f8",
+            grid_name="Geogrid",
+            ensemble_name="iter-0",
+            realization=real))
+        
+        if len(coro_arr) == 5:  
+            await asyncio.gather(*coro_arr)
+            print("Got 5 grids")
+            coro_arr = []
+
+    if len(coro_arr) > 0:  
+        await asyncio.gather(*coro_arr)
+        print("Got remaining grids")
+
+    # gridgeo = await get_grid_geometry(
+    #     authenticated_user=authenticated_user,
+    #     case_uuid="c619f32d-3ada-4e5e-8d3c-330f940e88f8",
+    #     grid_name="Geogrid",
+    #     ensemble_name="iter-0",
+    #     realization=real)
     
-    print(f"{type(prop)=}")
+    # print(f"{type(gridgeo)=}")
+
+    # prop = await get_grid_parameter(
+    #     authenticated_user=authenticated_user,
+    #     case_uuid="c619f32d-3ada-4e5e-8d3c-330f940e88f8",
+    #     grid_name="Geogrid",
+    #     ensemble_name="iter-0",
+    #     realization=real,
+    #     parameter_name="FACIES")
+    
+    # print(f"{type(prop)=}")
 
     print(f"Download took: {timer.elapsed_s():2f}s")
 
