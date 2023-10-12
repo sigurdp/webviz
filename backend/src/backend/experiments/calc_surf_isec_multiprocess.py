@@ -1,4 +1,5 @@
 import asyncio
+import signal
 import numpy as np
 import logging
 from typing import List, Union, Optional
@@ -37,6 +38,12 @@ global_fence_arr = None
 
 
 def init_access_and_fence(access_token: str, case_uuid: str, ensemble_name: str, fence_arr: np.ndarray):
+    # !!!!!!!!!!!!!
+    # See: https://github.com/tiangolo/fastapi/issues/1487#issuecomment-1157066306
+    signal.set_wakeup_fd(-1)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
     global global_access
     global global_fence_arr
     global_access = SurfaceAccess.from_case_uuid_sync(access_token, case_uuid, ensemble_name)
