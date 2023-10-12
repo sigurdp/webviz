@@ -50,7 +50,78 @@ class SurfaceAccess(SumoEnsemble):
 
         return surfs
 
-    async def get_realization_surface_data(
+    def get_realization_surface_data_sync(
+        self, real_num: int, name: str, attribute: str, time_or_interval_str: Optional[str] = None
+    ) -> Optional[xtgeo.RegularSurface]:
+        """
+        Get surface data for a realization surface
+        """
+        timer = PerfTimer()
+        addr_str = self._make_addr_str(real_num, name, attribute, time_or_interval_str)
+
+        if time_or_interval_str is None:
+            time_filter = TimeFilter(TimeType.NONE)
+
+        else:
+            timestamp_arr = time_or_interval_str.split("/", 1)
+            if len(timestamp_arr) == 0 or len(timestamp_arr) > 2:
+                raise ValueError("time_or_interval_str must contain a single timestamp or interval")
+            if len(timestamp_arr) == 1:
+                time_filter = TimeFilter(
+                    TimeType.TIMESTAMP,
+                    start=timestamp_arr[0],
+                    end=timestamp_arr[0],
+                    exact=True,
+                )
+            else:
+                time_filter = TimeFilter(
+                    TimeType.INTERVAL,
+                    start=timestamp_arr[0],
+                    end=timestamp_arr[1],
+                    exact=True,
+                )
+
+        surface_collection: SurfaceCollection = self._case.surfaces.filter(
+            iteration=self._iteration_name,
+            aggregation=False,
+            realization=real_num,
+            name=name,
+            tagname=attribute,
+            time=time_filter,
+        )
+
+        surf_count = len(surface_collection)
+        if surf_count == 0:
+            LOGGER.warning(f"No realization surface found in Sumo for {addr_str}")
+            return None
+        if surf_count > 1:
+            LOGGER.warning(f"Multiple ({surf_count}) surfaces found in Sumo for: {addr_str}. Returning first surface.")
+
+        sumo_surf = surface_collection[0]
+        et_locate_ms = timer.lap_ms()
+
+        byte_stream: BytesIO = sumo_surf.blob
+        et_download_ms = timer.lap_ms()
+
+        xtgeo_surf = xtgeo.surface_from_file(byte_stream)
+        et_xtgeo_read_ms = timer.lap_ms()
+
+        size_mb = byte_stream.getbuffer().nbytes/(1024*1024)
+        nx = xtgeo_surf.ncol
+        ny = xtgeo_surf.nrow
+
+        LOGGER.debug(
+            f"Got realization surface from Sumo in: {timer.elapsed_ms()}ms ("
+            f"locate={et_locate_ms}ms, "
+            f"download={et_download_ms}ms, "
+            f"xtgeo_read={et_xtgeo_read_ms}ms) "
+            f"[{nx}x{ny}, {size_mb:.2f}MB] "
+            f"({addr_str})"
+        )
+
+        return xtgeo_surf
+
+    async def get_realization_surface_data_async(
         self, real_num: int, name: str, attribute: str, time_or_interval_str: Optional[str] = None
     ) -> Optional[xtgeo.RegularSurface]:
         """

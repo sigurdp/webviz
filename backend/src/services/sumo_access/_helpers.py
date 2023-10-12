@@ -24,6 +24,18 @@ async def _init_helper(access_token: str, case_uuid: str) -> Tuple[SumoClient, C
     return sumo_client, case
 
 
+def _init_helper_sync(access_token: str, case_uuid: str) -> Tuple[SumoClient, Case]:
+    sumo_client: SumoClient = create_sumo_client_instance(access_token)
+    case_collection = CaseCollection(sumo_client).filter(uuid=case_uuid)
+
+    if len(case_collection) != 1:
+        raise ValueError(f"None or multiple sumo cases found {case_uuid=}")
+
+    case = case_collection[0]
+
+    return sumo_client, case
+
+
 class SumoCase:
     def __init__(self, sumo_client: SumoClient, case: Case, case_uuid: str):
         self._sumo_client = sumo_client
@@ -56,6 +68,11 @@ class SumoEnsemble(SumoCase):
     @classmethod
     async def from_case_uuid(cls, access_token: str, case_uuid: str, iteration_name: str):  # type: ignore # wait on Python 3.11  # pylint: disable=arguments-differ
         sumo_client, case = await _init_helper(access_token, case_uuid)
+        return cls(sumo_client=sumo_client, case=case, case_uuid=case_uuid, iteration_name=iteration_name)
+
+    @classmethod
+    def from_case_uuid_sync(cls, access_token: str, case_uuid: str, iteration_name: str):  # type: ignore # wait on Python 3.11  # pylint: disable=arguments-differ
+        sumo_client, case = _init_helper_sync(access_token, case_uuid)
         return cls(sumo_client=sumo_client, case=case, case_uuid=case_uuid, iteration_name=iteration_name)
 
     def get_realizations(self) -> Sequence[int]:

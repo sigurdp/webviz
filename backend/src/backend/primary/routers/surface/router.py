@@ -82,7 +82,7 @@ async def get_realization_surface_data(
     perf_metrics = PerfMetrics(response)
 
     access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    xtgeo_surf = await access.get_realization_surface_data(
+    xtgeo_surf = await access.get_realization_surface_data_async(
         real_num=realization_num, name=name, attribute=attribute, time_or_interval_str=time_or_interval
     )
     perf_metrics.record_lap("get-surf")
@@ -154,12 +154,12 @@ async def get_property_surface_resampled_to_static_surface(
     perf_metrics = PerfMetrics(response)
 
     access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    xtgeo_surf_mesh = await access.get_realization_surface_data(
+    xtgeo_surf_mesh = await access.get_realization_surface_data_async(
         real_num=realization_num_mesh, name=name_mesh, attribute=attribute_mesh
     )
     perf_metrics.record_lap("mesh-surf")
 
-    xtgeo_surf_property = await access.get_realization_surface_data(
+    xtgeo_surf_property = await access.get_realization_surface_data_async(
         real_num=realization_num_property,
         name=name_property,
         attribute=attribute_property,
@@ -370,7 +370,7 @@ async def process_a_surf(item: SurfItem) -> ResultItem:
 
     access = global_access
 
-    xtgeo_surf = await access.get_realization_surface_data(real_num=item.real, name=item.name, attribute=item.attribute)
+    xtgeo_surf = await access.get_realization_surface_data_async(real_num=item.real, name=item.name, attribute=item.attribute)
     if xtgeo_surf is None:
         return None
     perf_metrics.record_lap("fetch")

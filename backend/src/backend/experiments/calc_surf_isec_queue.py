@@ -77,7 +77,7 @@ async def worker(name, queue, access: SurfaceAccess, fence_arr: np.ndarray, inte
 async def process_one_surface(access: SurfaceAccess, real_num: int, name: str, attribute: str, fence_arr: np.ndarray) -> schemas.SurfaceIntersectionData | None:
 
     print(f"Downloading surface {name} with attribute {attribute}-{real_num}")
-    xtgeo_surf = await access.get_realization_surface_data(real_num=real_num, name=name, attribute=attribute)
+    xtgeo_surf = await access.get_realization_surface_data_async(real_num=real_num, name=name, attribute=attribute)
     if xtgeo_surf is None:
         print(f"Skipping surface {name} with attribute {attribute}-{real_num}")
         return None

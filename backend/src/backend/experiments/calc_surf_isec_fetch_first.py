@@ -41,7 +41,7 @@ async def calc_surf_isec_fetch_first(
     real_arr = []
     for real in reals:
         real_arr.append(real)
-        coro_arr.append(access.get_realization_surface_data(real_num=real, name=name, attribute=attribute))
+        coro_arr.append(access.get_realization_surface_data_async(real_num=real, name=name, attribute=attribute))
 
     perf_metrics.record_lap("issue-requests")
 
