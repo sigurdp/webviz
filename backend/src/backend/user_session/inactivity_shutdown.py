@@ -22,7 +22,10 @@ class InactivityShutdown:
             Timer(60.0, self.check_inactivity_threshold).start()
 
     def check_inactivity_threshold(self) -> None:
+        print("check_inactivity_threshold() checking", flush=True)
+        
         if time.time() > self._time_last_request + self._inactivity_limit_seconds:
+            print("check_inactivity_threshold() EXITING!!!!!!!!!!!!!!!!!", flush=True)
             os._exit(0)
         else:
             Timer(60.0, self.check_inactivity_threshold).start()
