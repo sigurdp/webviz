@@ -114,10 +114,10 @@ async def calc_surf_isec_multiprocess(
     # Experiment with switching to spawn
     # Note that for multiprocess the default is fork
     # See: https://superfastpython.com/multiprocessing-pool-context/
-    context_object = multiprocessing.get_context("spawn")
+    # Use None to get the default context
+    context = multiprocessing.get_context("spawn")
 
-    with multiprocessing.Pool(
-        context=context_object,
+    with context.Pool(
         initializer=init_access_and_fence,
         initargs=(access_token, case_uuid, ensemble_name, fence_arr),
     ) as pool:
