@@ -112,10 +112,11 @@ async def calc_surf_isec_multiprocess(
     intersections = []
 
     # Experiment with switching to spawn
-    # Note that for multiprocess the default is fork
+    # Note that for multiprocess the default is fork, which is faster, but has issues with shutting down uvicorn
     # See: https://superfastpython.com/multiprocessing-pool-context/
     # Use None to get the default context
-    context = multiprocessing.get_context("spawn")
+    #context = multiprocessing.get_context("spawn")
+    context = multiprocessing.get_context("forkserver")
 
     with context.Pool(
         initializer=init_access_and_fence,
