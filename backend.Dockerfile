@@ -12,4 +12,4 @@ RUN pip install poetry \
     && poetry export -f requirements.txt -o requirements.txt \
     && pip install -r requirements.txt
 
-CMD exec uvicorn --proxy-headers --host=0.0.0.0 $UVICORN_ENTRYPOINT
+CMD exec uvicorn --log-level debug --proxy-headers --host=0.0.0.0 $UVICORN_ENTRYPOINT
