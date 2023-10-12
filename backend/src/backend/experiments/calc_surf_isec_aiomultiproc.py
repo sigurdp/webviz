@@ -1,10 +1,8 @@
-import signal
 import numpy as np
 import logging
 from typing import List
-import multiprocessing
+from aiomultiprocess import Pool
 
-# from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 
 from src.services.sumo_access.surface_access import SurfaceAccess
@@ -17,13 +15,12 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class SurfItem:
-    # access_token: str
+    access_token: str
     case_uuid: str
     ensemble_name: str
     name: str
     attribute: str
     real: int
-    # fence_arr: np.ndarray
 
 
 @dataclass
@@ -37,32 +34,25 @@ global_fence_arr = None
 
 
 def init_access_and_fence(access_token: str, case_uuid: str, ensemble_name: str, fence_arr: np.ndarray):
-    # !!!!!!!!!!!!!
-    # See: https://github.com/tiangolo/fastapi/issues/1487#issuecomment-1157066306
-    signal.set_wakeup_fd(-1)
-    signal.signal(signal.SIGTERM, signal.SIG_DFL)
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-
     global global_access
     global global_fence_arr
     global_access = SurfaceAccess.from_case_uuid_sync(access_token, case_uuid, ensemble_name)
     global_fence_arr = fence_arr
 
 
-def process_a_surf(item: SurfItem) -> ResultItem:
+async def process_a_surf(item: SurfItem) -> ResultItem:
     print(f">>>> process_a_surf {item.real=}", flush=True)
     perf_metrics = PerfMetrics()
 
     access = global_access
-    # access = await SurfaceAccess.from_case_uuid(item.access_token, item.case_uuid, item.ensemble_name)
-    perf_metrics.record_lap("access")
 
-    xtgeo_surf = access.get_realization_surface_data_sync(real_num=item.real, name=item.name, attribute=item.attribute)
+    xtgeo_surf = await access.get_realization_surface_data_async(
+        real_num=item.real, name=item.name, attribute=item.attribute
+    )
     if xtgeo_surf is None:
         return None
     perf_metrics.record_lap("fetch")
 
-    # line = xtgeo_surf.get_randomline(item.fence_arr)
     line = xtgeo_surf.get_randomline(global_fence_arr)
     perf_metrics.record_lap("calc")
 
@@ -73,8 +63,7 @@ def process_a_surf(item: SurfItem) -> ResultItem:
     return res_item
 
 
-async def calc_surf_isec_multiprocess(
-    perf_metrics: PerfMetrics,
+async def calc_surf_isec_aiomultiproc(
     authenticated_user: AuthenticatedUser,
     case_uuid: str,
     ensemble_name: str,
@@ -83,7 +72,7 @@ async def calc_surf_isec_multiprocess(
     num_reals: int,
     cutting_plane: schemas.CuttingPlane,
 ) -> List[schemas.SurfaceIntersectionData]:
-    myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_multiprocess():"
+    myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_aiomultiproc():"
     print(f"{myprefix} started", flush=True)
 
     fence_arr = np.array(
@@ -96,36 +85,37 @@ async def calc_surf_isec_multiprocess(
     for i in range(num_reals):
         item_list.append(
             SurfItem(
-                # access_token=access_token,
+                access_token=access_token,
                 case_uuid=case_uuid,
                 ensemble_name=ensemble_name,
                 name=name,
                 attribute=attribute,
                 real=i,
-                # fence_arr=fence_arr
             )
         )
 
-    print(f"{myprefix} built item_list {len(item_list)=}", flush=True)
+    print(f"{myprefix} built item_list {len(item_list)=}")
 
-    intersections = []
+    # See
+    # https://aiomultiprocess.omnilib.dev/en/latest/guide.html
 
-    # Experiment with switching to spawn
-    # Note that for multiprocess the default is fork, which is faster, but has issues with shutting down uvicorn
-    # See: https://superfastpython.com/multiprocessing-pool-context/
-    # Use None to get the default context
-    #context = multiprocessing.get_context("spawn")
-    #context = multiprocessing.get_context("forkserver")
-    context = multiprocessing.get_context(None)
+    processes = 4
+    queuecount = None
+    childconcurrency = 4
 
-    with context.Pool(
+    async with Pool(
+        queuecount=queuecount,
+        processes=processes,
+        childconcurrency=childconcurrency,
         initializer=init_access_and_fence,
-        initargs=(access_token, case_uuid, ensemble_name, fence_arr),
+        initargs=[access_token, case_uuid, ensemble_name, fence_arr],
     ) as pool:
-        res_item_arr = pool.map(process_a_surf, item_list)
-        print(f"{myprefix} back from map {len(res_item_arr)=}", flush=True)
+        print(f"{myprefix} pool info {pool.process_count=}")
+        print(f"{myprefix} pool info {pool.queue_count=}")
+        print(f"{myprefix} pool info {pool.childconcurrency=}")
 
-        for res_item in res_item_arr:
+        intersections = []
+        async for res_item in pool.map(process_a_surf, item_list):
             if res_item is not None and res_item.line is not None:
                 isecdata = schemas.SurfaceIntersectionData(
                     name="someName", hlen_arr=res_item.line[:, 0].tolist(), z_arr=res_item.line[:, 1].tolist()
@@ -135,6 +125,6 @@ async def calc_surf_isec_multiprocess(
             else:
                 print(f"{myprefix} res_item is None", flush=True)
 
-    print(f"{myprefix} finished", flush=True)
+    print(f"{myprefix} finished")
 
     return intersections
