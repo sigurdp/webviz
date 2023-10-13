@@ -103,9 +103,13 @@ async def calc_surf_isec_aiomultiproc(
     # See
     # https://aiomultiprocess.omnilib.dev/en/latest/guide.html
 
-    processes = None # Defaults to CPU count
-    queuecount = None # Default is 1
-    childconcurrency = 4 # Default is 16
+    processes = os.cpu_count()
+    childconcurrency = int(len(item_list)/processes)
+    queuecount = int(processes/4)
+
+    # processes = None # Defaults to CPU count
+    # queuecount = None # Default is 1
+    # childconcurrency = 4 # Default is 16
 
     async with aiomultiprocess.Pool(
         queuecount=queuecount,
