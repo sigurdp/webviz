@@ -116,12 +116,11 @@ async def calc_surf_isec_multiprocess(
     # Use None to get the default context
     #context = multiprocessing.get_context("spawn")
     #context = multiprocessing.get_context("forkserver")
-    context = multiprocessing.get_context(None)
+    #context = multiprocessing.get_context(None)
 
-    with context.Pool(
-        initializer=init_access_and_fence,
-        initargs=(access_token, case_uuid, ensemble_name, fence_arr),
-    ) as pool:
+    #with context.Pool(initializer=init_access_and_fence,initargs=(access_token, case_uuid, ensemble_name, fence_arr),) as pool:
+
+    with multiprocessing.Pool(initializer=init_access_and_fence, initargs=(access_token, case_uuid, ensemble_name, fence_arr)) as pool:
         res_item_arr = pool.map(process_a_surf, item_list)
         print(f"{myprefix} back from map {len(res_item_arr)=}", flush=True)
 
