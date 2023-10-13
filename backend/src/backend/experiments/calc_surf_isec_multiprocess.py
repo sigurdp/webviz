@@ -123,7 +123,9 @@ async def calc_surf_isec_multiprocess(
 
     # Note that the default number of processes is os.cpu_count()
     # Try to use twice as many processes as there are cores
-    processes = 2*os.cpu_count()
+    # Unclear if this has a positive effect or not??
+    #processes = 2*os.cpu_count()
+    processes = None
     print(f"{myprefix} trying to use {processes=}  ({os.cpu_count()=})", flush=True)
 
     with multiprocessing.Pool(processes=processes, initializer=init_access_and_fence, initargs=(access_token, case_uuid, ensemble_name, fence_arr)) as pool:
