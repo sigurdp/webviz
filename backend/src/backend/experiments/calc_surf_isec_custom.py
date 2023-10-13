@@ -45,11 +45,12 @@ async def calc_surf_isec_custom(
     name: str,
     attribute: str,
     num_reals: int,
+    num_workers: int, 
     cutting_plane: schemas.CuttingPlane,
 ) -> List[schemas.SurfaceIntersectionData]:
     
     myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_custom():"
-    print(f"{myprefix} started with {num_reals=}", flush=True)
+    print(f"{myprefix} started with {num_reals=} {num_workers=}", flush=True)
 
     perf_metrics.reset_lap_timer()
 
@@ -63,7 +64,7 @@ async def calc_surf_isec_custom(
     multi_queue = multiprocessing.Queue()
     async_queue = AsyncQueue(multi_queue)
 
-    num_procs=4
+    num_procs=num_workers
     proc_arr = []
     for proc_num in range(num_procs):
         p = multiprocessing.Process(target=process_surf_worker, args=(f"sigworker{proc_num}", multi_queue, fence_arr))
@@ -95,7 +96,8 @@ async def calc_surf_isec_custom(
 
 async def load_surf_bytes_task(queue, access: SurfaceAccess, real_num: int, name: str, attribute: str):
     surf_bytes = await access.get_realization_surface_bytes_async(real_num=real_num, name=name, attribute=attribute)
-    await queue.put(surf_bytes)
+    if surf_bytes is not None:
+        await queue.put(surf_bytes)
 
 
 def process_surf_worker(workerName, queue, fence_arr):
