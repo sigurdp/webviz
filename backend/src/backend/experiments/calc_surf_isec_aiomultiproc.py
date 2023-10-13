@@ -1,7 +1,8 @@
 import numpy as np
 import logging
+import os
 from typing import List
-from aiomultiprocess import Pool
+import aiomultiprocess
 
 from dataclasses import dataclass
 
@@ -12,10 +13,10 @@ from src.backend.utils.perf_metrics import PerfMetrics
 
 LOGGER = logging.getLogger(__name__)
 
+aiomultiprocess.set_start_method("fork")
 
 @dataclass
 class SurfItem:
-    access_token: str
     case_uuid: str
     ensemble_name: str
     name: str
@@ -41,14 +42,12 @@ def init_access_and_fence(access_token: str, case_uuid: str, ensemble_name: str,
 
 
 async def process_a_surf(item: SurfItem) -> ResultItem:
-    print(f">>>> process_a_surf {item.real=}", flush=True)
+    print(f">>>> process_a_surf {os.getpid()=} {item.real=}", flush=True)
     perf_metrics = PerfMetrics()
 
     access = global_access
 
-    xtgeo_surf = await access.get_realization_surface_data_async(
-        real_num=item.real, name=item.name, attribute=item.attribute
-    )
+    xtgeo_surf = await access.get_realization_surface_data_async(real_num=item.real, name=item.name, attribute=item.attribute)
     if xtgeo_surf is None:
         return None
     perf_metrics.record_lap("fetch")
@@ -58,7 +57,7 @@ async def process_a_surf(item: SurfItem) -> ResultItem:
 
     res_item = ResultItem(perf_info=perf_metrics.to_string(), line=line)
 
-    print(f">>>> process_a_surf {item.real=} done", flush=True)
+    print(f">>>> process_a_surf {os.getpid()=} {item.real=} done", flush=True)
 
     return res_item
 
@@ -72,12 +71,11 @@ async def calc_surf_isec_aiomultiproc(
     num_reals: int,
     cutting_plane: schemas.CuttingPlane,
 ) -> List[schemas.SurfaceIntersectionData]:
+    
     myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_aiomultiproc():"
     print(f"{myprefix} started", flush=True)
 
-    fence_arr = np.array(
-        [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
-    ).T
+    fence_arr = np.array([cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]).T
 
     access_token = authenticated_user.get_sumo_access_token()
 
@@ -85,7 +83,6 @@ async def calc_surf_isec_aiomultiproc(
     for i in range(num_reals):
         item_list.append(
             SurfItem(
-                access_token=access_token,
                 case_uuid=case_uuid,
                 ensemble_name=ensemble_name,
                 name=name,
@@ -94,25 +91,25 @@ async def calc_surf_isec_aiomultiproc(
             )
         )
 
-    print(f"{myprefix} built item_list {len(item_list)=}")
+    print(f"{myprefix} built item_list {len(item_list)=}", flush=True)
 
     # See
     # https://aiomultiprocess.omnilib.dev/en/latest/guide.html
 
-    processes = 4
-    queuecount = None
-    childconcurrency = 4
+    processes = None # Defaults to CPU count
+    queuecount = None # Default is 1
+    childconcurrency = 4 # Default is 16
 
-    async with Pool(
+    async with aiomultiprocess.Pool(
         queuecount=queuecount,
         processes=processes,
         childconcurrency=childconcurrency,
         initializer=init_access_and_fence,
         initargs=[access_token, case_uuid, ensemble_name, fence_arr],
     ) as pool:
-        print(f"{myprefix} pool info {pool.process_count=}")
-        print(f"{myprefix} pool info {pool.queue_count=}")
-        print(f"{myprefix} pool info {pool.childconcurrency=}")
+        print(f"{myprefix} pool info {pool.process_count=}", flush=True)
+        print(f"{myprefix} pool info {pool.queue_count=}", flush=True)
+        print(f"{myprefix} pool info {pool.childconcurrency=}", flush=True)
 
         intersections = []
         async for res_item in pool.map(process_a_surf, item_list):
@@ -125,6 +122,6 @@ async def calc_surf_isec_aiomultiproc(
             else:
                 print(f"{myprefix} res_item is None", flush=True)
 
-    print(f"{myprefix} finished")
+    print(f"{myprefix} finished", flush=True)
 
     return intersections
