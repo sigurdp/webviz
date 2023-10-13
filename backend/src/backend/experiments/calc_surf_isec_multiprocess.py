@@ -1,3 +1,4 @@
+import os
 import signal
 import numpy as np
 import logging
@@ -120,7 +121,12 @@ async def calc_surf_isec_multiprocess(
 
     #with context.Pool(initializer=init_access_and_fence,initargs=(access_token, case_uuid, ensemble_name, fence_arr),) as pool:
 
-    with multiprocessing.Pool(initializer=init_access_and_fence, initargs=(access_token, case_uuid, ensemble_name, fence_arr)) as pool:
+    # Note that the default number of processes is os.cpu_count()
+    # Try to use twice as many processes as there are cores
+    processes = 2*os.cpu_count()
+    print(f"{myprefix} trying to use {processes=}  ({os.cpu_count()=})", flush=True)
+
+    with multiprocessing.Pool(processes=processes, initializer=init_access_and_fence, initargs=(access_token, case_uuid, ensemble_name, fence_arr)) as pool:
         res_item_arr = pool.map(process_a_surf, item_list)
         print(f"{myprefix} back from map {len(res_item_arr)=}", flush=True)
 

@@ -53,7 +53,7 @@ async def post_calc_surf_isec_experiments(
     cutting_plane: schemas.CuttingPlane = Body(embed=True),
 ) ->  List[schemas.SurfaceIntersectionData]:
 
-    LOGGER.debug(f"route calc_surf_isec_experiments - entering {os.cpu_count()=}")
+    LOGGER.debug(f"route calc_surf_isec_experiments - entering  actual {os.cpu_count()=}")
 
     perf_metrics = PerfMetrics(response)
 
