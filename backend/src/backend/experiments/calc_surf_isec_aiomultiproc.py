@@ -11,10 +11,16 @@ from src.services.sumo_access.surface_access import SurfaceAccess
 from src.services.utils.authenticated_user import AuthenticatedUser
 from src.backend.primary.routers.surface import schemas
 from src.backend.utils.perf_metrics import PerfMetrics
+from src.backend.experiments.caching import get_user_cache
 
 LOGGER = logging.getLogger(__name__)
 
+logging.getLogger("src.backend.experiments.caching").setLevel(level=logging.DEBUG)
+
+
 aiomultiprocess.set_start_method("fork")
+
+
 
 @dataclass
 class SurfItem:
@@ -33,36 +39,54 @@ class ResultItem:
 
 global_access = None
 global_fence_arr = None
+global_user_cache = None
 
 
-def init_access_and_fence(access_token: str, case_uuid: str, ensemble_name: str, fence_arr: np.ndarray):
+def init_access_and_fence(authenticated_user: AuthenticatedUser, case_uuid: str, ensemble_name: str, fence_arr: np.ndarray):
     # !!!!!!!!!!!!!
     # See: https://github.com/tiangolo/fastapi/issues/1487#issuecomment-1157066306
     signal.set_wakeup_fd(-1)
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+    access_token = authenticated_user.get_sumo_access_token()
+
     global global_access
     global global_fence_arr
+    global global_user_cache
     global_access = SurfaceAccess.from_case_uuid_sync(access_token, case_uuid, ensemble_name)
     global_fence_arr = fence_arr
+    global_user_cache = get_user_cache(authenticated_user)
 
 
 async def process_a_surf(item: SurfItem) -> ResultItem:
     print(f">>>> process_a_surf {os.getpid()=} {item.real=}", flush=True)
     perf_metrics = PerfMetrics()
 
-    access = global_access
+    cache_key = f"surface:{item.case_uuid}_{item.ensemble_name}_Real{item.real}_{item.name}_{item.attribute}"
+    #cached_surf = await global_user_cache.get_RegularSurface(cache_key)
+    cached_surf = await global_user_cache.get_RegularSurface_HACK(cache_key)
+    perf_metrics.record_lap("read-cache")
 
-    xtgeo_surf = await access.get_realization_surface_data_async(real_num=item.real, name=item.name, attribute=item.attribute)
+    xtgeo_surf = cached_surf
+    
     if xtgeo_surf is None:
-        return None
-    perf_metrics.record_lap("fetch")
+        access = global_access
+
+        xtgeo_surf = await access.get_realization_surface_data_async(real_num=item.real, name=item.name, attribute=item.attribute)
+        if xtgeo_surf is None:
+            return None
+        perf_metrics.record_lap("fetch")
 
     line = xtgeo_surf.get_randomline(global_fence_arr)
     perf_metrics.record_lap("calc")
 
     res_item = ResultItem(perf_info=perf_metrics.to_string(), line=line)
+
+    if cached_surf is None:
+        #await global_user_cache.set_RegularSurface(cache_key, xtgeo_surf)
+        await global_user_cache.set_RegularSurface_HACK(cache_key, xtgeo_surf)
+        perf_metrics.record_lap("write-cache")
 
     print(f">>>> process_a_surf {os.getpid()=} {item.real=} done", flush=True)
 
@@ -116,7 +140,7 @@ async def calc_surf_isec_aiomultiproc(
         processes=processes,
         childconcurrency=childconcurrency,
         initializer=init_access_and_fence,
-        initargs=[access_token, case_uuid, ensemble_name, fence_arr],
+        initargs=[authenticated_user, case_uuid, ensemble_name, fence_arr],
     ) as pool:
         print(f"{myprefix} pool info {pool.process_count=}", flush=True)
         print(f"{myprefix} pool info {pool.queue_count=}", flush=True)
