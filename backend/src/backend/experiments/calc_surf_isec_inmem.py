@@ -41,25 +41,18 @@ IN_MEM_SURF_CACHE = InMemSurfCache()
 
 @dataclass
 class SurfItem:
-    # access_token: str
     case_uuid: str
     ensemble_name: str
     name: str
     attribute: str
     real: int
-    # fence_arr: np.ndarray
-
-
-@dataclass
-class ResultItem:
-    perf_info: str
-    line: np.ndarray
 
 
 global_access = None
+global_many_surfs_getter = None
 
 
-def init_access(access_token: str, case_uuid: str, ensemble_name: str):
+def init_access(access_token: str, case_uuid: str, ensemble_name: str, name: str, attribute: str):
     # !!!!!!!!!!!!!
     # See: https://github.com/tiangolo/fastapi/issues/1487#issuecomment-1157066306
     signal.set_wakeup_fd(-1)
@@ -69,23 +62,30 @@ def init_access(access_token: str, case_uuid: str, ensemble_name: str):
     global global_access
     global_access = SurfaceAccess.from_case_uuid_sync(access_token, case_uuid, ensemble_name)
 
+    global global_many_surfs_getter
+    global_many_surfs_getter = global_access.prepare_for_getting_many_realizations(name=name, attribute=attribute)
+
 
 def fetch_a_surf(item: SurfItem) -> bytes:
     print(f">>>> fetch_a_surf {item.real=}", flush=True)
-    perf_metrics = PerfMetrics()
 
-    access = global_access
-    # access = await SurfaceAccess.from_case_uuid(item.access_token, item.case_uuid, item.ensemble_name)
-    perf_metrics.record_lap("access")
+    # surf_bytes = global_access.get_realization_surface_bytes_sync(real_num=item.real, name=item.name, attribute=item.attribute)
+    # if surf_bytes is None:
+    #     return None
 
-    surf_bytes = access.get_realization_surface_bytes_sync(real_num=item.real, name=item.name, attribute=item.attribute)
-    if surf_bytes is None:
+    # xtgeo_surf = global_access.get_realization_surface_data_sync(real_num=item.real, name=item.name, attribute=item.attribute)
+    # if xtgeo_surf is None:
+    #     return None
+
+    xtgeo_surf = global_many_surfs_getter.get_real(real_num=item.real)
+    if xtgeo_surf is None:
         return None
-    perf_metrics.record_lap("fetch")
 
     print(f">>>> fetch_a_surf {item.real=} done", flush=True)
 
-    return surf_bytes
+    #return surf_bytes
+    return xtgeo_surf
+
 
 
 async def calc_surf_isec_inmem(
@@ -132,7 +132,8 @@ async def calc_surf_isec_inmem(
 
 
     if len(items_to_fetch_list) > 0:
-        with multiprocessing.Pool(initializer=init_access, initargs=(access_token, case_uuid, ensemble_name)) as pool:
+        with multiprocessing.Pool(initializer=init_access, initargs=(access_token, case_uuid, ensemble_name, name, attribute)) as pool:
+            print(f"{myprefix} just before map", flush=True)
             res_item_arr = pool.map(fetch_a_surf, items_to_fetch_list)
             print(f"{myprefix} back from map {len(res_item_arr)=}", flush=True)
 
@@ -140,8 +141,9 @@ async def calc_surf_isec_inmem(
                 xtgeo_surf = None
                 if res_item is not None:
                     print(f"{myprefix} {type(res_item)=}", flush=True)
-                    byte_stream = io.BytesIO(res_item)
-                    xtgeo_surf = xtgeo.surface_from_file(byte_stream)
+                    xtgeo_surf = res_item
+                    # byte_stream = io.BytesIO(res_item)
+                    # xtgeo_surf = xtgeo.surface_from_file(byte_stream)
 
                 xtgeo_surf_arr.append(xtgeo_surf)
                 IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, items_to_fetch_list[idx].name, items_to_fetch_list[idx].attribute, items_to_fetch_list[idx].real, cache_entry=SurfCacheEntry(xtgeo_surf))

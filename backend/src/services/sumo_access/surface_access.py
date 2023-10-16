@@ -16,6 +16,23 @@ from .generic_types import SumoContent
 LOGGER = logging.getLogger(__name__)
 
 
+class ManyRealSurfsGetter:
+    def __init__(self, sumo_surf_arr: List[Surface]):
+        self._sumo_surf_arr = sumo_surf_arr
+
+    def get_real(self, real_num: int) -> Optional[xtgeo.RegularSurface]:
+        for sumo_surf in self._sumo_surf_arr:
+            if sumo_surf.realization == real_num:
+                byte_stream: BytesIO = sumo_surf.blob
+                xtgeo_surf = xtgeo.surface_from_file(byte_stream)
+                return xtgeo_surf
+
+        return None
+
+
+
+
+
 class SurfaceAccess(SumoEnsemble):
     async def get_surface_directory(self) -> List[SurfaceMeta]:
         surface_collection: SurfaceCollection = self._case.surfaces.filter(
@@ -49,6 +66,58 @@ class SurfaceAccess(SumoEnsemble):
             surfs.append(surf_meta)
 
         return surfs
+
+    def prepare_for_getting_many_realizations(
+        self, name: str, attribute: str, time_or_interval_str: Optional[str] = None
+    ) -> ManyRealSurfsGetter:
+        """
+        Get surface data for a realization surface
+        """
+        timer = PerfTimer()
+        addr_str = self._make_addr_str(-1, name, attribute, time_or_interval_str)
+
+        if time_or_interval_str is None:
+            time_filter = TimeFilter(TimeType.NONE)
+
+        else:
+            timestamp_arr = time_or_interval_str.split("/", 1)
+            if len(timestamp_arr) == 0 or len(timestamp_arr) > 2:
+                raise ValueError("time_or_interval_str must contain a single timestamp or interval")
+            if len(timestamp_arr) == 1:
+                time_filter = TimeFilter(
+                    TimeType.TIMESTAMP,
+                    start=timestamp_arr[0],
+                    end=timestamp_arr[0],
+                    exact=True,
+                )
+            else:
+                time_filter = TimeFilter(
+                    TimeType.INTERVAL,
+                    start=timestamp_arr[0],
+                    end=timestamp_arr[1],
+                    exact=True,
+                )
+
+        surface_collection: SurfaceCollection = self._case.surfaces.filter(
+            iteration=self._iteration_name,
+            aggregation=False,
+            realization=None,
+            name=name,
+            tagname=attribute,
+            time=time_filter,
+        )
+
+        surf_count = len(surface_collection)
+        if surf_count == 0:
+            LOGGER.warning(f"No realization surface found in Sumo for {addr_str}")
+            return None
+
+        sumo_surf_arr = []
+        for sumo_surf in surface_collection:
+            sumo_surf_arr.append(sumo_surf)
+
+        return ManyRealSurfsGetter(sumo_surf_arr)
+
 
     def get_realization_surface_data_sync(
         self, real_num: int, name: str, attribute: str, time_or_interval_str: Optional[str] = None
