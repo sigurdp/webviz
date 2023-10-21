@@ -379,7 +379,7 @@ async def execute_usersession_job_calc_surf_isec_experiments(
     cutting_plane: schemas.CuttingPlane,
 ) -> List[schemas.SurfaceIntersectionData]:
 
-    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_isec_experiments() started")
+    LOGGER.debug(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_isec_experiments() started")
 
     query_params = {
         "case_uuid": case_uuid,
@@ -403,9 +403,11 @@ async def execute_usersession_job_calc_surf_isec_experiments(
         timeout=600,
     )
 
+    LOGGER.debug(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_isec_experiments() issued request, waiting...")
+
     job_resp = await client.send(job_req)
 
-    print(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_isec_experiments() finished")
+    LOGGER.debug(">>>>>>>>>>>>>>>>> execute_usersession_job_calc_surf_isec_experiments() finished")
 
     return job_resp.json()
 
