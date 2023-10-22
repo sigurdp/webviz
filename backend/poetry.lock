@@ -17,6 +17,17 @@ msgpack = ["msgpack (>=0.5.5)"]
 redis = ["redis (>=4.2.0)"]
 
 [[package]]
+name = "aiofiles"
+version = "23.2.1"
+description = "File support for asyncio."
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "aiofiles-23.2.1-py3-none-any.whl", hash = "sha256:19297512c647d4b27a2cf7c34caa7e405c0d60b5560618a29a9fe027b18b0107"},
+    {file = "aiofiles-23.2.1.tar.gz", hash = "sha256:84ec2218d8419404abcb9f0c02df3f34c6e0a68ed41072acfb1cef5cbc29051a"},
+]
+
+[[package]]
 name = "aiomultiprocess"
 version = "0.9.0"
 description = "AsyncIO version of the standard multiprocessing module"
@@ -3074,4 +3085,4 @@ tests = ["hypothesis", "pytest", "pytest-benchmark", "pytest-mock", "pytest-snap
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "e8aa7c54869c3dd4ca55fac401cc69b6e5be507c624ddc6ab85e726915b9fb13"
+content-hash = "d70cb74a75cea96785e0beb8937ed22ac25820db2a9fc094856d1630c24d151c"

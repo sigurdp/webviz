@@ -7,6 +7,9 @@ import multiprocessing
 import xtgeo
 import asyncio
 import os
+import shutil
+import aiofiles
+from src.services.utils.perf_timer import PerfTimer
 
 # from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -130,6 +133,18 @@ async def calc_surf_isec_inmem(
     print(f"{myprefix}  {len(os.sched_getaffinity(0))=}", flush=True)
     print(f"{myprefix}  {query_cpu()=}", flush=True)
 
+    try:
+        print(f"{myprefix}  {os.getcwd()=}", flush=True)
+        print(f"{myprefix}  {os.listdir('.')=}", flush=True)
+        print(f"{myprefix}  {os.listdir('/')=}", flush=True)
+    except:
+        pass
+
+    try:
+        print(f"{myprefix}  {shutil.disk_usage('.')=}", flush=True)
+        print(f"{myprefix}  {shutil.disk_usage('/')=}", flush=True)
+    except:
+        pass
 
     fence_arr = np.array(
         [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
@@ -170,6 +185,8 @@ async def calc_surf_isec_inmem(
     print(f"{myprefix} {len(xtgeo_surf_arr)=}", flush=True)
     print(f"{myprefix} {len(items_to_fetch_list)=}", flush=True)
 
+    # !!!!!!!!!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!!!
     processes = 8
     print(f"{myprefix} trying to use {processes=}  ({os.cpu_count()=})", flush=True)
 
@@ -193,6 +210,32 @@ async def calc_surf_isec_inmem(
                 IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, items_to_fetch_list[idx].name, items_to_fetch_list[idx].attribute, items_to_fetch_list[idx].real, cache_entry=SurfCacheEntry(xtgeo_surf))
                 #await redis_surf_cache.set(case_uuid, ensemble_name, items_to_fetch_list[idx].name, items_to_fetch_list[idx].attribute, items_to_fetch_list[idx].real, cache_entry=SurfCacheEntry(xtgeo_surf))
 
+
+
+    my_scratch_dir = os.getcwd() + "/my_scratch"
+    os.makedirs(my_scratch_dir, exist_ok=True)
+
+    perf_timer = PerfTimer()
+    print(f"{myprefix} writing surfaces to file {len(xtgeo_surf_arr)=}", flush=True)
+    file_write_coros = []
+    for idx, xtgeo_surf in enumerate(xtgeo_surf_arr):
+        if xtgeo_surf is not None:
+            file_name = f"{my_scratch_dir}/idx_{idx}.bin"
+            file_write_coros.append(write_surf_to_file(xtgeo_surf, file_name))
+    await asyncio.gather(*file_write_coros)
+    print(f"{myprefix} done writing to file in {perf_timer.elapsed_s()}s", flush=True)
+
+    print(f"{myprefix}  -----------------------------------------------", flush=True)
+    print(f"{myprefix}  {my_scratch_dir=}", flush=True)
+    dir_contents_arr = os.listdir(my_scratch_dir)
+    print(f"{myprefix}  {dir_contents_arr=}", flush=True)
+    first_file = my_scratch_dir + '/' + dir_contents_arr[0]
+    last_file = my_scratch_dir + '/' + dir_contents_arr[-1]
+    print(f"{myprefix}  size of {first_file=}: {os.path.getsize(first_file)=}", flush=True)
+    print(f"{myprefix}  size of {last_file=}: {os.path.getsize(last_file)=}", flush=True)
+    print(f"{myprefix}  -----------------------------------------------", flush=True)
+
+
     intersections = []
 
     for xtgeo_surf in xtgeo_surf_arr:
@@ -202,6 +245,13 @@ async def calc_surf_isec_inmem(
 
     return intersections
 
+
+async def write_surf_to_file(xtgeo_surf: xtgeo.RegularSurface, file_name: str):
+    async with aiofiles.open(file_name, mode='wb') as f:
+        masked_values = xtgeo_surf.values.astype(np.float32)
+        values_np = np.ma.filled(masked_values, fill_value=np.nan)
+        arr_bytes = bytes(values_np.ravel(order="C").data)
+        await f.write(arr_bytes)
 
 def query_cpu():
     print("Entering query_cpu()", flush=True)
