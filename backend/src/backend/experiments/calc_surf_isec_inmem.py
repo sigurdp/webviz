@@ -6,6 +6,7 @@ from typing import List
 import multiprocessing
 import xtgeo
 import asyncio
+import os
 
 # from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -125,6 +126,11 @@ async def calc_surf_isec_inmem(
     myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_inmem():"
     print(f"{myprefix} started", flush=True)
 
+    print(f"{myprefix}  {os.cpu_count()=}", flush=True)
+    print(f"{myprefix}  {len(os.sched_getaffinity(0))=}", flush=True)
+    print(f"{myprefix}  {query_cpu()=}", flush=True)
+
+
     fence_arr = np.array(
         [cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]
     ).T
@@ -141,9 +147,9 @@ async def calc_surf_isec_inmem(
     coro_arr = []
     for real in reals:
         coro_arr.append(redis_surf_cache.get(case_uuid, ensemble_name, name, attribute, real))
-    print("awaiting cache_entry_arr", flush=True)
+    print(f"{myprefix} - awaiting cache_entry_arr", flush=True)
     cache_entry_arr: List[SurfCacheEntry | None] = await asyncio.gather(*coro_arr)
-    print("resolved cache_entry_arr", flush=True)
+    print(f"{myprefix} - resolved cache_entry_arr", flush=True)
 
     for real in reals:
         #cache_entry = IN_MEM_SURF_CACHE.get(case_uuid, ensemble_name, name, attribute, real)
@@ -193,3 +199,20 @@ async def calc_surf_isec_inmem(
             intersections.append(schemas.SurfaceIntersectionData(name="someName", hlen_arr=line[:, 0].tolist(), z_arr=line[:, 1].tolist()))
 
     return intersections
+
+
+def query_cpu():
+    if os.path.isfile('/sys/fs/cgroup/cpu/cpu.cfs_quota_us'):
+        cpu_quota = int(open('/sys/fs/cgroup/cpu/cpu.cfs_quota_us').read().rstrip())
+        #print(cpu_quota) # Not useful for AWS Batch based jobs as result is -1, but works on local linux systems
+    
+    if cpu_quota != -1 and os.path.isfile('/sys/fs/cgroup/cpu/cpu.cfs_period_us'):
+        cpu_period = int(open('/sys/fs/cgroup/cpu/cpu.cfs_period_us').read().rstrip())
+        #print(cpu_period)
+        avail_cpu = int(cpu_quota / cpu_period) # Divide quota by period and you should get num of allotted CPU to the container, rounded down if fractional.
+    elif os.path.isfile('/sys/fs/cgroup/cpu/cpu.shares'):
+        cpu_shares = int(open('/sys/fs/cgroup/cpu/cpu.shares').read().rstrip())
+        #print(cpu_shares) # For AWS, gives correct value * 1024.
+        avail_cpu = int(cpu_shares / 1024)
+    
+    return avail_cpu
