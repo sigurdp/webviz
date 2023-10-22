@@ -202,6 +202,7 @@ async def calc_surf_isec_inmem(
 
 
 def query_cpu():
+    print("Entering query_cpu()", flush=True)
     cpu_quota = -1
     avail_cpu = -1
 
