@@ -170,7 +170,7 @@ async def calc_surf_isec_inmem(
     print(f"{myprefix} {len(xtgeo_surf_arr)=}", flush=True)
     print(f"{myprefix} {len(items_to_fetch_list)=}", flush=True)
 
-    processes = 32
+    processes = 8
     print(f"{myprefix} trying to use {processes=}  ({os.cpu_count()=})", flush=True)
 
     if len(items_to_fetch_list) > 0:
