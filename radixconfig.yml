@@ -35,6 +35,7 @@ spec:
       variables:
         UVICORN_PORT: 5000
         UVICORN_ENTRYPOINT: src.backend.primary.main:app
+
     - name: redis-login-state
       image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
       ports:
@@ -42,6 +43,11 @@ spec:
           port: 6379
       variables:
         ALLOW_EMPTY_PASSWORD: yes
+      resources:
+        requests:
+          memory: "8G"
+          cpu: "1000m"
+
     - name: redis-user-session-state
       image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
       ports:
