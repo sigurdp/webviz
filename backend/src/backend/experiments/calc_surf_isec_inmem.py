@@ -38,27 +38,27 @@ class InMemSurfCache:
         return surf
 
 
-class RedisSurfCache:
-    def __init__(self, authenticated_user: AuthenticatedUser):
-        self._user_cache = get_user_cache(authenticated_user)
+# class RedisSurfCache:
+#     def __init__(self, authenticated_user: AuthenticatedUser):
+#         self._user_cache = get_user_cache(authenticated_user)
 
-    async def set(self, case_uuid: str, ensemble_name: str, name: str, attribute: str, real: int, cache_entry: SurfCacheEntry):
-        cache_key = f"surface:{case_uuid}_{ensemble_name}_Real{real}_{name}_{attribute}"
-        xtgeo_surf = cache_entry.surf
-        if xtgeo_surf is None:
-            xtgeo_surf = xtgeo.RegularSurface(1, 1, 1, 1)
-        await self._user_cache.set_RegularSurface_HACK(cache_key, xtgeo_surf)
+#     async def set(self, case_uuid: str, ensemble_name: str, name: str, attribute: str, real: int, cache_entry: SurfCacheEntry):
+#         cache_key = f"surface:{case_uuid}_{ensemble_name}_Real{real}_{name}_{attribute}"
+#         xtgeo_surf = cache_entry.surf
+#         if xtgeo_surf is None:
+#             xtgeo_surf = xtgeo.RegularSurface(1, 1, 1, 1)
+#         await self._user_cache.set_RegularSurface_HACK(cache_key, xtgeo_surf)
 
-    async def get(self, case_uuid: str, ensemble_name: str, name: str, attribute: str, real: int) -> SurfCacheEntry | None:
-        cache_key = f"surface:{case_uuid}_{ensemble_name}_Real{real}_{name}_{attribute}"
-        xtgeo_surf = await self._user_cache.get_RegularSurface_HACK(cache_key)
-        if xtgeo_surf is None:
-            return None
+#     async def get(self, case_uuid: str, ensemble_name: str, name: str, attribute: str, real: int) -> SurfCacheEntry | None:
+#         cache_key = f"surface:{case_uuid}_{ensemble_name}_Real{real}_{name}_{attribute}"
+#         xtgeo_surf = await self._user_cache.get_RegularSurface_HACK(cache_key)
+#         if xtgeo_surf is None:
+#             return None
 
-        if xtgeo_surf.ncol == 1 and xtgeo_surf.nrow == 1:
-            return SurfCacheEntry(surf=None)
+#         if xtgeo_surf.ncol == 1 and xtgeo_surf.nrow == 1:
+#             return SurfCacheEntry(surf=None)
         
-        return SurfCacheEntry(surf=xtgeo_surf)
+#         return SurfCacheEntry(surf=xtgeo_surf)
 
 
 IN_MEM_SURF_CACHE = InMemSurfCache()
@@ -142,19 +142,18 @@ async def calc_surf_isec_inmem(
     xtgeo_surf_arr = []
     items_to_fetch_list = []
 
-    redis_surf_cache = RedisSurfCache(authenticated_user)
+    #redis_surf_cache = RedisSurfCache(authenticated_user)
 
-    coro_arr = []
-    for real in reals:
-        coro_arr.append(redis_surf_cache.get(case_uuid, ensemble_name, name, attribute, real))
-    print(f"{myprefix} - awaiting cache_entry_arr", flush=True)
-    cache_entry_arr: List[SurfCacheEntry | None] = await asyncio.gather(*coro_arr)
-    print(f"{myprefix} - resolved cache_entry_arr", flush=True)
+    # coro_arr = []
+    # for real in reals:
+    #     coro_arr.append(redis_surf_cache.get(case_uuid, ensemble_name, name, attribute, real))
+    # print(f"{myprefix} - awaiting cache_entry_arr", flush=True)
+    # cache_entry_arr: List[SurfCacheEntry | None] = await asyncio.gather(*coro_arr)
+    # print(f"{myprefix} - resolved cache_entry_arr", flush=True)
 
     for real in reals:
-        #cache_entry = IN_MEM_SURF_CACHE.get(case_uuid, ensemble_name, name, attribute, real)
-        #cache_entry = await redis_surf_cache.get(case_uuid, ensemble_name, name, attribute, real)
-        cache_entry = cache_entry_arr[real]
+        cache_entry = IN_MEM_SURF_CACHE.get(case_uuid, ensemble_name, name, attribute, real)
+        #cache_entry = cache_entry_arr[real]
         if cache_entry is not None:
             xtgeo_surf_arr.append(cache_entry.surf)
         else:
@@ -188,8 +187,8 @@ async def calc_surf_isec_inmem(
                     # xtgeo_surf = xtgeo.surface_from_file(byte_stream)
 
                 xtgeo_surf_arr.append(xtgeo_surf)
-                #IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, items_to_fetch_list[idx].name, items_to_fetch_list[idx].attribute, items_to_fetch_list[idx].real, cache_entry=SurfCacheEntry(xtgeo_surf))
-                await redis_surf_cache.set(case_uuid, ensemble_name, items_to_fetch_list[idx].name, items_to_fetch_list[idx].attribute, items_to_fetch_list[idx].real, cache_entry=SurfCacheEntry(xtgeo_surf))
+                IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, items_to_fetch_list[idx].name, items_to_fetch_list[idx].attribute, items_to_fetch_list[idx].real, cache_entry=SurfCacheEntry(xtgeo_surf))
+                #await redis_surf_cache.set(case_uuid, ensemble_name, items_to_fetch_list[idx].name, items_to_fetch_list[idx].attribute, items_to_fetch_list[idx].real, cache_entry=SurfCacheEntry(xtgeo_surf))
 
     intersections = []
 
