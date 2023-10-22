@@ -170,9 +170,12 @@ async def calc_surf_isec_inmem(
     print(f"{myprefix} {len(xtgeo_surf_arr)=}", flush=True)
     print(f"{myprefix} {len(items_to_fetch_list)=}", flush=True)
 
+    processes = 32
+    print(f"{myprefix} trying to use {processes=}  ({os.cpu_count()=})", flush=True)
+
     if len(items_to_fetch_list) > 0:
         context = multiprocessing.get_context("spawn")
-        with context.Pool(initializer=init_access, initargs=(access_token, case_uuid, ensemble_name, name, attribute)) as pool:
+        with context.Pool(processes=processes, initializer=init_access, initargs=(access_token, case_uuid, ensemble_name, name, attribute)) as pool:
         #with multiprocessing.Pool(initializer=init_access, initargs=(access_token, case_uuid, ensemble_name, name, attribute)) as pool:
             print(f"{myprefix} just before map", flush=True)
             res_item_arr = pool.map(fetch_a_surf, items_to_fetch_list)
