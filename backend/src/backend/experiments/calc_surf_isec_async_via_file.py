@@ -95,9 +95,10 @@ async def calc_surf_isec_async_via_file(
     xtgeo_surf_arr = []
     for task in done_arr:
         surf_item: DownloadedSurfItem = task.result()
-        xtgeo_surf = xtgeo.surface_from_file(surf_item.file_name)
-        xtgeo_surf_arr.append(xtgeo_surf)
-        print(f"{myprefix}  loaded xt_geo {surf_item.file_name=}", flush=True)
+        if surf_item.file_name is not None:
+            xtgeo_surf = xtgeo.surface_from_file(surf_item.file_name)
+            xtgeo_surf_arr.append(xtgeo_surf)
+            print(f"{myprefix}  loaded xt_geo {surf_item.file_name=}", flush=True)
 
     perf_metrics.record_lap("load-xtgeo")
 
