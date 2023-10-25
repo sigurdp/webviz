@@ -68,7 +68,6 @@ async def post_calc_surf_isec_experiments(
     #intersections = await calc_surf_isec_custom(perf_metrics, authenticated_user, case_uuid, ensemble_name, name, attribute, num_reals, num_workers, cutting_plane)
     #intersections = await calc_surf_isec_inmem(perf_metrics, authenticated_user, case_uuid, ensemble_name, name, attribute, num_reals, cutting_plane)
     intersections = await calc_surf_isec_async_via_file(perf_metrics, authenticated_user, case_uuid, ensemble_name, name, attribute, num_reals, num_workers, cutting_plane)
-    
 
     #intersections = await calc_surf_isec_many_multiprocess(perf_metrics, authenticated_user, case_uuid, ensemble_name, name, attribute, num_reals, cutting_plane)
 

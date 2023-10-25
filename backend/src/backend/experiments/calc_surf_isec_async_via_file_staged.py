@@ -142,7 +142,7 @@ def bytes_to_xtgeo_surf(byte_arr: bytes) -> xtgeo.RegularSurface:
     return surf
 
 
-async def calc_surf_isec_async_via_file(
+async def calc_surf_isec_async_via_file_staged(
     perf_metrics: PerfMetrics,
     authenticated_user: AuthenticatedUser,
     case_uuid: str,

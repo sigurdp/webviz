@@ -83,11 +83,15 @@ export function view({ moduleContext, workbenchSession, workbenchSettings, workb
     const xArr = extendedTrajectory ? extendedTrajectory.points.map((coord) => coord[0]) : undefined;
     const yArr = extendedTrajectory ? extendedTrajectory.points.map((coord) => coord[1]) : undefined;
 
-    const cuttingPlane: CuttingPlane_api = {
-        x_arr: xArr ?? [],
-        y_arr: yArr ?? [],
-        length_arr: curtain ? curtain.map((c: number[]) => c[0] - viewSettings.extension) : [],
-    };
+    let cuttingPlane: CuttingPlane_api | null = null;
+    if (xArr && yArr && curtain) {
+        cuttingPlane = {
+            x_arr: xArr,
+            y_arr: yArr,
+            length_arr: curtain.map((c: number[]) => c[0] - viewSettings.extension)
+        };
+    }
+
     const surfaceIntersectionsQuery = useSurfaceIntersectionsQuery(
         surfaceAddress,
         cuttingPlane,

@@ -24,34 +24,13 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class DownloadedSurfItem:
+    download_ok: bool
     real: int
-    base_file_name: str
+    name: str
+    attribute: str
+    full_irap_file_name: str
 
-async def download_surf_to_disk_using_access(access: SurfaceAccess,  real: int, name: str, attribute: str, scratch_dir: str, out_queue = multiprocessing.Queue()) -> DownloadedSurfItem:
-    print(f">>>> download_surf_to_disk {real=}", flush=True)
-    perf_metrics = PerfMetrics()
-
-    surf_bytes = await access.get_realization_surface_bytes_async(real_num=real, name=name, attribute=attribute)
-    perf_metrics.record_lap("fetch")
-
-    if surf_bytes is None:
-        print(f">>>> download_surf_to_disk {real=} failed", flush=True)
-        return DownloadedSurfItem(real=real, base_file_name=None)
-
-    base_file_name = f"{scratch_dir}/{name}-{attribute}-{real}"
-    irap_file_name = base_file_name + ".bin"
-    async with aiofiles.open(irap_file_name, mode='wb') as f:
-        await f.write(surf_bytes)
-
-    perf_metrics.record_lap("write")
-    out_queue.put(base_file_name)
-
-    print(f">>>> download_surf_to_disk {real=} done in {perf_metrics.to_string()}", flush=True)
-
-    return DownloadedSurfItem(real=real, base_file_name=base_file_name)
-
-
-async def download_surf_to_disk_using_many_surf_getter(many_surfs_getter: ManyRealSurfsGetter,  real: int, name: str, attribute: str, scratch_dir: str, out_queue = multiprocessing.Queue()) -> DownloadedSurfItem:
+async def download_surf_to_disk(many_surfs_getter: ManyRealSurfsGetter, real: int, name: str, attribute: str, scratch_dir: str, out_queue = multiprocessing.Queue()) -> DownloadedSurfItem:
     print(f">>>> download_surf_to_disk {real=}", flush=True)
     perf_metrics = PerfMetrics()
 
@@ -60,27 +39,32 @@ async def download_surf_to_disk_using_many_surf_getter(many_surfs_getter: ManyRe
 
     if surf_bytes is None:
         print(f">>>> download_surf_to_disk {real=} failed", flush=True)
-        return DownloadedSurfItem(real=real, base_file_name=None)
+        return DownloadedSurfItem(download_ok=False, real=real, name=name, attribute=attribute, full_irap_file_name=None)
 
-    base_file_name = f"{scratch_dir}/{name}-{attribute}-{real}"
-    irap_file_name = base_file_name + ".bin"
+    irap_file_name = f"{scratch_dir}/{name}-{attribute}-{real}.bin"
     async with aiofiles.open(irap_file_name, mode='wb') as f:
         await f.write(surf_bytes)
 
     perf_metrics.record_lap("write")
-    out_queue.put(base_file_name)
+
+    item = DownloadedSurfItem(download_ok=True, real=real, name=name, attribute=attribute, full_irap_file_name=irap_file_name)
+    out_queue.put(item)
 
     print(f">>>> download_surf_to_disk {real=} done in {perf_metrics.to_string()}", flush=True)
 
-    return DownloadedSurfItem(real=real, base_file_name=base_file_name)
+    return item
 
 
-async def load_quick_surf(quick_file_name) -> xtgeo.RegularSurface:
+async def load_quick_surf(quick_file_name) -> xtgeo.RegularSurface | None:
     perf_metrics = PerfMetrics()
 
-    async with aiofiles.open(quick_file_name, mode='rb') as f:
-        my_bytes = await f.read()
-        perf_metrics.record_lap("load")
+    try:
+        async with aiofiles.open(quick_file_name, mode='rb') as f:
+            my_bytes = await f.read()
+            perf_metrics.record_lap("load")
+    except:
+        print(f">>>> load_quick_surf  failed to load {quick_file_name=}", flush=True)
+        return None
         
     xtgeo_surf = bytes_to_xtgeo_surf(my_bytes)
     perf_metrics.record_lap("construct")
@@ -90,24 +74,26 @@ async def load_quick_surf(quick_file_name) -> xtgeo.RegularSurface:
     return xtgeo_surf
 
 
-def convert_irap_to_quick_format_process_worker(workerName, queue: multiprocessing.Queue):
+def convert_irap_to_quicksurf_worker(workerName: str, scratch_dir: str, in_queue: multiprocessing.Queue):
     while True:
         print(f"---- Worker {workerName} waiting for work...", flush=True)
-        base_file_name = queue.get()
-        if base_file_name is None:
+        item: DownloadedSurfItem = in_queue.get()
+        if item is None:
             print(f"---- Worker {workerName} exiting", flush=True)
             return
 
-        print(f"---- Worker {workerName} Doing work...", flush=True)
+        if not item.download_ok:
+            print(f"---- Worker {workerName} download failed, skipping", flush=True)
+            continue
 
-        irap_file_name = base_file_name + ".bin"
-        quick_file_name = base_file_name + ".quick"
+        print(f"---- Worker {workerName} Doing work...", flush=True)
 
         perf_metrics = PerfMetrics()
 
-        xtgeo_surf = xtgeo.surface_from_file(irap_file_name)
+        xtgeo_surf = xtgeo.surface_from_file(item.full_irap_file_name)
         perf_metrics.record_lap("xtgeo-read")
 
+        quick_file_name = make_quicksurf_fn(scratch_dir, item.real, item.name, item.attribute)
         my_bytes = xtgeo_surf_to_bytes(xtgeo_surf)
         with open(quick_file_name, mode='wb') as f:
             f.write(my_bytes)
@@ -146,6 +132,12 @@ def bytes_to_xtgeo_surf(byte_arr: bytes) -> xtgeo.RegularSurface:
     return surf
 
 
+def make_quicksurf_fn(scratch_dir: str, real: int, name: str, attribute: str) -> str:
+    return f"{scratch_dir}/{name}-{attribute}-{real}.quick"
+
+
+
+# ==========================================================
 async def calc_surf_isec_async_via_file(
     perf_metrics: PerfMetrics,
     authenticated_user: AuthenticatedUser,
@@ -159,85 +151,115 @@ async def calc_surf_isec_async_via_file(
 ) -> List[schemas.SurfaceIntersectionData]:
     
     myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_async_via_file():"
+
+    print(f"{myprefix} started #################################################################################################################", flush=True)
     print(f"{myprefix} started  {num_reals=}  {num_workers=}", flush=True)
 
-    my_scratch_dir = os.getcwd() + "/my_scratch"
+    user_id = authenticated_user.get_user_id()
+    access_token = authenticated_user.get_sumo_access_token()
+
+    my_scratch_dir = os.getcwd() + f"/my_scratch/{user_id}/{case_uuid}_{ensemble_name}"
     os.makedirs(my_scratch_dir, exist_ok=True)
     print(f"{myprefix}  {my_scratch_dir=}", flush=True)
+
+
+    print(f"{myprefix}  ---------------------------", flush=True)
+    try:
+        print(f"{myprefix}  {os.getcwd()=}", flush=True)
+        print(f"{myprefix}  {os.listdir('.')=}", flush=True)
+        print(f"{myprefix}  {os.listdir(my_scratch_dir)=}", flush=True)
+        print(f"{myprefix}  {os.listdir('/tmp')=}", flush=True)
+        print(f"{myprefix}  {os.listdir('/tmp/webvizcache')=}", flush=True)
+    except:
+        pass
+    print(f"{myprefix}  ---------------------------", flush=True)
+
 
     fence_arr = np.array([cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]).T
 
     perf_metrics.reset_lap_timer()
 
-    access_token = authenticated_user.get_sumo_access_token()
     access = await SurfaceAccess.from_case_uuid(access_token, case_uuid, ensemble_name)
     many_surfs_getter = access.prepare_for_getting_many_realizations(name=name, attribute=attribute)
     perf_metrics.record_lap("access")
 
-    reals = range(0, num_reals)
-
-
-    multi_queue = multiprocessing.Queue()
-    num_procs = 4
-    proc_arr = []
-    for proc_num in range(num_procs):
-        p = multiprocessing.Process(target=convert_irap_to_quick_format_process_worker, args=(f"worker_{proc_num}", multi_queue))
-        p.start()
-        proc_arr.append(p)  
-
-    perf_metrics.record_lap("start-procs")
-
-
-    no_concurrent = num_workers
-    dltasks = set()
-    done_arr = []
-    for real in reals:
-        if len(dltasks) >= no_concurrent:
-            # Wait for some download to finish before adding a new one
-            donetasks, dltasks = await asyncio.wait(dltasks, return_when=asyncio.FIRST_COMPLETED)
-            done_arr.extend(list(donetasks))
-
-        #dltasks.add(asyncio.create_task(download_surf_to_disk_using_access(access, real, name, attribute, my_scratch_dir, multi_queue)))
-        dltasks.add(asyncio.create_task(download_surf_to_disk_using_many_surf_getter(many_surfs_getter, real, name, attribute, my_scratch_dir, multi_queue)))
-        
-
-    # Wait for the remaining downloads to finish
-    donetasks, _dummy = await asyncio.wait(dltasks)
-    done_arr.extend(list(donetasks))
-
-    perf_metrics.record_lap("download-to-disk")
-
-    quick_file_names_arr = []
-    for donetask in done_arr:
-        surf_item: DownloadedSurfItem = donetask.result()
-        if surf_item.base_file_name is not None:
-            quick_file_names_arr.append(surf_item.base_file_name + ".quick")
-        else:
-            quick_file_names_arr.append(None)
-
-    for p in proc_arr:
-        multi_queue.put(None)
-
-    multi_queue.close()
-    multi_queue.join_thread()
-    for p in proc_arr:
-        p.join()
-
-    perf_metrics.record_lap("wait-convert")
-
-    print(f"{myprefix}  {len(quick_file_names_arr)=}", flush=True)
-
-
-    myTimer = PerfTimer()
-
     xtgeo_surf_arr = []
-    for quick_file_name in quick_file_names_arr:
-        if quick_file_name is not None:
-            xtgeo_surf = await load_quick_surf(quick_file_name)
-            xtgeo_surf_arr.append(xtgeo_surf)
+    reals_to_download = []
 
-    print(f"{myprefix}  average quick surf load time: {myTimer.elapsed_ms()/len(xtgeo_surf_arr):.2f}ms", flush=True)
-    perf_metrics.record_lap("load-quick")
+    for real in range(0, num_reals):
+        quick_file_name = make_quicksurf_fn(my_scratch_dir, real, name, attribute)
+        xtgeo_surf = await load_quick_surf(quick_file_name)
+        if xtgeo_surf:
+            xtgeo_surf_arr.append(xtgeo_surf)
+        else:
+            reals_to_download.append(real)
+
+    perf_metrics.record_lap("load-cached-quick")
+    print(f"{myprefix}  {len(xtgeo_surf_arr)=} {len(reals_to_download)=}", flush=True)
+
+    if len(reals_to_download) > 0:
+        multi_queue = multiprocessing.Queue()
+        num_procs = 4
+        proc_arr = []
+        for proc_num in range(num_procs):
+            p = multiprocessing.Process(target=convert_irap_to_quicksurf_worker, args=(f"worker_{proc_num}", my_scratch_dir, multi_queue))
+            p.start()
+            proc_arr.append(p)  
+
+        perf_metrics.record_lap("start-procs")
+
+
+        no_concurrent = num_workers
+        dltasks = set()
+        done_arr = []
+        for real in reals_to_download:
+            if len(dltasks) >= no_concurrent:
+                # Wait for some download to finish before adding a new one
+                donetasks, dltasks = await asyncio.wait(dltasks, return_when=asyncio.FIRST_COMPLETED)
+                done_arr.extend(list(donetasks))
+
+            dltasks.add(asyncio.create_task(download_surf_to_disk(many_surfs_getter, real, name, attribute, my_scratch_dir, multi_queue)))
+            
+
+        # Wait for the remaining downloads to finish
+        donetasks, _dummy = await asyncio.wait(dltasks)
+        done_arr.extend(list(donetasks))
+
+        perf_metrics.record_lap("download-to-disk")
+
+        quick_file_names_to_load = []
+        for donetask in done_arr:
+            surf_item: DownloadedSurfItem = donetask.result()
+            if surf_item.download_ok:
+                quick_file_names_to_load.append(make_quicksurf_fn(my_scratch_dir, surf_item.real, surf_item.name, surf_item.attribute))
+
+        for p in proc_arr:
+            multi_queue.put(None)
+
+        multi_queue.close()
+        multi_queue.join_thread()
+        for p in proc_arr:
+            p.join()
+
+        perf_metrics.record_lap("wait-convert")
+
+        print(f"{myprefix}  {len(quick_file_names_to_load)=}", flush=True)
+
+
+        myTimer = PerfTimer()
+
+        if len(quick_file_names_to_load) > 0:
+            num_surfaces_loaded = 0
+            for quick_file_name in quick_file_names_to_load:
+                if quick_file_name is not None:
+                    xtgeo_surf = await load_quick_surf(quick_file_name)
+                    if xtgeo_surf:
+                        xtgeo_surf_arr.append(xtgeo_surf)
+                        num_surfaces_loaded += 1
+
+            average_load_time_ms = myTimer.elapsed_ms()/num_surfaces_loaded if num_surfaces_loaded > 0 else 0
+            print(f"{myprefix}  average quick surf load time for {num_surfaces_loaded} surfaces: {average_load_time_ms:.2f}ms", flush=True)
+            perf_metrics.record_lap("load-quick")
 
 
     intersections = []
@@ -248,7 +270,7 @@ async def calc_surf_isec_async_via_file(
 
     perf_metrics.record_lap("cutting")
 
-
-    print(f"{myprefix}  finished in {perf_metrics.to_string()}", flush=True)
+    print(f"{myprefix}  finished in {perf_metrics.to_string()}  ", flush=True)
+    print(f"{myprefix}  finished #################################################################################################################", flush=True)
 
     return intersections
