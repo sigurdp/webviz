@@ -25,18 +25,24 @@ export type { EnsembleSensitivity as EnsembleSensitivity_api } from './models/En
 export type { EnsembleSensitivityCase as EnsembleSensitivityCase_api } from './models/EnsembleSensitivityCase';
 export type { FieldInfo as FieldInfo_api } from './models/FieldInfo';
 export { Frequency as Frequency_api } from './models/Frequency';
+export type { GraphUserPhoto as GraphUserPhoto_api } from './models/GraphUserPhoto';
 export type { GridIntersection as GridIntersection_api } from './models/GridIntersection';
 export type { GridSurface as GridSurface_api } from './models/GridSurface';
 export type { HTTPValidationError as HTTPValidationError_api } from './models/HTTPValidationError';
 export type { InplaceVolumetricsCategoricalMetaData as InplaceVolumetricsCategoricalMetaData_api } from './models/InplaceVolumetricsCategoricalMetaData';
 export type { InplaceVolumetricsTableMetaData as InplaceVolumetricsTableMetaData_api } from './models/InplaceVolumetricsTableMetaData';
+export type { Observations as Observations_api } from './models/Observations';
 export type { PolygonData as PolygonData_api } from './models/PolygonData';
 export type { PvtData as PvtData_api } from './models/PvtData';
+export type { RftObservation as RftObservation_api } from './models/RftObservation';
+export type { RftObservations as RftObservations_api } from './models/RftObservations';
 export type { SeismicCubeMeta as SeismicCubeMeta_api } from './models/SeismicCubeMeta';
 export { SensitivityType as SensitivityType_api } from './models/SensitivityType';
 export { StatisticFunction as StatisticFunction_api } from './models/StatisticFunction';
 export type { StatisticValueObject as StatisticValueObject_api } from './models/StatisticValueObject';
 export { StratigraphicFeature as StratigraphicFeature_api } from './models/StratigraphicFeature';
+export type { SummaryVectorDateObservation as SummaryVectorDateObservation_api } from './models/SummaryVectorDateObservation';
+export type { SummaryVectorObservations as SummaryVectorObservations_api } from './models/SummaryVectorObservations';
 export { SurfaceAttributeType as SurfaceAttributeType_api } from './models/SurfaceAttributeType';
 export type { SurfaceData as SurfaceData_api } from './models/SurfaceData';
 export type { SurfaceIntersectionData as SurfaceIntersectionData_api } from './models/SurfaceIntersectionData';
@@ -60,8 +66,10 @@ export type { WellCompletionsZone as WellCompletionsZone_api } from './models/We
 
 export { DefaultService } from './services/DefaultService';
 export { ExploreService } from './services/ExploreService';
+export { GraphService } from './services/GraphService';
 export { GridService } from './services/GridService';
 export { InplaceVolumetricsService } from './services/InplaceVolumetricsService';
+export { ObservationsService } from './services/ObservationsService';
 export { ParametersService } from './services/ParametersService';
 export { PvtService } from './services/PvtService';
 export { SeismicService } from './services/SeismicService';

@@ -2,11 +2,13 @@ import React from "react";
 
 import { Frequency_api, StatisticFunction_api } from "@api";
 import { EnsembleIdent } from "@framework/EnsembleIdent";
-import { ParameterIdent, ParameterType } from "@framework/EnsembleParameters";
+import { Parameter, ParameterIdent, ParameterType } from "@framework/EnsembleParameters";
 import { EnsembleSet } from "@framework/EnsembleSet";
 import { ModuleFCProps } from "@framework/Module";
+import { useSettingsStatusWriter } from "@framework/StatusWriter";
 import { useEnsembleSet } from "@framework/WorkbenchSession";
 import { MultiEnsembleSelect } from "@framework/components/MultiEnsembleSelect";
+import { ParameterListFilter } from "@framework/components/ParameterListFilter";
 import { VectorSelector, createVectorSelectorDataFromVectors } from "@framework/components/VectorSelector";
 import { fixupEnsembleIdents } from "@framework/utils/ensembleUiHelpers";
 import { ApiStatesWrapper } from "@lib/components/ApiStatesWrapper";
@@ -16,9 +18,11 @@ import { CollapsibleGroup } from "@lib/components/CollapsibleGroup";
 import { Dropdown } from "@lib/components/Dropdown";
 import { Label } from "@lib/components/Label";
 import { RadioGroup } from "@lib/components/RadioGroup";
+import { Select } from "@lib/components/Select";
 import { SmartNodeSelectorSelection, TreeDataNode } from "@lib/components/SmartNodeSelector";
 import { useValidState } from "@lib/hooks/useValidState";
 import { resolveClassNames } from "@lib/utils/resolveClassNames";
+import { FilterAlt } from "@mui/icons-material";
 
 import { isEqual } from "lodash";
 
@@ -36,9 +40,16 @@ import {
     VisualizationModeEnumToStringMapping,
 } from "./state";
 import { EnsembleVectorListsHelper } from "./utils/ensemblesVectorListHelper";
+import { joinStringArrayToHumanReadableString } from "./utils/stringUtils";
+
+enum StatisticsType {
+    INDIVIDUAL = "Individual",
+    FANCHART = "Fanchart",
+}
 
 export function settings({ moduleContext, workbenchSession }: ModuleFCProps<State>) {
     const ensembleSet = useEnsembleSet(workbenchSession);
+    const statusWriter = useSettingsStatusWriter(moduleContext);
 
     // Store state/values
     const [resampleFrequency, setResamplingFrequency] = moduleContext.useStoreState("resamplingFrequency");
@@ -57,15 +68,12 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
     const [selectedEnsembleIdents, setSelectedEnsembleIdents] = React.useState<EnsembleIdent[]>([]);
     const [selectedVectorNames, setSelectedVectorNames] = React.useState<string[]>([]);
     const [vectorSelectorData, setVectorSelectorData] = React.useState<TreeDataNode[]>([]);
-    const [prevVisualizationMode, setPrevVisualizationMode] = React.useState<VisualizationMode>(visualizationMode);
-
-    if (visualizationMode !== prevVisualizationMode) {
-        setPrevVisualizationMode(visualizationMode);
-    }
+    const [statisticsType, setStatisticsType] = React.useState<StatisticsType>(StatisticsType.INDIVIDUAL);
+    const [filteredParameterIdentList, setFilteredParameterIdentList] = React.useState<ParameterIdent[]>([]);
 
     if (!isEqual(ensembleSet, previousEnsembleSet)) {
-        const newSelectedEnsembleIdents = selectedEnsembleIdents.filter(
-            (ensemble) => ensembleSet.findEnsemble(ensemble) !== null
+        const newSelectedEnsembleIdents = selectedEnsembleIdents.filter((ensemble) =>
+            ensembleSet.hasEnsemble(ensemble)
         );
         const validatedEnsembleIdents = fixupEnsembleIdents(newSelectedEnsembleIdents, ensembleSet) ?? [];
         if (!isEqual(selectedEnsembleIdents, validatedEnsembleIdents)) {
@@ -75,26 +83,36 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
         setPreviousEnsembleSet(ensembleSet);
     }
 
+    // Get list of continuous parameters from selected ensembles
+    const continuousAndNonConstantParametersUnion: Parameter[] = [];
+    for (const ensembleIdent of selectedEnsembleIdents) {
+        const ensemble = ensembleSet.findEnsemble(ensembleIdent);
+        if (!ensemble) continue;
+
+        const continuousAndNonConstantParameters = ensemble
+            .getParameters()
+            .getParameterArr()
+            .filter((parameter) => parameter.type === ParameterType.CONTINUOUS && !parameter.isConstant);
+
+        // Add non-duplicate parameters to list - verified by ParameterIdent
+        for (const parameter of continuousAndNonConstantParameters) {
+            const parameterIdent = ParameterIdent.fromNameAndGroup(parameter.name, parameter.groupName);
+            const isParameterInUnion = continuousAndNonConstantParametersUnion.some((elm) =>
+                parameterIdent.equals(ParameterIdent.fromNameAndGroup(elm.name, elm.groupName))
+            );
+
+            if (isParameterInUnion) continue;
+            continuousAndNonConstantParametersUnion.push(parameter);
+        }
+    }
+
     const vectorListQueries = useVectorListQueries(selectedEnsembleIdents);
     const ensembleVectorListsHelper = new EnsembleVectorListsHelper(selectedEnsembleIdents, vectorListQueries);
     const selectedVectorNamesHasHistorical = ensembleVectorListsHelper.hasAnyHistoricalVector(selectedVectorNames);
     const currentVectorSelectorData = createVectorSelectorDataFromVectors(ensembleVectorListsHelper.vectorsUnion());
 
-    // Get union of continuous and non-constant parameters for selected ensembles and set valid parameter ident str
-    const continuousAndNonConstantParametersUnion: ParameterIdent[] = [];
-    for (const ensembleIdent of selectedEnsembleIdents) {
-        const ensemble = ensembleSet.findEnsemble(ensembleIdent);
-        if (ensemble === null) continue;
-
-        for (const parameter of ensemble.getParameters().getParameterIdents(ParameterType.CONTINUOUS)) {
-            if (continuousAndNonConstantParametersUnion.some((param) => param.equals(parameter))) continue;
-            if (ensemble.getParameters().getParameter(parameter).isConstant) continue;
-
-            continuousAndNonConstantParametersUnion.push(parameter);
-        }
-    }
     const [selectedParameterIdentStr, setSelectedParameterIdentStr] = useValidState<string | null>(null, [
-        continuousAndNonConstantParametersUnion,
+        filteredParameterIdentList,
         (item: ParameterIdent) => item.toString(),
     ]);
 
@@ -104,19 +122,39 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
         setVectorSelectorData(currentVectorSelectorData);
     }
 
+    // Set statistics type for checkbox rendering
+    const computedStatisticsType = computeStatisticsType(statisticsType, visualizationMode);
+    if (statisticsType !== computedStatisticsType) {
+        setStatisticsType(computedStatisticsType);
+    }
+
+    // Set warning for selected vectors not existing in a selected ensemble
+    for (const ensembleIdent of selectedEnsembleIdents) {
+        const nonExistingVectors = selectedVectorNames.filter(
+            (vector) => !ensembleVectorListsHelper.isVectorInEnsemble(ensembleIdent, vector)
+        );
+        if (nonExistingVectors.length === 0) {
+            continue;
+        }
+
+        const ensembleStr = ensembleSet.findEnsemble(ensembleIdent)?.getDisplayName() ?? ensembleIdent.toString();
+        const vectorArrayStr = joinStringArrayToHumanReadableString(nonExistingVectors);
+        statusWriter.addWarning(`Vector ${vectorArrayStr} does not exist in ensemble ${ensembleStr}`);
+    }
+
     React.useEffect(
         function propagateVectorSpecsToView() {
             const newVectorSpecifications: VectorSpec[] = [];
-            for (const ensemble of selectedEnsembleIdents) {
+            for (const ensembleIdent of selectedEnsembleIdents) {
                 for (const vector of selectedVectorNames) {
-                    if (!ensembleVectorListsHelper.isVectorInEnsemble(ensemble, vector)) {
+                    if (!ensembleVectorListsHelper.isVectorInEnsemble(ensembleIdent, vector)) {
                         continue;
                     }
 
                     newVectorSpecifications.push({
-                        ensembleIdent: ensemble,
+                        ensembleIdent: ensembleIdent,
                         vectorName: vector,
-                        hasHistoricalVector: ensembleVectorListsHelper.hasHistoricalVector(ensemble, vector),
+                        hasHistoricalVector: ensembleVectorListsHelper.hasHistoricalVector(ensembleIdent, vector),
                     });
                 }
             }
@@ -135,10 +173,10 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
             // Try/catch as ParameterIdent.fromString() can throw
             try {
                 const newParameterIdent = ParameterIdent.fromString(selectedParameterIdentStr);
-                const isParameterInUnion = continuousAndNonConstantParametersUnion.some((parameter) =>
+                const isParameterAmongFiltered = filteredParameterIdentList.some((parameter) =>
                     parameter.equals(newParameterIdent)
                 );
-                if (isParameterInUnion) {
+                if (isParameterAmongFiltered) {
                     setParameterIdent(newParameterIdent);
                 } else {
                     setParameterIdent(null);
@@ -147,15 +185,19 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
                 setParameterIdent(null);
             }
         },
-        [selectedParameterIdentStr]
+        [selectedParameterIdentStr, filteredParameterIdentList]
     );
 
     function handleGroupByChange(event: React.ChangeEvent<HTMLInputElement>) {
         setGroupBy(event.target.value as GroupBy);
     }
 
-    function handleColorByParameterChange(parameterIdentStr: string) {
-        setSelectedParameterIdentStr(parameterIdentStr);
+    function handleColorByParameterChange(parameterIdentStrings: string[]) {
+        if (parameterIdentStrings.length !== 0) {
+            setSelectedParameterIdentStr(parameterIdentStrings[0]);
+            return;
+        }
+        setSelectedParameterIdentStr(null);
     }
 
     function handleEnsembleSelectChange(ensembleIdentArr: EnsembleIdent[]) {
@@ -206,6 +248,17 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
         });
     }
 
+    const handleParameterListFilterChange = React.useCallback(
+        function handleParameterListFilterChange(filteredParameters: Parameter[]) {
+            const filteredParamIdents = filteredParameters.map((elm) =>
+                ParameterIdent.fromNameAndGroup(elm.name, elm.groupName)
+            );
+
+            setFilteredParameterIdentList(filteredParamIdents);
+        },
+        [setFilteredParameterIdentList]
+    );
+
     function handleIndividualStatisticsSelectionChange(
         event: React.ChangeEvent<HTMLInputElement>,
         statistic: StatisticFunction_api
@@ -229,9 +282,42 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
         });
     }
 
+    function makeStatisticCheckboxes() {
+        if (computedStatisticsType === StatisticsType.FANCHART) {
+            return Object.values(FanchartStatisticOption).map((value: FanchartStatisticOption) => {
+                return (
+                    <Checkbox
+                        key={value}
+                        label={FanchartStatisticOptionEnumToStringMapping[value]}
+                        checked={statisticsSelection?.FanchartStatisticsSelection?.includes(value)}
+                        onChange={(event) => {
+                            handleFanchartStatisticsSelectionChange(event, value);
+                        }}
+                    />
+                );
+            });
+        }
+        if (computedStatisticsType === StatisticsType.INDIVIDUAL) {
+            return Object.values(StatisticFunction_api).map((value: StatisticFunction_api) => {
+                return (
+                    <Checkbox
+                        key={value}
+                        label={StatisticFunctionEnumToStringMapping[value]}
+                        checked={statisticsSelection?.IndividualStatisticsSelection.includes(value)}
+                        onChange={(event) => {
+                            handleIndividualStatisticsSelectionChange(event, value);
+                        }}
+                    />
+                );
+            });
+        }
+
+        return [];
+    }
+
     return (
         <div className="flex flex-col gap-2 overflow-y-auto">
-            <CollapsibleGroup expanded={true} title="Group by">
+            <CollapsibleGroup expanded={false} title="Group by">
                 <RadioGroup
                     value={groupBy}
                     options={Object.values(GroupBy).map((val: GroupBy) => {
@@ -240,7 +326,7 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
                     onChange={handleGroupByChange}
                 />
             </CollapsibleGroup>
-            <CollapsibleGroup expanded={true} title="Resampling frequency">
+            <CollapsibleGroup expanded={false} title="Resampling frequency">
                 <Dropdown
                     options={[
                         { value: "RAW", label: "None (raw)" },
@@ -294,7 +380,7 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
                     </ApiStatesWrapper>
                 </div>
             </CollapsibleGroup>
-            <CollapsibleGroup expanded={true} title="Color realization by parameter">
+            <CollapsibleGroup expanded={false} title="Color realization by parameter">
                 <Checkbox
                     label="Enable"
                     checked={colorRealizationsByParameter}
@@ -304,25 +390,39 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
                     }}
                 />
                 <div
-                    className={resolveClassNames("mt-4 ml-6 mb-4", {
+                    className={resolveClassNames({
                         ["pointer-events-none opacity-70"]:
                             !colorRealizationsByParameter ||
                             visualizationMode !== VisualizationMode.INDIVIDUAL_REALIZATIONS,
                     })}
                 >
-                    <Dropdown
-                        options={continuousAndNonConstantParametersUnion.map((elm) => {
+                    <div className="mt-4 mb-4">
+                        <CollapsibleGroup
+                            expanded={false}
+                            title="Parameter list filter"
+                            icon={<FilterAlt fontSize="small" />}
+                        >
+                            <ParameterListFilter
+                                parameters={continuousAndNonConstantParametersUnion}
+                                initialFilters={["Continuous", "Nonconstant"]}
+                                onChange={handleParameterListFilterChange}
+                            />
+                        </CollapsibleGroup>
+                    </div>
+                    <Select
+                        options={filteredParameterIdentList.map((elm) => {
                             return {
                                 value: elm.toString(),
                                 label: elm.groupName ? `${elm.groupName}:${elm.name}` : elm.name,
                             };
                         })}
-                        value={selectedParameterIdentStr?.toString() ?? undefined}
+                        size={4}
+                        value={selectedParameterIdentStr ? [selectedParameterIdentStr.toString()] : undefined}
                         onChange={handleColorByParameterChange}
                     />
                 </div>
             </CollapsibleGroup>
-            <CollapsibleGroup expanded={true} title="Visualization">
+            <CollapsibleGroup expanded={false} title="Visualization">
                 <RadioGroup
                     value={visualizationMode}
                     options={Object.values(VisualizationMode).map((val: VisualizationMode) => {
@@ -338,41 +438,32 @@ export function settings({ moduleContext, workbenchSession }: ModuleFCProps<Stat
                                     visualizationMode === VisualizationMode.INDIVIDUAL_REALIZATIONS,
                             })}
                         >
-                            {visualizationMode === VisualizationMode.STATISTICAL_FANCHART ||
-                            (visualizationMode === VisualizationMode.INDIVIDUAL_REALIZATIONS &&
-                                prevVisualizationMode === VisualizationMode.STATISTICAL_FANCHART)
-                                ? Object.values(FanchartStatisticOption).map((value: FanchartStatisticOption) => {
-                                      return (
-                                          <Checkbox
-                                              key={value}
-                                              label={FanchartStatisticOptionEnumToStringMapping[value]}
-                                              checked={statisticsSelection?.FanchartStatisticsSelection?.includes(
-                                                  value
-                                              )}
-                                              onChange={(event) => {
-                                                  handleFanchartStatisticsSelectionChange(event, value);
-                                              }}
-                                          />
-                                      );
-                                  })
-                                : Object.values(StatisticFunction_api).map((value: StatisticFunction_api) => {
-                                      return (
-                                          <Checkbox
-                                              key={value}
-                                              label={StatisticFunctionEnumToStringMapping[value]}
-                                              checked={statisticsSelection?.IndividualStatisticsSelection.includes(
-                                                  value
-                                              )}
-                                              onChange={(event) => {
-                                                  handleIndividualStatisticsSelectionChange(event, value);
-                                              }}
-                                          />
-                                      );
-                                  })}
+                            {makeStatisticCheckboxes()}
                         </div>
                     </Label>
                 </div>
             </CollapsibleGroup>
         </div>
     );
+}
+
+function computeStatisticsType(
+    previousStatisticsType: StatisticsType,
+    visualizationMode: VisualizationMode
+): StatisticsType {
+    if (
+        previousStatisticsType !== StatisticsType.FANCHART &&
+        visualizationMode === VisualizationMode.STATISTICAL_FANCHART
+    ) {
+        return StatisticsType.FANCHART;
+    }
+
+    if (
+        previousStatisticsType !== StatisticsType.INDIVIDUAL &&
+        [VisualizationMode.STATISTICAL_LINES, VisualizationMode.STATISTICS_AND_REALIZATIONS].includes(visualizationMode)
+    ) {
+        return StatisticsType.INDIVIDUAL;
+    }
+
+    return previousStatisticsType;
 }
