@@ -6,6 +6,7 @@ from typing import List
 import asyncio
 import aiofiles
 import xtgeo
+import struct
 
 # from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from src.services.sumo_access.surface_access import SurfaceAccess
 from src.services.utils.authenticated_user import AuthenticatedUser
 from src.backend.primary.routers.surface import schemas
 from src.backend.utils.perf_metrics import PerfMetrics
+from src.services.utils.perf_timer import PerfTimer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,8 +26,8 @@ class DownloadedSurfItem:
     surf_bytes: bytes
     file_name: str
 
-async def download_surf_bytes(access: SurfaceAccess,  real: int, name: str, attribute: str, scratch_dir: str) -> DownloadedSurfItem:
-    print(f">>>> download_surf_bytes {real=}", flush=True)
+async def download_surf_to_disk(access: SurfaceAccess,  real: int, name: str, attribute: str, scratch_dir: str) -> DownloadedSurfItem:
+    print(f">>>> download_surf_to_disk {real=}", flush=True)
     perf_metrics = PerfMetrics()
 
     surf_bytes = await access.get_realization_surface_bytes_async(real_num=real, name=name, attribute=attribute)
@@ -38,9 +40,73 @@ async def download_surf_bytes(access: SurfaceAccess,  real: int, name: str, attr
             await f.write(surf_bytes)
         perf_metrics.record_lap("write")
 
-    print(f">>>> download_surf_bytes {real=} done  [{perf_metrics.to_string()}]", flush=True)
+    print(f">>>> download_surf_to_disk {real=} done in {perf_metrics.to_string()}", flush=True)
 
     return DownloadedSurfItem(real=real, surf_bytes=surf_bytes, file_name=file_name)
+
+
+async def convert_irap_to_quick_format(irap_file_name: str, quick_file_name) -> bool:
+    if irap_file_name is None:
+        return False
+
+    perf_metrics = PerfMetrics()
+
+    xtgeo_surf = xtgeo.surface_from_file(irap_file_name)
+    perf_metrics.record_lap("xtgeo-read")
+
+    my_bytes = xtgeo_surf_to_bytes(xtgeo_surf)
+    async with aiofiles.open(quick_file_name, mode='wb') as f:
+        await f.write(my_bytes)
+    perf_metrics.record_lap("write-quick")
+
+    print(f">>>> convert_irap_to_quick_format {quick_file_name=} done in {perf_metrics.to_string()}", flush=True)
+
+    return True
+
+
+async def load_quick_surf(quick_file_name) -> xtgeo.RegularSurface:
+    perf_metrics = PerfMetrics()
+
+    async with aiofiles.open(quick_file_name, mode='rb') as f:
+        my_bytes = await f.read()
+        perf_metrics.record_lap("load")
+        
+    xtgeo_surf = bytes_to_xtgeo_surf(my_bytes)
+    perf_metrics.record_lap("construct")
+
+    print(f">>>> load_quick_surf  loaded {quick_file_name=} in {perf_metrics.to_string()}", flush=True)
+
+    return xtgeo_surf
+
+
+def xtgeo_surf_to_bytes(surf: xtgeo.RegularSurface) -> bytes:
+    header_bytes = struct.pack("@iiddddid", surf.ncol, surf.nrow, surf.xinc, surf.yinc, surf.xori, surf.yori, surf.yflip, surf.rotation)
+
+    masked_values = surf.values.astype(np.float32)
+    values_np = np.ma.filled(masked_values, fill_value=np.nan)
+    arr_bytes = bytes(values_np.ravel(order="C").data)
+
+    ret_arr = header_bytes + arr_bytes
+    return ret_arr
+
+
+def bytes_to_xtgeo_surf(byte_arr: bytes) -> xtgeo.RegularSurface:
+    # 3*4 + 5*8 = 52
+    ncol, nrow, xinc, yinc, xori, yori, yflip, rotation = struct.unpack("iiddddid", byte_arr[:56])
+    values = np.frombuffer(byte_arr[56:], dtype=np.float32).reshape(nrow, ncol)
+    surf = xtgeo.RegularSurface(
+        ncol=ncol,
+        nrow=nrow,
+        xinc=xinc,
+        yinc=yinc,
+        xori=xori,
+        yori=yori,
+        yflip=yflip,
+        rotation=rotation,
+        values=values,
+    )
+
+    return surf
 
 
 async def calc_surf_isec_async_via_file(
@@ -72,6 +138,7 @@ async def calc_surf_isec_async_via_file(
 
     reals = range(0, num_reals)
 
+
     no_concurrent = num_workers
     dltasks = set()
     done_arr = []
@@ -81,26 +148,38 @@ async def calc_surf_isec_async_via_file(
             donetasks, dltasks = await asyncio.wait(dltasks, return_when=asyncio.FIRST_COMPLETED)
             done_arr.extend(list(donetasks))
 
-        dltasks.add(asyncio.create_task(download_surf_bytes(access, real, name, attribute, my_scratch_dir)))
-                    
+        dltasks.add(asyncio.create_task(download_surf_to_disk(access, real, name, attribute, my_scratch_dir)))
+
     # Wait for the remaining downloads to finish
     donetasks, _dummy = await asyncio.wait(dltasks)
     done_arr.extend(list(donetasks))
 
-    perf_metrics.record_lap("download")
+    perf_metrics.record_lap("download-to-disk")
 
 
     print(f"{myprefix}  {len(done_arr)=}", flush=True)
 
-    xtgeo_surf_arr = []
-    for task in done_arr:
-        surf_item: DownloadedSurfItem = task.result()
+    loadTimer = PerfTimer()
+    quick_file_names_arr = []
+    for donetask in done_arr:
+        surf_item: DownloadedSurfItem = donetask.result()
         if surf_item.file_name is not None:
-            xtgeo_surf = xtgeo.surface_from_file(surf_item.file_name)
-            xtgeo_surf_arr.append(xtgeo_surf)
-            print(f"{myprefix}  loaded xt_geo {surf_item.file_name=}", flush=True)
+            quick_file_name = surf_item.file_name.replace(".bin", ".quick")
+            await convert_irap_to_quick_format(surf_item.file_name, quick_file_name)
+            quick_file_names_arr.append(quick_file_name)
 
-    perf_metrics.record_lap("load-xtgeo")
+    print(f"{myprefix}  average convert time: {loadTimer.elapsed_ms()/len(quick_file_names_arr):.2f}ms", flush=True)
+    perf_metrics.record_lap("conv-xtgeo-to-quick")
+
+
+    loadTimer = PerfTimer()
+    xtgeo_surf_arr = []
+    for quick_file_name in quick_file_names_arr:
+        xtgeo_surf = await load_quick_surf(quick_file_name)
+        xtgeo_surf_arr.append(xtgeo_surf)
+
+    print(f"{myprefix}  average quick surf load time: {loadTimer.elapsed_ms()/len(xtgeo_surf_arr):.2f}ms", flush=True)
+    perf_metrics.record_lap("load-quick")
 
 
     intersections = []
@@ -114,4 +193,4 @@ async def calc_surf_isec_async_via_file(
 
     print(f"{myprefix}  finished in {perf_metrics.to_string()}", flush=True)
 
-    return []
+    return intersections
