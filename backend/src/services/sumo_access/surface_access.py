@@ -20,7 +20,7 @@ class ManyRealSurfsGetter:
     def __init__(self, sumo_surf_arr: List[Surface]):
         self._sumo_surf_arr = sumo_surf_arr
 
-    def get_real(self, real_num: int) -> Optional[xtgeo.RegularSurface]:
+    def get_real_surf_sync(self, real_num: int) -> Optional[xtgeo.RegularSurface]:
         for sumo_surf in self._sumo_surf_arr:
             if sumo_surf.realization == real_num:
                 byte_stream: BytesIO = sumo_surf.blob
@@ -29,6 +29,13 @@ class ManyRealSurfsGetter:
 
         return None
 
+    async def get_real_bytes_async(self, real_num: int) -> Optional[bytes]:
+        for sumo_surf in self._sumo_surf_arr:
+            if sumo_surf.realization == real_num:
+                surf_bytes: bytes = await sumo_surf._sumo.get_async(f"/objects('{sumo_surf.uuid}')/blob")
+                return surf_bytes
+
+        return None
 
 
 

@@ -13,6 +13,7 @@ import multiprocessing
 from dataclasses import dataclass
 
 from src.services.sumo_access.surface_access import SurfaceAccess
+from src.services.sumo_access.surface_access import ManyRealSurfsGetter
 from src.services.utils.authenticated_user import AuthenticatedUser
 from src.backend.primary.routers.surface import schemas
 from src.backend.utils.perf_metrics import PerfMetrics
@@ -26,11 +27,35 @@ class DownloadedSurfItem:
     real: int
     base_file_name: str
 
-async def download_surf_to_disk(access: SurfaceAccess,  real: int, name: str, attribute: str, scratch_dir: str, out_queue = multiprocessing.Queue()) -> DownloadedSurfItem:
+async def download_surf_to_disk_using_access(access: SurfaceAccess,  real: int, name: str, attribute: str, scratch_dir: str, out_queue = multiprocessing.Queue()) -> DownloadedSurfItem:
     print(f">>>> download_surf_to_disk {real=}", flush=True)
     perf_metrics = PerfMetrics()
 
     surf_bytes = await access.get_realization_surface_bytes_async(real_num=real, name=name, attribute=attribute)
+    perf_metrics.record_lap("fetch")
+
+    if surf_bytes is None:
+        print(f">>>> download_surf_to_disk {real=} failed", flush=True)
+        return DownloadedSurfItem(real=real, base_file_name=None)
+
+    base_file_name = f"{scratch_dir}/{name}-{attribute}-{real}"
+    irap_file_name = base_file_name + ".bin"
+    async with aiofiles.open(irap_file_name, mode='wb') as f:
+        await f.write(surf_bytes)
+
+    perf_metrics.record_lap("write")
+    out_queue.put(base_file_name)
+
+    print(f">>>> download_surf_to_disk {real=} done in {perf_metrics.to_string()}", flush=True)
+
+    return DownloadedSurfItem(real=real, base_file_name=base_file_name)
+
+
+async def download_surf_to_disk_using_many_surf_getter(many_surfs_getter: ManyRealSurfsGetter,  real: int, name: str, attribute: str, scratch_dir: str, out_queue = multiprocessing.Queue()) -> DownloadedSurfItem:
+    print(f">>>> download_surf_to_disk {real=}", flush=True)
+    perf_metrics = PerfMetrics()
+
+    surf_bytes = await many_surfs_getter.get_real_bytes_async(real_num=real)
     perf_metrics.record_lap("fetch")
 
     if surf_bytes is None:
@@ -146,6 +171,7 @@ async def calc_surf_isec_async_via_file(
 
     access_token = authenticated_user.get_sumo_access_token()
     access = await SurfaceAccess.from_case_uuid(access_token, case_uuid, ensemble_name)
+    many_surfs_getter = access.prepare_for_getting_many_realizations(name=name, attribute=attribute)
     perf_metrics.record_lap("access")
 
     reals = range(0, num_reals)
@@ -171,7 +197,9 @@ async def calc_surf_isec_async_via_file(
             donetasks, dltasks = await asyncio.wait(dltasks, return_when=asyncio.FIRST_COMPLETED)
             done_arr.extend(list(donetasks))
 
-        dltasks.add(asyncio.create_task(download_surf_to_disk(access, real, name, attribute, my_scratch_dir, multi_queue)))
+        #dltasks.add(asyncio.create_task(download_surf_to_disk_using_access(access, real, name, attribute, my_scratch_dir, multi_queue)))
+        dltasks.add(asyncio.create_task(download_surf_to_disk_using_many_surf_getter(many_surfs_getter, real, name, attribute, my_scratch_dir, multi_queue)))
+        
 
     # Wait for the remaining downloads to finish
     donetasks, _dummy = await asyncio.wait(dltasks)

@@ -105,7 +105,7 @@ def fetch_a_surf(item: SurfItem) -> bytes:
     # if xtgeo_surf is None:
     #     return None
 
-    xtgeo_surf = global_many_surfs_getter.get_real(real_num=item.real)
+    xtgeo_surf = global_many_surfs_getter.get_real_surf_sync(real_num=item.real)
     if xtgeo_surf is None:
         return None
 
