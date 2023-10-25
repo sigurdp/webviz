@@ -24,30 +24,45 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class DownloadedSurfItem:
     real: int
-    base_file_name: str
+    surf_bytes: bytes
+    file_name: str
 
-async def download_surf_to_disk(access: SurfaceAccess,  real: int, name: str, attribute: str, scratch_dir: str, out_queue = multiprocessing.Queue()) -> DownloadedSurfItem:
+async def download_surf_to_disk(access: SurfaceAccess,  real: int, name: str, attribute: str, scratch_dir: str) -> DownloadedSurfItem:
     print(f">>>> download_surf_to_disk {real=}", flush=True)
     perf_metrics = PerfMetrics()
 
     surf_bytes = await access.get_realization_surface_bytes_async(real_num=real, name=name, attribute=attribute)
     perf_metrics.record_lap("fetch")
 
-    if surf_bytes is None:
-        print(f">>>> download_surf_to_disk {real=} failed", flush=True)
-        return DownloadedSurfItem(real=real, base_file_name=None)
-
-    base_file_name = f"{scratch_dir}/{name}-{attribute}-{real}"
-    irap_file_name = base_file_name + ".bin"
-    async with aiofiles.open(irap_file_name, mode='wb') as f:
-        await f.write(surf_bytes)
-
-    perf_metrics.record_lap("write")
-    out_queue.put(base_file_name)
+    file_name = None
+    if surf_bytes is not None:
+        file_name = f"{scratch_dir}/{name}-{attribute}-{real}.bin"
+        async with aiofiles.open(file_name, mode='wb') as f:
+            await f.write(surf_bytes)
+        perf_metrics.record_lap("write")
 
     print(f">>>> download_surf_to_disk {real=} done in {perf_metrics.to_string()}", flush=True)
 
-    return DownloadedSurfItem(real=real, base_file_name=base_file_name)
+    return DownloadedSurfItem(real=real, surf_bytes=surf_bytes, file_name=file_name)
+
+
+async def convert_irap_to_quick_format(irap_file_name: str, quick_file_name) -> bool:
+    if irap_file_name is None:
+        return False
+
+    perf_metrics = PerfMetrics()
+
+    xtgeo_surf = xtgeo.surface_from_file(irap_file_name)
+    perf_metrics.record_lap("xtgeo-read")
+
+    my_bytes = xtgeo_surf_to_bytes(xtgeo_surf)
+    async with aiofiles.open(quick_file_name, mode='wb') as f:
+        await f.write(my_bytes)
+    perf_metrics.record_lap("write-quick")
+
+    print(f">>>> convert_irap_to_quick_format {quick_file_name=} done in {perf_metrics.to_string()}", flush=True)
+
+    return True
 
 
 async def load_quick_surf(quick_file_name) -> xtgeo.RegularSurface:
@@ -65,30 +80,36 @@ async def load_quick_surf(quick_file_name) -> xtgeo.RegularSurface:
     return xtgeo_surf
 
 
+@dataclass
+class QueueItem:
+    irap_file_name: str
+    quick_file_name: str
+
+
 def convert_irap_to_quick_format_process_worker(workerName, queue: multiprocessing.Queue):
     while True:
         print(f"---- Worker {workerName} waiting for work...", flush=True)
-        base_file_name = queue.get()
-        if base_file_name is None:
+        item: QueueItem = queue.get()
+        if item is None:
             print(f"---- Worker {workerName} exiting", flush=True)
             return
 
         print(f"---- Worker {workerName} Doing work...", flush=True)
 
-        irap_file_name = base_file_name + ".bin"
-        quick_file_name = base_file_name + ".quick"
+        if item.irap_file_name is None:
+            return False
 
         perf_metrics = PerfMetrics()
 
-        xtgeo_surf = xtgeo.surface_from_file(irap_file_name)
+        xtgeo_surf = xtgeo.surface_from_file(item.irap_file_name)
         perf_metrics.record_lap("xtgeo-read")
 
         my_bytes = xtgeo_surf_to_bytes(xtgeo_surf)
-        with open(quick_file_name, mode='wb') as f:
+        with open(item.quick_file_name, mode='wb') as f:
             f.write(my_bytes)
         perf_metrics.record_lap("write-quick")
 
-        print(f"---- Worker converted {quick_file_name=} in {perf_metrics.to_string()}", flush=True)
+        print(f"---- Worker converted {item.quick_file_name=} in {perf_metrics.to_string()}", flush=True)
 
 
 def xtgeo_surf_to_bytes(surf: xtgeo.RegularSurface) -> bytes:
@@ -152,7 +173,7 @@ async def calc_surf_isec_async_via_file(
 
 
     multi_queue = multiprocessing.Queue()
-    num_procs = 4
+    num_procs = 2
     proc_arr = []
     for proc_num in range(num_procs):
         p = multiprocessing.Process(target=convert_irap_to_quick_format_process_worker, args=(f"worker_{proc_num}", multi_queue))
@@ -171,7 +192,7 @@ async def calc_surf_isec_async_via_file(
             donetasks, dltasks = await asyncio.wait(dltasks, return_when=asyncio.FIRST_COMPLETED)
             done_arr.extend(list(donetasks))
 
-        dltasks.add(asyncio.create_task(download_surf_to_disk(access, real, name, attribute, my_scratch_dir, multi_queue)))
+        dltasks.add(asyncio.create_task(download_surf_to_disk(access, real, name, attribute, my_scratch_dir)))
 
     # Wait for the remaining downloads to finish
     donetasks, _dummy = await asyncio.wait(dltasks)
@@ -179,13 +200,33 @@ async def calc_surf_isec_async_via_file(
 
     perf_metrics.record_lap("download-to-disk")
 
+
+    print(f"{myprefix}  {len(done_arr)=}", flush=True)
+
+    """
+    myTimer = PerfTimer()
     quick_file_names_arr = []
     for donetask in done_arr:
         surf_item: DownloadedSurfItem = donetask.result()
-        if surf_item.base_file_name is not None:
-            quick_file_names_arr.append(surf_item.base_file_name + ".quick")
-        else:
-            quick_file_names_arr.append(None)
+        if surf_item.file_name is not None:
+            quick_file_name = surf_item.file_name.replace(".bin", ".quick")
+            await convert_irap_to_quick_format(surf_item.file_name, quick_file_name)
+            quick_file_names_arr.append(quick_file_name)
+
+    print(f"{myprefix}  average convert time: {myTimer.elapsed_ms()/len(quick_file_names_arr):.2f}ms", flush=True)
+    perf_metrics.record_lap("conv-xtgeo-to-quick")
+    """
+
+
+    myTimer = PerfTimer()
+
+    quick_file_names_arr = []
+    for donetask in done_arr:
+        surf_item: DownloadedSurfItem = donetask.result()
+        if surf_item.file_name is not None:
+            quick_file_name = surf_item.file_name.replace(".bin", ".quick")
+            multi_queue.put(QueueItem(irap_file_name=surf_item.file_name, quick_file_name=quick_file_name))
+            quick_file_names_arr.append(quick_file_name)
 
     for p in proc_arr:
         multi_queue.put(None)
@@ -195,18 +236,15 @@ async def calc_surf_isec_async_via_file(
     for p in proc_arr:
         p.join()
 
-    perf_metrics.record_lap("wait-convert")
-
-    print(f"{myprefix}  {len(quick_file_names_arr)=}", flush=True)
+    print(f"{myprefix}  average convert time: {myTimer.elapsed_ms()/len(quick_file_names_arr):.2f}ms", flush=True)
+    perf_metrics.record_lap("conv-xtgeo-to-quick")
 
 
     myTimer = PerfTimer()
-
     xtgeo_surf_arr = []
     for quick_file_name in quick_file_names_arr:
-        if quick_file_name is not None:
-            xtgeo_surf = await load_quick_surf(quick_file_name)
-            xtgeo_surf_arr.append(xtgeo_surf)
+        xtgeo_surf = await load_quick_surf(quick_file_name)
+        xtgeo_surf_arr.append(xtgeo_surf)
 
     print(f"{myprefix}  average quick surf load time: {myTimer.elapsed_ms()/len(xtgeo_surf_arr):.2f}ms", flush=True)
     perf_metrics.record_lap("load-quick")
