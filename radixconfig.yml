@@ -79,6 +79,8 @@ spec:
               blobfuse2:
                 container: cache
                 uid: 1234
+                useAdls: true
+                streaming: false
   dnsAppAlias:
     environment: prod
     component: frontend
