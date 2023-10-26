@@ -163,36 +163,43 @@ async def calc_surf_isec_async_via_file(
     print(f"{myprefix}  {my_scratch_dir=}", flush=True)
 
 
-    print(f"{myprefix}  ---------------------------", flush=True)
-    try:
-        print(f"{myprefix}  {os.getcwd()=}", flush=True)
-        print(f"{myprefix}  {os.listdir('.')=}", flush=True)
-        print(f"{myprefix}  {os.listdir(my_scratch_dir)=}", flush=True)
-        print(f"{myprefix}  {os.listdir('/tmp')=}", flush=True)
-        print(f"{myprefix}  {os.listdir('/tmp/webvizcache')=}", flush=True)
-    except:
-        pass
-    print(f"{myprefix}  ---------------------------", flush=True)
+    # print(f"{myprefix}  ---------------------------", flush=True)
+    # try:
+    #     print(f"{myprefix}  {os.getcwd()=}", flush=True)
+    #     print(f"{myprefix}  {os.listdir('.')=}", flush=True)
+    #     print(f"{myprefix}  {os.listdir(my_scratch_dir)=}", flush=True)
+    #     print(f"{myprefix}  {os.listdir('/tmp')=}", flush=True)
+    #     print(f"{myprefix}  {os.listdir('/tmp/webvizcache')=}", flush=True)
+    # except:
+    #     pass
+    # print(f"{myprefix}  ---------------------------", flush=True)
 
 
     fence_arr = np.array([cutting_plane.x_arr, cutting_plane.y_arr, np.zeros(len(cutting_plane.y_arr)), cutting_plane.length_arr]).T
 
-    perf_metrics.reset_lap_timer()
+    perf_metrics.record_lap("startup")
 
     access = await SurfaceAccess.from_case_uuid(access_token, case_uuid, ensemble_name)
     many_surfs_getter = access.prepare_for_getting_many_realizations(name=name, attribute=attribute)
     perf_metrics.record_lap("access")
 
+    all_reals_to_get = range(0, num_reals)
+
+    coro_arr = []
+    for real in all_reals_to_get:
+        quick_file_name = make_quicksurf_fn(my_scratch_dir, real, name, attribute)
+        coro_arr.append(load_quick_surf(quick_file_name))
+
     xtgeo_surf_arr = []
     reals_to_download = []
 
-    for real in range(0, num_reals):
-        quick_file_name = make_quicksurf_fn(my_scratch_dir, real, name, attribute)
-        xtgeo_surf = await load_quick_surf(quick_file_name)
-        if xtgeo_surf:
-            xtgeo_surf_arr.append(xtgeo_surf)
+    res_arr: List[xtgeo.RegularSurface | None] = await asyncio.gather(*coro_arr)
+    for idx, may_xtgeo_surf in enumerate(res_arr):
+        if may_xtgeo_surf:
+            xtgeo_surf_arr.append(may_xtgeo_surf)
         else:
-            reals_to_download.append(real)
+            reals_to_download.append(all_reals_to_get[idx])
+
 
     perf_metrics.record_lap("load-cached-quick")
     print(f"{myprefix}  {len(xtgeo_surf_arr)=} {len(reals_to_download)=}", flush=True)
