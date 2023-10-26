@@ -158,7 +158,7 @@ async def calc_surf_isec_async_via_file(
     user_id = authenticated_user.get_user_id()
     access_token = authenticated_user.get_sumo_access_token()
 
-    my_scratch_dir = os.getcwd() + f"/my_scratch/{user_id}/{case_uuid}_{ensemble_name}"
+    my_scratch_dir = f"/tmp/webvizcache/my_scratch/{user_id}/{case_uuid}_{ensemble_name}"
     os.makedirs(my_scratch_dir, exist_ok=True)
     print(f"{myprefix}  {my_scratch_dir=}", flush=True)
 
