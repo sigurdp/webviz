@@ -80,7 +80,8 @@ spec:
                 container: cache
                 uid: 1234
                 useAdls: true
-                streaming: false
+                streaming: 
+                  enabled: false
   dnsAppAlias:
     environment: prod
     component: frontend
