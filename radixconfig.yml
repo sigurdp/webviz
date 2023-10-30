@@ -81,7 +81,7 @@ spec:
                 uid: 1234
                 useAdls: true
                 streaming: 
-                  enabled: true
+                  enabled: false
   dnsAppAlias:
     environment: prod
     component: frontend
