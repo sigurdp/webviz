@@ -158,9 +158,9 @@ async def calc_surf_isec_async_via_file(
     user_id = authenticated_user.get_user_id()
     access_token = authenticated_user.get_sumo_access_token()
 
-    my_scratch_dir = f"/tmp/webvizcache/my_scratch/{user_id}/{case_uuid}_{ensemble_name}"
-    os.makedirs(my_scratch_dir, exist_ok=True)
-    print(f"{myprefix}  {my_scratch_dir=}", flush=True)
+    user_scratch_dir = f"/tmp/webvizcache/my_scratch/user_{user_id}/{case_uuid}__{ensemble_name}"
+    os.makedirs(user_scratch_dir, exist_ok=True)
+    print(f"{myprefix}  {user_scratch_dir=}", flush=True)
 
 
     # print(f"{myprefix}  ---------------------------", flush=True)
@@ -187,7 +187,7 @@ async def calc_surf_isec_async_via_file(
 
     coro_arr = []
     for real in all_reals_to_get:
-        quick_file_name = make_quicksurf_fn(my_scratch_dir, real, name, attribute)
+        quick_file_name = make_quicksurf_fn(user_scratch_dir, real, name, attribute)
         coro_arr.append(load_quick_surf(quick_file_name))
 
     xtgeo_surf_arr = []
@@ -209,7 +209,7 @@ async def calc_surf_isec_async_via_file(
         num_procs = 4
         proc_arr = []
         for proc_num in range(num_procs):
-            p = multiprocessing.Process(target=convert_irap_to_quicksurf_worker, args=(f"worker_{proc_num}", my_scratch_dir, multi_queue))
+            p = multiprocessing.Process(target=convert_irap_to_quicksurf_worker, args=(f"worker_{proc_num}", user_scratch_dir, multi_queue))
             p.start()
             proc_arr.append(p)  
 
@@ -225,7 +225,7 @@ async def calc_surf_isec_async_via_file(
                 donetasks, dltasks = await asyncio.wait(dltasks, return_when=asyncio.FIRST_COMPLETED)
                 done_arr.extend(list(donetasks))
 
-            dltasks.add(asyncio.create_task(download_surf_to_disk(many_surfs_getter, real, name, attribute, my_scratch_dir, multi_queue)))
+            dltasks.add(asyncio.create_task(download_surf_to_disk(many_surfs_getter, real, name, attribute, user_scratch_dir, multi_queue)))
             
 
         # Wait for the remaining downloads to finish
@@ -238,7 +238,7 @@ async def calc_surf_isec_async_via_file(
         for donetask in done_arr:
             surf_item: DownloadedSurfItem = donetask.result()
             if surf_item.download_ok:
-                quick_file_names_to_load.append(make_quicksurf_fn(my_scratch_dir, surf_item.real, surf_item.name, surf_item.attribute))
+                quick_file_names_to_load.append(make_quicksurf_fn(user_scratch_dir, surf_item.real, surf_item.name, surf_item.attribute))
 
         for p in proc_arr:
             multi_queue.put(None)
