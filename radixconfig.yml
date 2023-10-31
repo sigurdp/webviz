@@ -81,7 +81,10 @@ spec:
                 uid: 1234
                 useAdls: true
                 streaming: 
-                  enabled: false
+                  enabled: true
+                accessMode: ReadWriteMany
+                skuName: Premium_LRS
+
   dnsAppAlias:
     environment: prod
     component: frontend

@@ -261,6 +261,7 @@ async def calc_surf_isec_async_via_queue_and_file(
         num_poison_pills = 0
         num_surfaces_loaded = 0
         while num_poison_pills < num_procs:
+            # Should have anb async wrapper to the queue here since this call will block!!!!
             conv_item = converted_queue.get()
             if conv_item is None:
                 num_poison_pills += 1
