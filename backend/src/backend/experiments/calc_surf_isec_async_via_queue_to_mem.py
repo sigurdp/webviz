@@ -158,7 +158,7 @@ async def calc_surf_isec_async_via_queue_to_mem(
     cutting_plane: schemas.CuttingPlane,
 ) -> List[schemas.SurfaceIntersectionData]:
     
-    myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_async_via_queue_and_file():"
+    myprefix = ">>>>>>>>>>>>>>>>> calc_surf_isec_async_via_queue_to_mem():"
 
     print(f"{myprefix} started #################################################################################################################", flush=True)
     print(f"{myprefix} started  {num_reals=}  {num_workers=}", flush=True)
@@ -241,12 +241,16 @@ async def calc_surf_isec_async_via_queue_to_mem(
                 continue
 
             if conv_item.quick_bytes is None:
-                IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, conv_item.name, conv_item.attribute, conv_item.real, cache_entry=SurfCacheEntry(None))
+                #!!!!!
+                #!!!!!
+                #IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, conv_item.name, conv_item.attribute, conv_item.real, cache_entry=SurfCacheEntry(None))
                 continue
 
             xtgeo_surf = bytes_to_xtgeo_surf(conv_item.quick_bytes)
             xtgeo_surf_arr.append(xtgeo_surf)
-            IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, conv_item.name, conv_item.attribute, conv_item.real, cache_entry=SurfCacheEntry(xtgeo_surf))
+            #!!!!!
+            #!!!!!
+            #IN_MEM_SURF_CACHE.set(case_uuid, ensemble_name, conv_item.name, conv_item.attribute, conv_item.real, cache_entry=SurfCacheEntry(xtgeo_surf))
             num_surfaces_loaded += 1
         
         average_load_time_ms = myTimer.elapsed_ms()/num_surfaces_loaded if num_surfaces_loaded > 0 else 0

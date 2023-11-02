@@ -88,8 +88,8 @@ class RadixJobScheduler:
                     # these could be dynamic based on e.g. the selected ensemble sizess by the user.
                     json={
                         "resources": {
-                            "limits": {"memory": "16GiB", "cpu": "4"},
-                            "requests": {"memory": "16GiB", "cpu": "4"},
+                            "limits": {"memory": "4GiB", "cpu": "1"},
+                            "requests": {"memory": "4GiB", "cpu": "1"},
                         }
                     },
                 )
