@@ -101,7 +101,7 @@ async def get_statistical_surface_data(
     if service_stat_func_to_compute is None:
         raise HTTPException(status_code=404, detail="Invalid statistic requested")
 
-    xtgeo_surf = access.get_statistical_surface_data(
+    xtgeo_surf = await access.get_statistical_surface_data_async(
         statistic_function=service_stat_func_to_compute,
         name=name,
         attribute=attribute,
@@ -183,12 +183,12 @@ async def get_property_surface_resampled_to_statistical_static_surface(
     access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
     service_stat_func_to_compute = StatisticFunction.from_string_value(statistic_function)
     if service_stat_func_to_compute is not None:
-        xtgeo_surf_mesh = access.get_statistical_surface_data(
+        xtgeo_surf_mesh = await access.get_statistical_surface_data_async(
             statistic_function=service_stat_func_to_compute,
             name=name_mesh,
             attribute=attribute_mesh,
         )
-        xtgeo_surf_property = access.get_statistical_surface_data(
+        xtgeo_surf_property = await access.get_statistical_surface_data_async(
             statistic_function=service_stat_func_to_compute,
             name=name_property,
             attribute=attribute_property,
