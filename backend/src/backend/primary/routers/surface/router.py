@@ -2,6 +2,7 @@ import logging
 from typing import List, Union, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import BackgroundTasks
 
 from src.services.sumo_access.surface_access import SurfaceAccess
 from src.services.smda_access.stratigraphy_access import StratigraphyAccess
@@ -10,6 +11,7 @@ from src.services.smda_access.mocked_drogon_smda_access import _mocked_stratigra
 from src.services.utils.statistic_function import StatisticFunction
 from src.services.utils.authenticated_user import AuthenticatedUser
 from src.services.utils.perf_timer import PerfTimer
+from src.services.utils.user_cache import get_user_cache, UserCache
 from src.backend.auth.auth_helper import AuthHelper
 from src.backend.utils.perf_metrics import PerfMetrics
 from src.services.sumo_access._helpers import SumoCase
@@ -54,6 +56,7 @@ async def get_surface_directory(
 
 @router.get("/realization_surface_data/")
 async def get_realization_surface_data(
+    background_tasks: BackgroundTasks,
     response: Response,
     authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
     case_uuid: str = Query(description="Sumo case uuid"),
@@ -65,14 +68,31 @@ async def get_realization_surface_data(
 ) -> schemas.SurfaceData:
     perf_metrics = PerfMetrics(response)
 
-    access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
-    xtgeo_surf = await access.get_realization_surface_data_async(
-        real_num=realization_num, name=name, attribute=attribute, time_or_interval_str=time_or_interval
-    )
-    perf_metrics.record_lap("get-surf")
+    user_cache: UserCache = get_user_cache(authenticated_user)
+    cache_key = f"surface:{case_uuid}_{ensemble_name}_{realization_num}_{name}_{attribute}_{time_or_interval}"
+
+    #cached_xtgeo_surf = await user_cache.get_RegularSurface(cache_key)
+    cached_xtgeo_surf = await user_cache.get_Any(cache_key)
+    #cached_xtgeo_surf = await user_cache.get_RegularSurface_HACK(cache_key)
+    xtgeo_surf = cached_xtgeo_surf
+    perf_metrics.record_lap("read-cache")
+
+    if not xtgeo_surf:
+        access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
+        xtgeo_surf = await access.get_realization_surface_data_async(
+            real_num=realization_num, name=name, attribute=attribute, time_or_interval_str=time_or_interval
+        )
+        perf_metrics.record_lap("get-surf")
 
     if not xtgeo_surf:
         raise HTTPException(status_code=404, detail="Surface not found")
+
+    if not cached_xtgeo_surf:
+        #await user_cache.set_RegularSurface(cache_key, xtgeo_surf)
+        await user_cache.set_Any(cache_key, xtgeo_surf)
+        #await user_cache.set_RegularSurface_HACK(cache_key, xtgeo_surf)
+        #background_tasks.add_task(user_cache.set_RegularSurface_HACK, cache_key, xtgeo_surf)
+    perf_metrics.record_lap("write-cache")
 
     surf_data_response = converters.to_api_surface_data(xtgeo_surf)
     perf_metrics.record_lap("convert")

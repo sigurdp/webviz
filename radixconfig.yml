@@ -39,8 +39,8 @@ spec:
         UVICORN_ENTRYPOINT: src.backend.primary.main:app
       resources:
         requests:
-          memory: "1Gi"
-          cpu: "200m"
+          memory: 1Gi
+          cpu: 200m
       environmentConfig:
         - environment: prod
           horizontalScaling:
@@ -67,8 +67,8 @@ spec:
         REDIS_PORT_NUMBER: 6380
       resources:
         requests:
-          memory: "2Gi"
-          cpu: "200m"
+          memory: 2Gi
+          cpu: 200m
 
   jobs:
     - name: backend-user-session
