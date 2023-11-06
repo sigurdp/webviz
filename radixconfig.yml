@@ -39,8 +39,8 @@ spec:
         UVICORN_ENTRYPOINT: src.backend.primary.main:app
       resources:
         requests:
-          memory: 1Gi
-          cpu: 200m
+          memory: 2Gi
+          cpu: 400m
       environmentConfig:
         - environment: prod
           horizontalScaling:
@@ -51,7 +51,7 @@ spec:
           horizontalScaling:
             resources:
              memory:
-              averageUtilization: 50
+              averageUtilization: 60
             cpu:
               averageUtilization: 80
             minReplicas: 2
@@ -74,7 +74,7 @@ spec:
         ALLOW_EMPTY_PASSWORD: yes
         REDIS_PORT_NUMBER: 6380
         # https://redis.io/docs/management/config/#configuring-redis-as-a-cache
-        REDIS_EXTRA_FLAGS: --maxmemory 1gb --maxmemory-policy allkeys-lru --loglevel debug
+        REDIS_EXTRA_FLAGS: --maxmemory 1gb  --maxmemory-policy allkeys-lru  --save ''  --appendonly no  --loglevel debug
       resources:
         requests:
           memory: 2Gi
