@@ -65,6 +65,8 @@ spec:
       variables:
         ALLOW_EMPTY_PASSWORD: yes
         REDIS_PORT_NUMBER: 6380
+        # https://redis.io/docs/management/config/#configuring-redis-as-a-cache
+        REDIS_EXTRA_FLAGS: --maxmemory 2gb --maxmemory-policy allkeys-lru --loglevel verbose
       resources:
         requests:
           memory: 2Gi

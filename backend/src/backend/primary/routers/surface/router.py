@@ -74,9 +74,9 @@ async def get_realization_surface_data(
     #cached_xtgeo_surf = await user_cache.get_RegularSurface(cache_key)
     cached_xtgeo_surf = await user_cache.get_Any(cache_key)
     #cached_xtgeo_surf = await user_cache.get_RegularSurface_HACK(cache_key)
-    xtgeo_surf = cached_xtgeo_surf
-    perf_metrics.record_lap("read-cache")
+    perf_metrics.record_lap(f"read-cache{'-hit' if cached_xtgeo_surf else '-miss'}")
 
+    xtgeo_surf = cached_xtgeo_surf
     if not xtgeo_surf:
         access = await SurfaceAccess.from_case_uuid(authenticated_user.get_sumo_access_token(), case_uuid, ensemble_name)
         xtgeo_surf = await access.get_realization_surface_data_async(
