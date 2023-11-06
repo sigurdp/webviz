@@ -48,6 +48,14 @@ spec:
             maxReplicas: 6
         - environment: review
           replicas: 2
+          horizontalScaling:
+            resources:
+             memory:
+              averageUtilization: 50
+            cpu:
+              averageUtilization: 80
+            minReplicas: 2
+            maxReplicas: 6
 
     - name: redis-user-session
       image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
@@ -66,7 +74,7 @@ spec:
         ALLOW_EMPTY_PASSWORD: yes
         REDIS_PORT_NUMBER: 6380
         # https://redis.io/docs/management/config/#configuring-redis-as-a-cache
-        REDIS_EXTRA_FLAGS: --maxmemory 2gb --maxmemory-policy allkeys-lru --loglevel verbose
+        REDIS_EXTRA_FLAGS: --maxmemory 1gb --maxmemory-policy allkeys-lru --loglevel debug
       resources:
         requests:
           memory: 2Gi
