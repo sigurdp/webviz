@@ -39,16 +39,16 @@ spec:
         UVICORN_ENTRYPOINT: src.backend.primary.main:app
       resources:
         requests:
-          memory: 1Gi
-          cpu: 400m
+          memory: 2Gi
+          cpu: 800m
       environmentConfig:
         - environment: prod
-          replicas: 2
+          replicas: 1
           # horizontalScaling:
           #   minReplicas: 2
           #   maxReplicas: 6
         - environment: review
-          replicas: 2
+          replicas: 1
           # horizontalScaling:
           #   resources:
           #    memory:
