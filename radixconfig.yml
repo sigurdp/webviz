@@ -39,7 +39,7 @@ spec:
         UVICORN_ENTRYPOINT: src.backend.primary.main:app
       resources:
         requests:
-          memory: 3Gi
+          memory: 4Gi
           cpu: 800m
       environmentConfig:
         - environment: prod
