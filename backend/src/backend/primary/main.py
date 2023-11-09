@@ -82,6 +82,32 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total")
 
 
+
+
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp
+from starlette.requests import Request
+from starlette.responses import Response
+import gc
+import time
+
+
+class GCHackMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp):
+        super().__init__(app)
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+        start_time_s = time.perf_counter()
+        gc.collect()
+        elapsed_time_ms = int(1000 * (time.perf_counter() - start_time_s))
+        print(f"GC took {elapsed_time_ms:.2f}ms")
+        return response
+
+app.add_middleware(GCHackMiddleware)
+
+
+
 @app.get("/")
 async def root() -> str:
     return f"Backend is alive at this time: {datetime.datetime.now()}"
