@@ -43,10 +43,8 @@ spec:
         UVICORN_ENTRYPOINT: src.backend.primary.main:app
       resources:
         requests:
-          # memory: 4Gi
-          # cpu: 800m
-          memory: 2Gi
-          cpu: 800m
+          memory: 4Gi
+          cpu: 1000m
       environmentConfig:
         - environment: prod
           replicas: 1
@@ -55,14 +53,14 @@ spec:
           #   maxReplicas: 6
         - environment: review
           replicas: 1
-          # horizontalScaling:
-          #   resources:
-          #    memory:
-          #     averageUtilization: 60
-          #   cpu:
-          #     averageUtilization: 80
-          #   minReplicas: 2
-          #   maxReplicas: 6
+          horizontalScaling:
+            resources:
+             memory:
+              averageUtilization: 60
+            cpu:
+              averageUtilization: 80
+            minReplicas: 2
+            maxReplicas: 6
 
     - name: redis-user-session
       image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
