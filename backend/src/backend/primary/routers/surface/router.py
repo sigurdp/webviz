@@ -75,7 +75,7 @@ async def get_realization_surface_data(
     #cached_xtgeo_surf = await user_cache.get_RegularSurface(cache_key)
     cached_xtgeo_surf = await user_cache.get_Any(cache_key)
     #cached_xtgeo_surf = await user_cache.get_RegularSurface_HACK(cache_key)
-    #perf_metrics.record_lap(f"read-cache{'-hit' if cached_xtgeo_surf else '-miss'}")
+    perf_metrics.record_lap(f"read-cache{'-hit' if cached_xtgeo_surf else '-miss'}")
 
     xtgeo_surf = cached_xtgeo_surf
     if not xtgeo_surf:
@@ -93,7 +93,7 @@ async def get_realization_surface_data(
         await user_cache.set_Any(cache_key, xtgeo_surf)
         #await user_cache.set_RegularSurface_HACK(cache_key, xtgeo_surf)
         #background_tasks.add_task(user_cache.set_RegularSurface_HACK, cache_key, xtgeo_surf)
-    perf_metrics.record_lap("write-cache")
+        perf_metrics.record_lap("write-cache")
 
     surf_data_response = converters.to_api_surface_data(xtgeo_surf)
     perf_metrics.record_lap("convert")
