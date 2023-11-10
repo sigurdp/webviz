@@ -82,7 +82,7 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total")
 
 
-
+"""
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
@@ -106,6 +106,8 @@ class GCHackMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(GCHackMiddleware)
 
+
+"""
 
 
 @app.get("/")
