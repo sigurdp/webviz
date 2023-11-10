@@ -18,11 +18,7 @@ spec:
       ports:
         - name: http
           port: 8080
-      resources:
-        requests:
-          memory: 1Gi
-          cpu: 800m
-
+          
     - name: backend-primary
       dockerFileName: backend.Dockerfile
       ports:
@@ -79,6 +75,7 @@ spec:
         ALLOW_EMPTY_PASSWORD: yes
         REDIS_PORT_NUMBER: 6380
         # https://redis.io/docs/management/config/#configuring-redis-as-a-cache
+        # maxmemory for redis must be aligned with component's requested memory, here 1gb vs 2gb
         REDIS_EXTRA_FLAGS: --maxmemory 1gb  --maxmemory-policy allkeys-lru  --save ''  --appendonly no  --loglevel debug
       resources:
         requests:
