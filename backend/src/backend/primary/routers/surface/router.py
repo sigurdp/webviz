@@ -72,9 +72,9 @@ async def get_realization_surface_data(
     cache_key = f"surface:{case_uuid}_{ensemble_name}_{realization_num}_{name}_{attribute}_{time_or_interval}"
 
     cached_xtgeo_surf = None
+    #cached_xtgeo_surf = await user_cache.get_Any(cache_key)
     #cached_xtgeo_surf = await user_cache.get_RegularSurface(cache_key)
-    cached_xtgeo_surf = await user_cache.get_Any(cache_key)
-    #cached_xtgeo_surf = await user_cache.get_RegularSurface_HACK(cache_key)
+    cached_xtgeo_surf = await user_cache.get_RegularSurface_quick(cache_key)
     perf_metrics.record_lap(f"read-cache{'-hit' if cached_xtgeo_surf else '-miss'}")
 
     xtgeo_surf = cached_xtgeo_surf
@@ -89,9 +89,9 @@ async def get_realization_surface_data(
         raise HTTPException(status_code=404, detail="Surface not found")
 
     if not cached_xtgeo_surf:
+        #await user_cache.set_Any(cache_key, xtgeo_surf)
         #await user_cache.set_RegularSurface(cache_key, xtgeo_surf)
-        await user_cache.set_Any(cache_key, xtgeo_surf)
-        #await user_cache.set_RegularSurface_HACK(cache_key, xtgeo_surf)
+        await user_cache.set_RegularSurface_quick(cache_key, xtgeo_surf)
         #background_tasks.add_task(user_cache.set_RegularSurface_HACK, cache_key, xtgeo_surf)
         perf_metrics.record_lap("write-cache")
 

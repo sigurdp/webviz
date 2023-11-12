@@ -32,6 +32,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logging.getLogger("src.services.sumo_access").setLevel(level=logging.DEBUG)
+logging.getLogger("src.services.utils.user_cache").setLevel(level=logging.DEBUG)
 logging.getLogger("src.backend.primary.routers.surface").setLevel(level=logging.DEBUG)
 
 
@@ -83,7 +84,6 @@ app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total")
 
 
 """
-
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 from starlette.requests import Request
@@ -105,8 +105,6 @@ class GCHackMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(GCHackMiddleware)
-
-
 """
 
 

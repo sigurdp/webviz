@@ -1,5 +1,6 @@
 import io
 import logging
+import struct
 from typing import Any
 import xtgeo
 import numpy as np
@@ -31,6 +32,36 @@ class SurfMeta:
     rotation: float
 
 
+def xtgeo_surf_to_quick_bytes(surf: xtgeo.RegularSurface) -> bytes:
+    header_bytes = struct.pack("@iiddddid", surf.ncol, surf.nrow, surf.xinc, surf.yinc, surf.xori, surf.yori, surf.yflip, surf.rotation)
+
+    masked_values = surf.values.astype(np.float32)
+    values_np = np.ma.filled(masked_values, fill_value=np.nan)
+    arr_bytes = bytes(values_np.ravel(order="C").data)
+
+    ret_arr = header_bytes + arr_bytes
+    return ret_arr
+
+
+def quick_bytes_to_xtgeo_surf(byte_arr: bytes) -> xtgeo.RegularSurface:
+    # 3*4 + 5*8 = 52
+    ncol, nrow, xinc, yinc, xori, yori, yflip, rotation = struct.unpack("iiddddid", byte_arr[:56])
+    values = np.frombuffer(byte_arr[56:], dtype=np.float32).reshape(nrow, ncol)
+    surf = xtgeo.RegularSurface(
+        ncol=ncol,
+        nrow=nrow,
+        xinc=xinc,
+        yinc=yinc,
+        xori=xori,
+        yori=yori,
+        yflip=yflip,
+        rotation=rotation,
+        values=values,
+    )
+
+    return surf
+
+
 class UserCache:
     def __init__(self, aio_cache: BaseCache, authenticated_user: AuthenticatedUser):
         self._cache = aio_cache
@@ -38,6 +69,7 @@ class UserCache:
 
     def _make_full_key(self, key: str) -> str:
         return f"user:{self._authenticated_user_id}:{key}"
+
 
     async def set_Any(self, key: str, obj: Any) -> bool:
         timer = PerfTimer()
@@ -99,97 +131,38 @@ class UserCache:
         return surf
 
 
-    async def set_RegularSurface_HACK(
+    async def set_RegularSurface_quick(
         self, key: str, surf: xtgeo.RegularSurface
     ) -> bool:
         timer = PerfTimer()
 
-        surf_meta = SurfMeta(
-            ncol=surf.ncol,
-            nrow=surf.nrow,
-            xinc=surf.xinc,
-            yinc=surf.yinc,
-            xori=surf.xori,
-            yori=surf.yori,
-            yflip=surf.yflip,
-            rotation=surf.rotation,
-        )
+        quick_bytes = xtgeo_surf_to_quick_bytes(surf)
 
-        values = surf.values
+        res = await self._cache.set(self._make_full_key(key), quick_bytes)
 
-        masked_values = surf.values.astype(np.float32)
-        values_np = np.ma.filled(masked_values, fill_value=np.nan)
-        arr_bytes = bytes(values_np.ravel(order="C").data)
+        LOGGER.debug(f"##### set_RegularSurface_quick() ({(len(quick_bytes)/1024):.2f}KB) took: {timer.elapsed_ms()}ms")
 
-        # print("----------------------------", flush=True)
-        # print(f"{type(arr_bytes)=}", flush=True)
-        # print("----------------------------", flush=True)
-
-        pairs = []
-        pairs.append([self._make_full_key(key + ":surf_meta"), surf_meta])
-        pairs.append([self._make_full_key(key + ":surf_bytes"), arr_bytes])
-
-        res = await self._cache.multi_set(pairs)
-        LOGGER.debug(
-            f"##### set_RegularSurface_HACK() ({(len(arr_bytes)/1024):.2f}KB) took: {timer.elapsed_ms()}ms"
-        )
         return res
 
-    async def get_RegularSurface_HACK(self, key: str) -> xtgeo.RegularSurface | None:
+    async def get_RegularSurface_quick(self, key: str) -> xtgeo.RegularSurface | None:
         timer = PerfTimer()
 
-        key_arr = []
-        key_arr.append(self._make_full_key(key + ":surf_meta"))
-        key_arr.append(self._make_full_key(key + ":surf_bytes"))
+        quick_bytes = await self._cache.get(self._make_full_key(key))
 
-        items_arr = await self._cache.multi_get(key_arr)
-
-        if items_arr is None or len(items_arr) != 2:
-            LOGGER.debug(
-                f"##### get_RegularSurface_HACK() data=no took: {timer.elapsed_ms()}ms"
-            )
+        if quick_bytes is None:
+            LOGGER.debug(f"##### set_RegularSurface_quick() data=no took: {timer.elapsed_ms()}ms")
             return None
-
-        surf_meta = items_arr[0]
-        arr_bytes = items_arr[1]
-        if (surf_meta is None) or (arr_bytes is None):
-            LOGGER.debug(
-                f"##### get_RegularSurface_HACK() data=no took: {timer.elapsed_ms()}ms"
-            )
-            return None
-
-        # print("----------------------------", flush=True)
-        # print(f"{surf_meta=}", flush=True)
-        # print(f"{type(arr_bytes)=}", flush=True)
-        # print("----------------------------", flush=True)
-
-        values = np.frombuffer(arr_bytes, dtype=np.float32).reshape(
-            surf_meta.nrow, surf_meta.ncol
-        )
 
         try:
-            surf = xtgeo.RegularSurface(
-                ncol=surf_meta.ncol,
-                nrow=surf_meta.nrow,
-                xinc=surf_meta.xinc,
-                yinc=surf_meta.yinc,
-                xori=surf_meta.xori,
-                yori=surf_meta.yori,
-                yflip=surf_meta.yflip,
-                rotation=surf_meta.rotation,
-                values=values,
-            )
+            surf = quick_bytes_to_xtgeo_surf(quick_bytes)
         except Exception as e:
-            LOGGER.debug(
-                f"##### get_RegularSurface_HACK() data=convException took: {timer.elapsed_ms()}ms"
-            )
+            LOGGER.debug(f"##### set_RegularSurface_quick() data=convException took: {timer.elapsed_ms()}ms")
             return None
 
-        LOGGER.debug(
-            f"##### get_RegularSurface_HACK() data=yes ({(len(arr_bytes)/1024):.2f}KB) took: {timer.elapsed_ms()}ms"
-        )
+        LOGGER.debug(f"##### get_RegularSurface_quick() data=yes ({(len(quick_bytes)/1024):.2f}KB) took: {timer.elapsed_ms()}ms")
 
         return surf
+
 
 
 redis_client = redis.Redis.from_url(config.REDIS_CACHE_URL)
