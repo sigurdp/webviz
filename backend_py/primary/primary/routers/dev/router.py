@@ -6,6 +6,11 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
 
+import asyncio
+from primary.services.sumo_access.summary_access import Frequency, SummaryAccess
+from webviz_pkg.core_utils.perf_metrics import PerfMetrics
+
+
 import json
 import io
 import fsspec
@@ -247,6 +252,99 @@ async def ri_isect(
     await grid_service.get_polyline_intersection_async(ensemble_name, realization, grid_name, property_name, xy_arr)
 
     return "OK"
+
+
+@router.get("/smrytest", response_class=HTMLResponse)
+async def blobtest(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query()] = "11167ec3-41f7-452c-8a08-38466df6bb97",
+    ensemble_name: Annotated[str, Query()] = "iter-0",
+    vector_names: Annotated[list[str], Query()] = ["FOPT"],
+    realization: Annotated[int | None, Query()] = None,
+) -> str:
+    LOGGER.debug(f"smrytest() - start")
+
+    sumo_freq = Frequency.MONTHLY
+
+    LOGGER.debug(f"{case_uuid=}")
+    LOGGER.debug(f"{ensemble_name=}")
+    LOGGER.debug(f"{realization=}")
+    LOGGER.debug(f"{vector_names=}")
+
+
+    perf_metrics = PerfMetrics()
+
+    sumo_access_token = authenticated_user.get_sumo_access_token()
+    #sumo_client = SumoClient(env=config.SUMO_ENV, token=sumo_access_token, interactive=False)
+    perf_metrics.record_lap("get-token")
+
+    access = await SummaryAccess.from_case_uuid(sumo_access_token, case_uuid, ensemble_name)
+    perf_metrics.record_lap("access")
+
+
+    meta_arr = []
+    table = None
+
+    if realization is None:
+        task_arr = []
+        LOGGER.debug(f"smrytest() - launching tasks")
+        async with asyncio.TaskGroup() as tg:
+            for vecname in vector_names:
+                LOGGER.debug(f"smrytest() - launching tasks for {vecname}")
+                task = tg.create_task(access.get_vector_table_async(
+                    vector_name=vecname,
+                    resampling_frequency=sumo_freq,
+                    realizations=None,
+                ))
+                task_arr.append(task)
+
+        perf_metrics.record_lap("get-vector-tasks")
+
+        LOGGER.debug(f"smrytest() - tasks done, creating combined table")
+
+        for task in task_arr:
+            vectable, vecmeta = task.result()
+            if table is None:
+                table = vectable
+            else:
+                table = table.append_column(vecmeta.name, vectable[vecmeta.name])
+
+            meta_arr.append(vecmeta)
+
+        perf_metrics.record_lap("combine-tables")
+
+        LOGGER.debug(f"smrytest() - done creating combined table")
+    else:
+        table, meta = await access.get_single_real_vectors_table_async(
+            vector_names=vector_names, 
+            resampling_frequency=sumo_freq, 
+            realization=realization
+        )
+        meta_arr.append(meta)
+
+        perf_metrics.record_lap("get-vector-table")
+
+
+    # async with asyncio.TaskGroup() as tg:
+    #     grid_task = tg.create_task(blob_cache.ensure_grid_blob_downloaded_async(req_body.grid_blob_object_uuid))
+    #     perf_metrics.measure_task(grid_task, "get-grid-blob")
+
+    #     get_ri_task = tg.create_task(RESINSIGHT_MANAGER.get_channel_for_running_ri_instance_async())
+    #     perf_metrics.measure_task(get_ri_task, "get-ri")
+
+
+    retstr = f"DONE - {case_uuid}"
+    retstr += "<br>"
+    retstr += f"<br>elapsed_s={perf_metrics.get_elapsed_ms()/1000:.3f}"
+    retstr += f"<br>{table.shape=}"
+    retstr += f"<br>{meta_arr=}"
+    retstr += "<br><br>"
+
+    LOGGER.debug(f"{perf_metrics.to_string()}")
+
+    LOGGER.debug(f"smrytest() - end")
+
+    return retstr
 
 
 @router.get("/blobtest", response_class=HTMLResponse)
