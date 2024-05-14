@@ -5,6 +5,23 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
+
+import json
+import io
+import fsspec
+import adlfs
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pyarrow.dataset as ds
+from webviz_pkg.core_utils.perf_timer import PerfTimer
+from fastapi.responses import HTMLResponse
+from primary.services.sumo_access.sumo_blob_access import get_sas_token_and_blob_store_base_uri_for_case
+from sumo.wrapper import SumoClient
+from primary import config
+import pyarrow.feather as pf
+
+
+
 from webviz_pkg.core_utils.background_tasks import run_in_background_task
 
 from primary.auth.auth_helper import AuthenticatedUser, AuthHelper
@@ -230,3 +247,256 @@ async def ri_isect(
     await grid_service.get_polyline_intersection_async(ensemble_name, realization, grid_name, property_name, xy_arr)
 
     return "OK"
+
+
+@router.get("/blobtest", response_class=HTMLResponse)
+async def blobtest(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    agg_col: Annotated[str | None, Query()] = None,
+    get_col: Annotated[list[str] | None, Query()] = None,
+    case_uuid: Annotated[str, Query()] = "11167ec3-41f7-452c-8a08-38466df6bb97",
+    iteration_name: Annotated[str, Query()] = "iter-0",
+    realization: Annotated[int, Query()] = 1,
+) -> str:
+    LOGGER.debug(f"blobtest() - start")
+
+    table_name = None
+
+    """
+    # case_uuid = "11167ec3-41f7-452c-8a08-38466df6bb97" # webviz_case_2
+    # iteration_name = "iter-0"
+    # realization = 1
+    # table_name = None
+    # #table_name = "DROGON"
+
+    case_uuid = "e2e2c560-788a-4e92-93a3-3ba7afe2c796" # ffgas_rnb2024
+    iteration_name = "iter-0"
+    realization = 1
+    table_name = None
+    #table_name = "TROLL_GAS_HIST"
+
+    agg_col = None
+    agg_col = "FGPR"
+
+    get_col = None
+    #get_col = ["REAL"]
+    #get_col = ["DATE"]
+    #get_col = ["DATE", "FGPR"]
+    #get_col = ["FGPR"]
+    #get_col = ['DATE', 'YEARS', 'DAY', 'MONTH', 'YEAR', 'FGIP', 'FGPR', 'FGPRH', 'FGPT', 'FGPTH', 'FGIR', 'FGIRH', 'FGIT', 'FGITH', 'FGCR', 'FGCT', 'FGSR', 'FGST', 'FGPP', 'FWIP', 'FWGR', 'FWPR', 'FWPT', 'FWPP', 'FVPR', 'FVPT', 'FVIR', 'FVIT', 'FPR', 'FNQR', 'FNQT']
+    """
+    
+    LOGGER.debug(f"{case_uuid=}")
+    LOGGER.debug(f"{iteration_name=}")
+    LOGGER.debug(f"{realization=}")
+    LOGGER.debug(f"{agg_col=}")
+    LOGGER.debug(f"{get_col=}")
+
+    sumo_access_token = authenticated_user.get_sumo_access_token()
+    sumo_client = SumoClient(env=config.SUMO_ENV, token=sumo_access_token, interactive=False)
+
+    if agg_col is not None:
+        data_format = "parquet"
+        blob_id = await find_all_real_combined_summary_table_blob_id(sumo_client, case_uuid, iteration_name, table_name, agg_col)
+    else:
+        data_format = "feather"
+        blob_id = await find_single_real_summary_table_blob_id(sumo_client, case_uuid, iteration_name, table_name, realization)
+
+
+    sas_token, blob_store_base_uri = get_sas_token_and_blob_store_base_uri_for_case(sumo_access_token, case_uuid)
+    LOGGER.debug(f"{sas_token=}")
+    LOGGER.debug(f"{blob_store_base_uri=}")
+
+    timer = PerfTimer()
+
+    blob_endpoint = blob_store_base_uri.rpartition("/")[0]
+    conn_string = f"BlobEndpoint={blob_endpoint};SharedAccessSignature={sas_token}"
+    fs = adlfs.AzureBlobFileSystem(connection_string=conn_string)
+    et_create_fs_ms = timer.lap_ms()
+    LOGGER.debug(f"{fs=}")
+
+
+    blob_path = f"{case_uuid}/{blob_id}"
+
+    size_bytes = fs.size(path=blob_path)
+    size_mb = size_bytes/1024/1024
+    LOGGER.debug(f"{size_mb=:.2f}")
+    et_get_blob_size_ms = timer.lap_ms()
+
+
+    # TRY AND DO A RAW DOWNLOAD FOR COMPARISON!!!!
+    # TRY AND DO A RAW DOWNLOAD FOR COMPARISON!!!!
+    et_download_blob_with_sumo_ms = -1
+    byte_stream_from_sumo: io.BytesIO = await download_blob_using_sumo(sumo_client, blob_id)
+    if data_format == "parquet":
+        # parquet_file = pa.parquet.ParquetFile(byte_stream_from_sumo)
+        # LOGGER.debug(f"{parquet_file.metadata=}")
+        # LOGGER.debug(f"{parquet_file.metadata.row_group(0).column(0).compression=}")
+        table_from_sumo = pq.read_table(byte_stream_from_sumo, columns=get_col)
+    else:
+        table_from_sumo = pf.read_table(byte_stream_from_sumo, columns=get_col)
+
+        # pa.feather.write_feather(table_from_sumo, "~/dump_compressed.feather")
+        # pa.feather.write_feather(table_from_sumo, "~/dump_uncompressed.feather", compression="uncompressed")
+        # pq.write_table(table_from_sumo, "~/dump_compressed.parquet")
+
+    et_download_blob_with_sumo_ms = timer.lap_ms()
+
+
+
+    if data_format == "parquet":
+        table = pq.read_table(blob_path, filesystem=fs, columns=get_col)
+    else:
+        the_file = fs.open(blob_path, "rb")
+        table = pf.read_table(the_file, columns=get_col)
+
+    # dataset = ds.dataset(blob_path, filesystem=fs, format=data_format)
+    # #table = dataset.to_table(columns=columns_to_get, filter=ds.field("REAL") == 3)
+    # table = dataset.to_table(columns=columns_to_get)
+
+    et_get_data_table_ms = timer.lap_ms()
+
+    #LOGGER.debug(table.schema)
+    #LOGGER.debug(table.column_names)
+    #df = table.to_pandas()
+
+
+    elapsed_s = timer.elapsed_s()
+
+    retstr = f"DONE - {blob_path}"
+    retstr += "<br>"
+    retstr += f"<br>elapsed_s={elapsed_s:.3f}"
+    retstr += f"<br>{table.shape=}"
+    retstr += f"<br>{table_from_sumo.shape=}"
+    retstr += f"<br>{et_create_fs_ms=}"
+    retstr += f"<br>{et_get_blob_size_ms=}"
+    retstr += f"<br>{et_download_blob_with_sumo_ms=}"
+    retstr += f"<br>{et_get_data_table_ms=}"
+    retstr += "<br><br>"
+
+    LOGGER.debug(f"blobtest() - done")
+
+    return retstr
+
+
+async def find_single_real_summary_table_blob_id(sumo_client: SumoClient, case_uuid: str, iteration_name: str, table_name: str | None, realization: int) -> str:
+    LOGGER.debug("find_single_real_summary_table_blob_id() - start")
+
+    myquery = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"match": {"_sumo.parent_object.keyword": case_uuid}},
+                    {"match": {"class": "table"}},
+                    {"match": {"fmu.iteration.name.keyword": iteration_name}},
+                    {"match": {"fmu.context.stage.keyword": "realization"}},
+                    {"match": {"fmu.realization.id": realization}},
+                    #{"match": {"data.name.keyword": table_name}},
+                    #{"match": {"data.content.keyword": "timeseries"}},
+                    {"match": {"data.tagname.keyword": "summary"}},
+                ]
+            }
+        },
+    }
+
+    if table_name is not None:
+        myquery["query"]["bool"]["must"].append({"match": {"data.name.keyword": table_name}})
+
+    response = await sumo_client.post_async("/search", json=myquery)
+    response_as_json = response.json()
+
+    # LOGGER.debug("-----------------")
+    # delete_key_from_dict_recursive(response_as_json, "parameters")
+    # delete_key_from_dict_recursive(response_as_json, "columns")
+    # LOGGER.debug(json.dumps(response_as_json, indent=2))
+    # LOGGER.debug("-----------------")
+
+    hits = response_as_json["hits"]["hits"]
+    if len(hits) != 1:
+        raise ValueError(f"Expected 1 hit, got {len(hits)}")
+
+    blob_id = hits[0]["_source"]["_sumo"]["blob_name"]
+    LOGGER.debug(f"find_single_real_summary_table_blob_id() - {blob_id=}")
+
+    blob_size_bytes = hits[0]["_source"]["_sumo"].get("blob_size")
+    blob_size_mb = blob_size_bytes / 1024 / 1024 if blob_size_bytes is not None else -1
+    LOGGER.debug(f"find_single_real_summary_table_blob_id() - {blob_size_mb=:.2f}")
+
+    LOGGER.debug("find_single_real_summary_table_blob_id() - done")
+
+    return blob_id
+
+
+async def find_all_real_combined_summary_table_blob_id(sumo_client: SumoClient, case_uuid: str, iteration_name: str, table_name: str | None, agg_column_name: str) -> str:
+    LOGGER.debug("find_all_real_combined_summary_table_blob_id() - start")
+
+    myquery = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"match": {"_sumo.parent_object.keyword": case_uuid}},
+                    {"match": {"class.keyword": "table"}},
+                    {"match": {"fmu.iteration.name.keyword": iteration_name}},
+                    {"match": {"fmu.context.stage.keyword": "iteration"}},
+                    {"match": {"fmu.aggregation.operation.keyword": "collection"}},
+                    #{"match": {"data.name.keyword": table_name}},
+                    #{"match": {"data.content.keyword": "timeseries"}},
+                    {"match": {"data.tagname.keyword": "summary"}},
+                    {"match": {"data.spec.columns.keyword": agg_column_name}},
+                ]
+            }
+        },
+    }
+
+    if table_name is not None:
+        myquery["query"]["bool"]["must"].append({"match": {"data.name.keyword": table_name}})
+
+    response = await sumo_client.post_async("/search", json=myquery)
+    response_as_json = response.json()
+
+    # LOGGER.debug("-----------------")
+    # delete_key_from_dict_recursive(response_as_json, "parameters")
+    # delete_key_from_dict_recursive(response_as_json, "realization_ids")
+    # LOGGER.debug(json.dumps(response_as_json, indent=2))
+    # LOGGER.debug("-----------------")
+
+    hits = response_as_json["hits"]["hits"]
+    if len(hits) != 1:
+        raise ValueError(f"Expected 1 hit, got {len(hits)}")
+
+    blob_id = hits[0]["_source"]["_sumo"]["blob_name"]
+    LOGGER.debug(f"find_all_real_combined_summary_table_blob_id() - {blob_id=}")
+
+    blob_size_bytes = hits[0]["_source"]["_sumo"].get("blob_size")
+    blob_size_mb = blob_size_bytes / 1024 / 1024 if blob_size_bytes is not None else -1
+    LOGGER.debug(f"find_all_real_combined_summary_table_blob_id() - {blob_size_mb=:.2f}")
+
+    LOGGER.debug("find_all_real_combined_summary_table_blob_id() - done")
+
+    return blob_id
+
+
+async def download_blob_using_sumo(sumo_client: SumoClient, blob_id: str) -> io.BytesIO:
+    LOGGER.debug("download_blob_using_sumo() - start")
+
+    res = await sumo_client.get_async(f"/objects('{blob_id}')/blob")
+    byte_stream = io.BytesIO(res.content)
+    num_bytes = byte_stream.getbuffer().nbytes
+    num_mb = num_bytes / 1024 / 1024
+    LOGGER.debug(f"download_blob_using_sumo() - {num_mb=:.2f}")
+
+    LOGGER.debug("download_blob_using_sumo() - done")
+
+    return byte_stream
+
+
+def delete_key_from_dict_recursive(d, key_to_delete):
+    if isinstance(d, dict):
+        for key, value in list(d.items()):
+            if key == key_to_delete:
+                del d[key]
+            else:
+                delete_key_from_dict_recursive(value, key_to_delete)
+    elif isinstance(d, list):
+        for item in d:
+            delete_key_from_dict_recursive(item, key_to_delete)
