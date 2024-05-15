@@ -29,6 +29,7 @@ xtgeo = "^3.8.0"
 adlfs = "^2024.4.1"
 fsspec = "^2024.3.1"
 azure-storage-blob = "^12.19.1"
+azure-storage-file-datalake = "12.15.0"
 
 core_utils = {path = "../libs/core_utils", develop = true}
 server_schemas = {path = "../libs/server_schemas", develop = true}

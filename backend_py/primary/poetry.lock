@@ -333,23 +333,43 @@ opentelemetry-sdk = ">=1.20,<2.0"
 
 [[package]]
 name = "azure-storage-blob"
-version = "12.19.1"
+version = "12.20.0"
 description = "Microsoft Azure Blob Storage Client Library for Python"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "azure-storage-blob-12.19.1.tar.gz", hash = "sha256:13e16ba42fc54ac2c7e8f976062173a5c82b9ec0594728e134aac372965a11b0"},
-    {file = "azure_storage_blob-12.19.1-py3-none-any.whl", hash = "sha256:c5530dc51c21c9564e4eb706cd499befca8819b10dd89716d3fc90d747556243"},
+    {file = "azure-storage-blob-12.20.0.tar.gz", hash = "sha256:eeb91256e41d4b5b9bad6a87fd0a8ade07dd58aa52344e2c8d2746e27a017d3b"},
+    {file = "azure_storage_blob-12.20.0-py3-none-any.whl", hash = "sha256:de6b3bf3a90e9341a6bcb96a2ebe981dffff993e9045818f6549afea827a52a9"},
 ]
 
 [package.dependencies]
-azure-core = ">=1.28.0,<2.0.0"
+azure-core = ">=1.28.0"
 cryptography = ">=2.1.4"
 isodate = ">=0.6.1"
-typing-extensions = ">=4.3.0"
+typing-extensions = ">=4.6.0"
 
 [package.extras]
-aio = ["azure-core[aio] (>=1.28.0,<2.0.0)"]
+aio = ["azure-core[aio] (>=1.28.0)"]
+
+[[package]]
+name = "azure-storage-file-datalake"
+version = "12.15.0"
+description = "Microsoft Azure File DataLake Storage Client Library for Python"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "azure-storage-file-datalake-12.15.0.tar.gz", hash = "sha256:bc6c07fa22a93446c2c9097b10ad6572396e82ab34230d697f30034258415a0b"},
+    {file = "azure_storage_file_datalake-12.15.0-py3-none-any.whl", hash = "sha256:6b12ce23f5fffb26a6fa7f7f5932442a1d419dba1675f9ff89dcd13f9707be5a"},
+]
+
+[package.dependencies]
+azure-core = ">=1.28.0"
+azure-storage-blob = ">=12.20.0"
+isodate = ">=0.6.1"
+typing-extensions = ">=4.6.0"
+
+[package.extras]
+aio = ["azure-core[aio] (>=1.28.0)"]
 
 [[package]]
 name = "bandit"
@@ -4024,4 +4044,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "4478f9f3938edcdb519464a63cfdc0b0edbebfbfeaf9b1e4dc81fbc0b5ab1f2d"
+content-hash = "5b69f2846949d991a96f668df7869c9bb8a56b4f1accf0889ecd68804d1f06b3"

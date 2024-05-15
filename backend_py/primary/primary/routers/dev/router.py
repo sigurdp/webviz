@@ -24,7 +24,7 @@ from primary.services.sumo_access.sumo_blob_access import get_sas_token_and_blob
 from sumo.wrapper import SumoClient
 from primary import config
 import pyarrow.feather as pf
-
+from azure.storage.filedatalake import DataLakeServiceClient, DataLakeFileClient, DelimitedJsonDialect, DelimitedTextDialect, ArrowDialect, ArrowType, QuickQueryDialect
 
 
 from webviz_pkg.core_utils.background_tasks import run_in_background_task
@@ -431,15 +431,75 @@ async def blobtest(
         # LOGGER.debug(f"{parquet_file.metadata=}")
         # LOGGER.debug(f"{parquet_file.metadata.row_group(0).column(0).compression=}")
         table_from_sumo = pq.read_table(byte_stream_from_sumo, columns=get_col)
+
+        et_download_blob_with_sumo_ms = timer.lap_ms()
+
+        # LOGGER.debug(table_from_sumo)
+        # LOGGER.debug(f"{table_from_sumo.shape=}")
+        # LOGGER.debug(f"{table_from_sumo.schema=}")
+
+        # Write a binary file
+        # with open("/home/appuser/table_from_sumo.raw.parquet", "wb") as f:
+        #     f.write(byte_stream_from_sumo.getvalue())
+
+        """
+        LOGGER.debug("-----------------------------------------------------------------------------")
+
+        file_client = DataLakeFileClient.from_connection_string(conn_string, file_system_name=case_uuid, file_path=blob_id)
+
+        errors = []
+        def on_error(error):
+            LOGGER.error(f"Error: {type(error)=} {error.error=}")
+            LOGGER.error(f"       {error.description=}")
+            LOGGER.error(f"       {error.position=}")
+            errors.append(error)
+
+        query_expression = "SELECT _2 from DataLakeStorage"
+        query_expression = 'SELECT "DATE","REAL" from DataLakeStorage WHERE "REAL" ='
+        #query_expression = 'SELECT "DATE","REAL" from DataLakeStorage WHERE "REAL" >= 2 AND "REAL" <= 5'
+        #query_expression = 'SELECT "DATE","REAL" from DataLakeStorage'
+        #query_expression = 'SELECT "DATE","REAL","FGPR" from DataLakeStorage'
+        input_format = "ParquetDialect"
+        #output_format = DelimitedJsonDialect(delimiter='\n')
+        #output_format = DelimitedTextDialect(has_header=True)
+        output_format = [ArrowDialect(ArrowType.TIMESTAMP_MS, name="DATE"), ArrowDialect(ArrowType.INT64, name="REAL")]
+        query_reader = file_client.query_file(query_expression, on_error=on_error, file_format=input_format, output_format=output_format)
+
+        content = query_reader.readall()
+        LOGGER.debug(f"{type(content)=}")
+        LOGGER.debug(f"{len(content)=}")
+        #LOGGER.debug(f"{content=}")
+
+        et_blob_query_ms = timer.lap_ms()
+
+        LOGGER.debug(f"{et_blob_query_ms=}")
+
+        with pa.ipc.RecordBatchStreamReader(content) as arrow_reader:
+            schema = arrow_reader.schema
+            LOGGER.debug(schema)
+
+            thetable = arrow_reader.read_all()
+            thetable = thetable.combine_chunks()
+            LOGGER.debug(thetable)
+            #LOGGER.debug(f"{thetable['REAL'].unique()=}")
+            LOGGER.debug(f"{thetable.shape=}")
+            LOGGER.debug(f"{thetable.schema=}")
+
+            # thecol = thetable["REAL"]
+            # LOGGER.debug(f"{thecol.type=}")
+            # LOGGER.debug(f"{thecol[0]=}")
+            # LOGGER.debug(f"{thecol.to_numpy()=}")
+            # LOGGER.debug(f"{thecol.to_pylist()=}")
+        LOGGER.debug("-----------------------------------------------------------------------------")
+        """
     else:
         table_from_sumo = pf.read_table(byte_stream_from_sumo, columns=get_col)
+
+        et_download_blob_with_sumo_ms = timer.lap_ms()
 
         # pa.feather.write_feather(table_from_sumo, "~/dump_compressed.feather")
         # pa.feather.write_feather(table_from_sumo, "~/dump_uncompressed.feather", compression="uncompressed")
         # pq.write_table(table_from_sumo, "~/dump_compressed.parquet")
-
-    et_download_blob_with_sumo_ms = timer.lap_ms()
-
 
 
     if data_format == "parquet":
