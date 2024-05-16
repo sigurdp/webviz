@@ -2,7 +2,9 @@ import logging
 from io import BytesIO
 from typing import List, Optional, Sequence, Tuple, Set
 
+import httpx
 import asyncio
+import aiohttp
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -457,21 +459,56 @@ async def _load_all_real_arrow_table_from_sumo_MULTI(case: Case, iteration_name:
     et_table_count_ms = timer.lap_ms()
 
     #task_dict: dict[str, asyncio.Task] = {}
-    task_arr: list[asyncio.Task] = []
     sumo_table_arr: list[Table] = []
+    blob_id_table_arr: list[str] = []
+    for i in range(0, num_sumo_tables):
+        sumo_table: Table = await table_collection.getitem_async(i)
+        LOGGER.debug(f"{sumo_table.name=}")
+        LOGGER.debug(f"{sumo_table.format=}")
+        LOGGER.debug(f"{sumo_table.tagname=}")
+        #LOGGER.debug(f"{sumo_table.metadata=}")
+        sumo_table_arr.append(sumo_table)
+        blob_id_table_arr.append(sumo_table.uuid)
 
-    async with asyncio.TaskGroup() as tg:
-        for i in range(0, num_sumo_tables):
-            sumo_table: Table = await table_collection.getitem_async(i)
-            sumo_table_arr.append(sumo_table)
-            LOGGER.debug(f"{sumo_table.name=}")
-            LOGGER.debug(f"{sumo_table.format=}")
-            LOGGER.debug(f"{sumo_table.tagname=}")
-            #LOGGER.debug(f"{sumo_table.metadata=}")
+    et_pre_download_ms = timer.lap_ms()
 
-            LOGGER.debug(f"creating task for sumo table {i}")
-            task = tg.create_task(sumo_table.blob_async)
-            task_arr.append(task)
+
+    sumo_client = case._sumo
+    token = sumo_client.auth.get_token()
+    headers = {
+        "Content-Type": "application/json",
+        "authorization": f"Bearer {token}",
+    }
+
+
+    async def do_download_blob_httpx(async_client: httpx.AsyncClient, sumo_table: Table) -> BytesIO:
+        #return await sumo_table.blob_async
+        
+        blob_uuid = sumo_table.uuid
+        
+        res = await async_client.get(f"{sumo_client.base_url}/objects('{blob_uuid}')/blob",
+            headers=headers,
+            timeout=60,
+        )
+        return BytesIO(res.content)
+
+
+    async def do_download_blob_aiohttp(session: aiohttp.ClientSession, sumo_table: Table) -> BytesIO:
+        blob_uuid = sumo_table.uuid
+        async with session.get(f"{sumo_client.base_url}/objects('{blob_uuid}')/blob", headers=headers) as response:
+            return BytesIO(await response.read())
+
+
+    task_arr: list[asyncio.Task] = []
+    #async with httpx.AsyncClient(follow_redirects=True) as async_client:
+    async with aiohttp.ClientSession() as session:
+        async with asyncio.TaskGroup() as tg:
+            for i in range(0, num_sumo_tables):
+                sumo_table = sumo_table_arr[i]
+                LOGGER.debug(f"creating task for sumo table {i}")
+                #task = tg.create_task(do_download_blob_httpx(async_client, sumo_table))
+                task = tg.create_task(do_download_blob_aiohttp(session, sumo_table))
+                task_arr.append(task)
 
     et_download_ms = timer.lap_ms()
 
@@ -484,7 +521,6 @@ async def _load_all_real_arrow_table_from_sumo_MULTI(case: Case, iteration_name:
     total_blob_size_mb = 0
 
     for i in range(0, num_sumo_tables):
-        sumo_table = sumo_table_arr[i]
         blob: BytesIO = task_arr[i].result()
 
         # Must check format etc here
@@ -537,7 +573,7 @@ async def _load_all_real_arrow_table_from_sumo_MULTI(case: Case, iteration_name:
 
     LOGGER.debug(
         f"Loaded all realizations arrow table from Sumo in: {timer.elapsed_ms()}ms "
-        f"(locate={et_locate_ms}ms, table_count={et_table_count_ms}ms, download={et_download_ms}ms, read_and_combine={et_read_and_combine_ms}ms) "
+        f"(locate={et_locate_ms}ms, table_count={et_table_count_ms}ms, pre_download={et_pre_download_ms}ms, download={et_download_ms}ms, read_and_combine={et_read_and_combine_ms}ms) "
         f"({vector_names=}, {combined_table.shape=}, {total_blob_size_mb=:.2f})"
     )
 

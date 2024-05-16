@@ -19,7 +19,7 @@ pydantic = "^2.3.0"
 numpy = "^1.24.1"
 orjson = "^3.8.10"
 pandas = {version = "2.0.1", extras = ["performance"]}
-httpx = "^0.24.0"
+httpx = {version = "^0.27.0", extras = ["http2"]}
 fmu-sumo = "1.0.3"
 sumo-wrapper-python = "1.0.6"
 azure-monitor-opentelemetry = "^1.1.0"
@@ -30,6 +30,7 @@ adlfs = "^2024.4.1"
 fsspec = "^2024.3.1"
 azure-storage-blob = "^12.19.1"
 azure-storage-file-datalake = "12.15.0"
+aiohttp = "^3.9.5"
 
 core_utils = {path = "../libs/core_utils", develop = true}
 server_schemas = {path = "../libs/server_schemas", develop = true}
