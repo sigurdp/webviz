@@ -286,34 +286,42 @@ async def blobtest(
     table = None
 
     if realization is None:
-        task_arr = []
-        LOGGER.debug(f"smrytest() - launching tasks")
-        async with asyncio.TaskGroup() as tg:
-            for vecname in vector_names:
-                LOGGER.debug(f"smrytest() - launching tasks for {vecname}")
-                task = tg.create_task(access.get_vector_table_async(
-                    vector_name=vecname,
+        table, meta = await access.get_vectors_table_async(vector_names=vector_names,
                     resampling_frequency=sumo_freq,
                     realizations=None,
-                ))
-                task_arr.append(task)
+        )
+        perf_metrics.record_lap("get-vectors")
 
-        perf_metrics.record_lap("get-vector-tasks")
+        
+        # task_arr = []
+        # LOGGER.debug(f"smrytest() - launching tasks")
+        # async with asyncio.TaskGroup() as tg:
+        #     for vecname in vector_names:
+        #         LOGGER.debug(f"smrytest() - launching tasks for {vecname}")
+        #         task = tg.create_task(access.get_vector_table_async(
+        #             vector_name=vecname,
+        #             resampling_frequency=sumo_freq,
+        #             realizations=None,
+        #         ))
+        #         task_arr.append(task)
 
-        LOGGER.debug(f"smrytest() - tasks done, creating combined table")
+        # perf_metrics.record_lap("get-vector-tasks")
 
-        for task in task_arr:
-            vectable, vecmeta = task.result()
-            if table is None:
-                table = vectable
-            else:
-                table = table.append_column(vecmeta.name, vectable[vecmeta.name])
+        # LOGGER.debug(f"smrytest() - tasks done, creating combined table")
 
-            meta_arr.append(vecmeta)
+        # for task in task_arr:
+        #     vectable, vecmeta = task.result()
+        #     if table is None:
+        #         table = vectable
+        #     else:
+        #         table = table.append_column(vecmeta.name, vectable[vecmeta.name])
 
-        perf_metrics.record_lap("combine-tables")
+        #     meta_arr.append(vecmeta)
 
-        LOGGER.debug(f"smrytest() - done creating combined table")
+        # perf_metrics.record_lap("combine-tables")
+        # LOGGER.debug(f"smrytest() - done creating combined table")
+        
+
     else:
         table, meta = await access.get_single_real_vectors_table_async(
             vector_names=vector_names, 

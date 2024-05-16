@@ -2,8 +2,10 @@ import logging
 from io import BytesIO
 from typing import List, Optional, Sequence, Tuple, Set
 
+import asyncio
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pyarrow.compute as pc
 from fmu.sumo.explorer.objects import Case, TableCollection, Table
 from webviz_pkg.core_utils.perf_timer import PerfTimer
@@ -133,6 +135,60 @@ class SummaryAccess(SumoEnsemble):
             f"Got summary vector data from Sumo in: {timer.elapsed_ms()}ms "
             f"(loading={et_loading_ms}ms, resampling={et_resampling_ms}ms) "
             f"({vector_name=} {resampling_frequency=} {table.shape=})"
+        )
+
+        return table, vector_metadata
+
+    async def get_vectors_table_async(
+        self,
+        vector_names: Sequence[str],
+        resampling_frequency: Optional[Frequency],
+        realizations: Optional[Sequence[int]],
+    ) -> Tuple[pa.Table, VectorMetadata]:
+        timer = PerfTimer()
+
+        table = await _load_all_real_arrow_table_from_sumo_MULTI(self._case, self._iteration_name, vector_names)
+        et_loading_ms = timer.lap_ms()
+
+        if realizations is not None:
+            requested_reals_arr = pa.array(realizations)
+            mask = pc.is_in(table["REAL"], value_set=requested_reals_arr)
+            table = table.filter(mask)
+
+            # Verify that we got data for all the requested realizations
+            # Wait a little before enabling this test until we have proper error propagation to client in place
+            # reals_without_data = detect_missing_realizations(table, requested_reals_arr)
+            # if reals_without_data:
+            #     raise NoDataError(f"No data in some requested realizations, {reals_without_data=}", Service.SUMO)
+
+        # Our assumption is that the table is segmented on REAL and that within each segment,
+        # the DATE column is sorted. We may want to add some checks here to verify this assumption since the
+        # resampling algorithm below assumes this and will fail if it is not true.
+        # ...or just sort it unconditionally here
+        table = sort_table_on_real_then_date(table)
+
+        # The resampling algorithm below uses the field metadata to determine if the vector is a rate or not.
+        # For now, fail hard if metadata is not present. This test could be refined, but should suffice now.
+        LOGGER.debug(f"QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ")
+        LOGGER.debug(f"{vector_names[0]=}")
+        vector_metadata = create_vector_metadata_from_field_meta(table.schema.field(vector_names[0]))
+        LOGGER.debug(f"{vector_metadata=}")
+        if not vector_metadata:
+            raise InvalidDataError(f"Did not find valid metadata for vector {vector_names[0]}", Service.SUMO)
+
+        # Do the actual resampling
+        timer.lap_ms()
+        if resampling_frequency is not None:
+            table = resample_segmented_multi_real_table(table, resampling_frequency)
+        et_resampling_ms = timer.lap_ms()
+
+        # Should we always combine the chunks?
+        table = table.combine_chunks()
+
+        LOGGER.debug(
+            f"Got summary vector data from Sumo in: {timer.elapsed_ms()}ms "
+            f"(loading={et_loading_ms}ms, resampling={et_resampling_ms}ms) "
+            f"({vector_names=} {resampling_frequency=} {table.shape=})"
         )
 
         return table, vector_metadata
@@ -370,6 +426,126 @@ async def _load_all_real_arrow_table_from_sumo(case: Case, iteration_name: str, 
 
     return table
 
+
+async def _load_all_real_arrow_table_from_sumo_MULTI(case: Case, iteration_name: str, vector_names: list[str]) -> pa.Table:
+    timer = PerfTimer()
+
+    LOGGER.debug(f"{len(vector_names)=}")
+
+    table_collection = case.tables.filter(
+        tagname="summary",
+        stage="iteration",
+        aggregation="collection",
+        iteration=iteration_name,
+        column=vector_names,
+    )
+
+    table_names = await table_collection.names_async
+    LOGGER.debug(f"{table_names=}")
+    if len(table_names) == 0:
+        raise NoDataError(f"No summary tables with collection aggregation found: {vector_names=}", Service.SUMO)
+    if len(table_names) > 1:
+        raise MultipleDataMatchesError(
+            f"Multiple summary tables with collection aggregation found: {vector_names=}, {table_names=}", Service.SUMO
+        )
+
+    et_locate_ms = timer.lap_ms()
+
+    num_sumo_tables = await table_collection.length_async()
+    LOGGER.debug(f"{num_sumo_tables=}")
+
+    et_table_count_ms = timer.lap_ms()
+
+    #task_dict: dict[str, asyncio.Task] = {}
+    task_arr: list[asyncio.Task] = []
+    sumo_table_arr: list[Table] = []
+
+    async with asyncio.TaskGroup() as tg:
+        for i in range(0, num_sumo_tables):
+            sumo_table: Table = await table_collection.getitem_async(i)
+            sumo_table_arr.append(sumo_table)
+            LOGGER.debug(f"{sumo_table.name=}")
+            LOGGER.debug(f"{sumo_table.format=}")
+            LOGGER.debug(f"{sumo_table.tagname=}")
+            #LOGGER.debug(f"{sumo_table.metadata=}")
+
+            LOGGER.debug(f"creating task for sumo table {i}")
+            task = tg.create_task(sumo_table.blob_async)
+            task_arr.append(task)
+
+    et_download_ms = timer.lap_ms()
+
+    LOGGER.debug(f"COOOOOOOOOOOOOOOOOOMBINING")
+
+    # We have a slight challenge here since we don't know which tables contain which columns
+    # The only way to discover this is after we have actually loaded the tables
+
+    combined_table = None
+    total_blob_size_mb = 0
+
+    for i in range(0, num_sumo_tables):
+        sumo_table = sumo_table_arr[i]
+        blob: BytesIO = task_arr[i].result()
+
+        # Must check format etc here
+        subtable: pa.Table = pq.read_table(blob)
+
+        src_field = subtable.field(2)
+        column_name = src_field.name
+        LOGGER.debug(f"{column_name=}")
+
+        if i == 0:
+            combined_table = subtable
+        else:
+            combined_table = combined_table.append_column(src_field, subtable[src_field.name])
+
+        total_blob_size_mb += _try_to_determine_blob_size_mb(blob)
+
+    et_read_and_combine_ms = timer.lap_ms()
+
+    # Verify that we got the expected columns
+    if not "DATE" in combined_table.column_names:
+        raise InvalidDataError("Table does not contain a DATE column", Service.SUMO)
+    if not "REAL" in combined_table.column_names:
+        raise InvalidDataError("Table does not contain a REAL column", Service.SUMO)
+    # if not vector_name in table.column_names:
+    #     raise InvalidDataError(f"Table does not contain a {vector_name} column", Service.SUMO)
+    # if table.num_columns != 3:
+    #     raise InvalidDataError("Table should contain exactly 3 columns", Service.SUMO)
+
+    # Verify that we got the expected columns
+    # if sorted(table.column_names) != sorted(["DATE", "REAL", vector_name]):
+    #     raise InvalidDataError(f"Unexpected columns in table {table.column_names=}", Service.SUMO)
+
+    # Verify that the column datatypes are as we expect
+    schema = combined_table.schema
+    if schema.field("DATE").type != pa.timestamp("ms"):
+        raise InvalidDataError(f"Unexpected type for DATE column {schema.field('DATE').type=}", Service.SUMO)
+    if schema.field("REAL").type != pa.int16():
+        raise InvalidDataError(f"Unexpected type for REAL column {schema.field('REAL').type=}", Service.SUMO)
+    # if schema.field(vector_name).type != pa.float32():
+    #     raise InvalidDataError(
+    #         f"Unexpected type for {vector_name} column {schema.field(vector_name).type=}", Service.SUMO
+    #     )
+
+    # The call above has already downloaded and cached the raw blob, just use this to get the data size
+    #blob_size_mb = _try_to_determine_blob_size_mb(sumo_table.blob)
+    #blob_size_mb = -1
+
+    # To get the correct column ordering
+    combined_table = combined_table.select(["DATE", "REAL"] + vector_names)
+
+    LOGGER.debug(
+        f"Loaded all realizations arrow table from Sumo in: {timer.elapsed_ms()}ms "
+        f"(locate={et_locate_ms}ms, table_count={et_table_count_ms}ms, download={et_download_ms}ms, read_and_combine={et_read_and_combine_ms}ms) "
+        f"({vector_names=}, {combined_table.shape=}, {total_blob_size_mb=:.2f})"
+    )
+
+    LOGGER.debug(f"{combined_table.column_names=}")
+    #LOGGER.debug(combined_table.schema)
+    #LOGGER.debug(combined_table)
+
+    return combined_table
 
 async def _load_single_real_full_arrow_table_from_sumo(case: Case, iteration_name: str, realization: int) -> pa.Table:
     timer = PerfTimer()
