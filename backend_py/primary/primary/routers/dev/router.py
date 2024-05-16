@@ -255,7 +255,7 @@ async def ri_isect(
 
 
 @router.get("/smrytest", response_class=HTMLResponse)
-async def blobtest(
+async def smrytest(
     authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
     case_uuid: Annotated[str, Query()] = "11167ec3-41f7-452c-8a08-38466df6bb97",
     ensemble_name: Annotated[str, Query()] = "iter-0",
@@ -341,7 +341,7 @@ async def blobtest(
     #     perf_metrics.measure_task(get_ri_task, "get-ri")
 
 
-    retstr = f"DONE - {case_uuid}"
+    retstr = f"smrytest DONE - {case_uuid}"
     retstr += "<br>"
     retstr += f"<br>elapsed_s={perf_metrics.get_elapsed_ms()/1000:.3f}"
     retstr += f"<br>{table.shape=}"
@@ -351,6 +351,61 @@ async def blobtest(
     LOGGER.debug(f"{perf_metrics.to_string()}")
 
     LOGGER.debug(f"smrytest() - end")
+
+    return retstr
+
+
+@router.get("/smrywell", response_class=HTMLResponse)
+async def smrywell(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query()] = "5b783aab-ce10-4b78-b129-baf8d8ce4baa",
+    ensemble_name: Annotated[str, Query()] = "iter-0",
+) -> str:
+    LOGGER.debug(f"smrywell() - start")
+
+    sumo_freq = Frequency.MONTHLY
+
+    LOGGER.debug(f"{case_uuid=}")
+    LOGGER.debug(f"{ensemble_name=}")
+
+
+    perf_metrics = PerfMetrics()
+
+    sumo_access_token = authenticated_user.get_sumo_access_token()
+    perf_metrics.record_lap("get-token")
+
+    access = await SummaryAccess.from_case_uuid(sumo_access_token, case_uuid, ensemble_name)
+    perf_metrics.record_lap("access")
+
+    vecinfo_arr = await access.get_available_vectors_async()
+    perf_metrics.record_lap("get-vec-names")
+
+    vector_names = []
+    for vecinfo in vecinfo_arr:
+        if vecinfo.name.startswith("WBHP:") or vecinfo.name.startswith("WGPR:") or vecinfo.name.startswith("WWPR:") or vecinfo.name.startswith("WWIR:") or vecinfo.name.startswith("WGIR:") or vecinfo.name.startswith("WTHP:") or vecinfo.name.startswith("WBHP:") or vecinfo.name.startswith("WMCTL:"):
+            vector_names.append(vecinfo.name)
+
+    #LOGGER.debug(f"{vector_names=}")
+    LOGGER.debug(f"{len(vector_names)=}")
+
+    perf_metrics.record_lap("find-vec-names")
+
+    table, meta = await access.get_vectors_table_async(vector_names=vector_names,
+                resampling_frequency=sumo_freq,
+                realizations=None,
+    )
+    perf_metrics.record_lap("get-vectors")
+
+
+    retstr = f"smrywell DONE - {case_uuid}"
+    retstr += "<br>"
+    retstr += f"<br>elapsed_s={perf_metrics.get_elapsed_ms()/1000:.3f}"
+    retstr += f"<br>{table.shape=}"
+    retstr += "<br><br>"
+
+    LOGGER.debug(f"{perf_metrics.to_string()}")
+
+    LOGGER.debug(f"smrywell() - end")
 
     return retstr
 
