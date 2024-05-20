@@ -511,6 +511,7 @@ async def _load_all_real_arrow_table_from_sumo_MULTI(case: Case, iteration_name:
                 task_arr.append(task)
 
     et_download_ms = timer.lap_ms()
+    LOGGER.debug(f"{et_download_ms=}")
 
     LOGGER.debug(f"COOOOOOOOOOOOOOOOOOMBINING")
 
@@ -522,22 +523,26 @@ async def _load_all_real_arrow_table_from_sumo_MULTI(case: Case, iteration_name:
 
     for i in range(0, num_sumo_tables):
         blob: BytesIO = task_arr[i].result()
+        task_arr[i] = None
+
+        size_of_this_blob_mb = _try_to_determine_blob_size_mb(blob)
+        total_blob_size_mb += size_of_this_blob_mb
 
         # Must check format etc here
         subtable: pa.Table = pq.read_table(blob)
 
         src_field = subtable.field(2)
         column_name = src_field.name
-        LOGGER.debug(f"{column_name=}")
+        LOGGER.debug(f"{i=} {size_of_this_blob_mb=:.2f}  {total_blob_size_mb=:.2f}  {column_name=}")
 
         if i == 0:
             combined_table = subtable
         else:
             combined_table = combined_table.append_column(src_field, subtable[src_field.name])
 
-        total_blob_size_mb += _try_to_determine_blob_size_mb(blob)
 
     et_read_and_combine_ms = timer.lap_ms()
+    LOGGER.debug(f"{et_read_and_combine_ms=}")
 
     # Verify that we got the expected columns
     if not "DATE" in combined_table.column_names:
