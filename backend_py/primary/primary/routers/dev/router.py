@@ -254,6 +254,217 @@ async def ri_isect(
     return "OK"
 
 
+@router.get("/voltest", response_class=HTMLResponse)
+async def voltest(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query()] = "485041ce-ad72-48a3-ac8c-484c0ed95cf8",
+    ensemble_name: Annotated[str, Query()] = "iter-0",
+) -> str:
+    LOGGER.debug(f"voltest() - start")
+
+    table_name = None
+
+    LOGGER.debug(f"{case_uuid=}")
+    LOGGER.debug(f"{ensemble_name=}")
+    LOGGER.debug(f"{table_name=}")
+
+    perf_metrics = PerfMetrics()
+
+    sumo_access_token = authenticated_user.get_sumo_access_token()
+    perf_metrics.record_lap("get-token")
+
+    sumo_client = SumoClient(env=config.SUMO_ENV, token=sumo_access_token, interactive=False)
+
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-fields.html#search-fields-request
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-fields.html#script-fields
+
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-multi-terms-aggregation.html
+
+    myquery = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"match": {"_sumo.parent_object.keyword": case_uuid}},
+                    {"match": {"class.keyword": "table"}},
+                    {"match": {"fmu.iteration.name.keyword": ensemble_name}},
+                    {"match": {"fmu.context.stage.keyword": "iteration"}},
+                    {"match": {"fmu.aggregation.operation.keyword": "collection"}},
+                    #{"match": {"data.name.keyword": table_name}},
+                    #{"match": {"data.content.keyword": "timeseries"}},
+                    {"match": {"data.tagname.keyword": "summary"}},
+                    #{"match": {"data.spec.columns.keyword": agg_column_name}},
+                ]
+            }
+        },
+
+        "fields": [
+            #"data.*",
+            #"masterdata.smda.*",
+            "data.name.keyword",
+            "data.tagname.keyword",
+            "sig_test1"
+        ],
+
+        # "script_fields": {
+        #     "sig_test1": {
+        #         "script": "params['_source']['masterdata']['smda']['country'][0]['identifier']"
+        #     }
+        # },
+
+        "aggs": {
+            # "sig_col_names": {
+            #     "terms": {"field": "data.spec.columns.keyword", "size": 20000},
+            # },
+            # "sig_formats": {
+            #     "terms": { "field": "data.format.keyword", "size": 10 }, 
+            # },
+            "sig_formats_and_col_names": {
+                "multi_terms": {"terms": [ {"field": "data.format.keyword"}, {"field": "data.spec.columns.keyword"}], "size": 10 }, 
+            }
+        },
+
+        "_source": False,
+        "size": 10,
+    }
+
+    if table_name is not None:
+        myquery["query"]["bool"]["must"].append({"match": {"data.name.keyword": table_name}})
+
+    response = await sumo_client.post_async("/search", json=myquery)
+    response_as_json = response.json()
+
+    LOGGER.debug("-----------------")
+    delete_key_from_dict_recursive(response_as_json, "parameters")
+    delete_key_from_dict_recursive(response_as_json, "realization_ids")
+    LOGGER.debug(json.dumps(response_as_json, indent=2))
+    LOGGER.debug("-----------------")
+
+    retstr = f"voltest DONE - {case_uuid}"
+    retstr += "<br>"
+    retstr += f"<br>elapsed_s={perf_metrics.get_elapsed_ms()/1000:.3f}"
+    #retstr += f"<br>{table.shape=}"
+    retstr += "<br><br>"
+
+    LOGGER.debug(f"{perf_metrics.to_string()}")
+
+    LOGGER.debug(f"voltest() - end")
+
+    return retstr
+
+
+@router.get("/surftest", response_class=HTMLResponse)
+async def voltest(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query()] = "9c7ac93c-1bc2-4fdc-a827-787a68f19a21", # SNORRE, 240422_sim2seis
+    #case_uuid: Annotated[str, Query()] = "64fdd320-59f2-4f67-8b36-8314ae7e9b87", # JOHAN SVERDRUP, 24p3p1pdev_ahm_full_run_v2
+    ensemble_name: Annotated[str, Query()] = "iter-0",
+) -> str:
+    LOGGER.debug(f"surftest() - start")
+
+    LOGGER.debug(f"{case_uuid=}")
+    LOGGER.debug(f"{ensemble_name=}")
+
+    perf_metrics = PerfMetrics()
+
+    sumo_access_token = authenticated_user.get_sumo_access_token()
+    perf_metrics.record_lap("get-token")
+
+    sumo_client = SumoClient(env=config.SUMO_ENV, token=sumo_access_token, interactive=False)
+
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-fields.html#search-fields-request
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-fields.html#script-fields
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-multi-terms-aggregation.html
+
+    myquery = {
+        "track_total_hits": True,
+        "query": {
+            "bool": {
+                "must": [
+                    {"match": {"_sumo.parent_object.keyword": case_uuid}},
+                    {"match": {"class.keyword": "surface"}},
+                    {"match": {"fmu.iteration.name.keyword": ensemble_name}},
+                    {"match": {"fmu.context.stage.keyword": "realization"}},
+
+                    #{"match": {"fmu.realization.id": 0}},
+
+                    # {"match": {"data.tagname.keyword": "average_SOIL"}},
+                    # {"match": {"data.name.keyword": "Iso_SN_7_2"}},
+
+                    {"exists": {"field": "data.time.t0"}},
+                    {"exists": {"field": "data.time.t1"}},
+                ],
+                # "must_not": [
+                #     {"exists": {"field": "data.time.t0"}},
+                #     {"exists": {"field": "data.time.t1"}},
+                # ],
+            },
+        },
+
+        "fields": [
+            "data.name.keyword",
+            "data.tagname.keyword",
+        ],
+
+    
+        "aggs": {
+            # "sig_name": {
+            #     "terms": {"field": "data.name.keyword", "size": 65000},
+            # },
+            "my_buckets": {
+                "composite": {
+                    "size": 65000,
+                    "sources": [
+                        { "sig_name": { "terms": { "field": "data.name.keyword" } } },
+                        { "sig_tagname": { "terms": { "field": "data.tagname.keyword" } } },
+                        # { "sig_t0": { "terms": { "field": "data.time.t0.value" } } },
+                        # { "sig_t1": { "terms": { "field": "data.time.t1.value" } } },
+                        { "sig_is_observation": { "terms": { "field": "data.is_observation" } } },
+                    ],
+                },
+                "aggs": {
+                    "my_top_hits": {
+                        "top_hits": {
+                            "_source": False,
+                            "size": 1,
+                        }
+                    }
+                },
+            },
+        },
+
+        "_source": False,
+        "size": 0,
+    }
+
+    response = await sumo_client.post_async("/search", json=myquery)
+    response_as_json = response.json()
+
+    LOGGER.debug("-----------------")
+    delete_key_from_dict_recursive(response_as_json, "parameters")
+    delete_key_from_dict_recursive(response_as_json, "realization_ids")
+    LOGGER.debug(json.dumps(response_as_json, indent=2))
+    LOGGER.debug("-----------------")
+
+    LOGGER.debug(f"{response_as_json['took']=}")
+    LOGGER.debug(f"{len(response_as_json['aggregations']['my_buckets']['buckets'])=}")
+
+    retstr = f"surftest DONE - {case_uuid}"
+    retstr += "<br>"
+    retstr += f"<br>elapsed_s={perf_metrics.get_elapsed_ms()/1000:.3f}"
+    #retstr += f"<br>{table.shape=}"
+    retstr += "<br><br>"
+
+    LOGGER.debug(f"{perf_metrics.to_string()}")
+
+    LOGGER.debug(f"surftest() - end")
+
+    return retstr
+
+
+
+
+
+
 @router.get("/smrytest", response_class=HTMLResponse)
 async def smrytest(
     authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
@@ -380,10 +591,21 @@ async def smrywell(
     vecinfo_arr = await access.get_available_vectors_async()
     perf_metrics.record_lap("get-vec-names")
 
+    max_num_vecs = 10
     vector_names = []
     for vecinfo in vecinfo_arr:
-        if vecinfo.name.startswith("WBHP:") or vecinfo.name.startswith("WGPR:") or vecinfo.name.startswith("WWPR:") or vecinfo.name.startswith("WWIR:") or vecinfo.name.startswith("WGIR:") or vecinfo.name.startswith("WTHP:") or vecinfo.name.startswith("WBHP:") or vecinfo.name.startswith("WMCTL:"):
-            vector_names.append(vecinfo.name)
+        if (
+            vecinfo.name.startswith("WBHP:")
+            or vecinfo.name.startswith("WGPR:")
+            or vecinfo.name.startswith("WWPR:")
+            or vecinfo.name.startswith("WWIR:")
+            or vecinfo.name.startswith("WGIR:")
+            or vecinfo.name.startswith("WTHP:")
+            or vecinfo.name.startswith("WBHP:")
+            or vecinfo.name.startswith("WMCTL:")
+        ):
+            if len(vector_names) < max_num_vecs:
+                vector_names.append(vecinfo.name)
 
     #LOGGER.debug(f"{vector_names=}")
     LOGGER.debug(f"{len(vector_names)=}")
