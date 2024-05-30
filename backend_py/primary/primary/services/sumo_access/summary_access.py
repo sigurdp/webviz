@@ -496,7 +496,12 @@ async def _load_all_real_arrow_table_from_sumo_MULTI(case: Case, iteration_name:
     async def do_download_blob_aiohttp(session: aiohttp.ClientSession, sumo_table: Table) -> BytesIO:
         blob_uuid = sumo_table.uuid
         async with session.get(f"{sumo_client.base_url}/objects('{blob_uuid}')/blob", headers=headers) as response:
-            return BytesIO(await response.read())
+            blob_bytes = await response.read()
+            # LOGGER.debug(f"got blob bytes for {blob_uuid}")
+            # with open(f"/home/appuser/blobtests/sig__{blob_uuid}.parquet", "wb") as f:
+            #     LOGGER.debug(f"writing {blob_uuid} to file")
+            #     f.write(blob_bytes)
+            return BytesIO(blob_bytes)
 
 
     task_arr: list[asyncio.Task] = []
