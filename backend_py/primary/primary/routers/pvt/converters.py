@@ -51,6 +51,9 @@ def pvt_dataframe_to_api_data(data_frame: pd.DataFrame) -> List[PvtData]:
     list_of_pvtdata: List[PvtData] = []
 
     for keyword, df_grouped_on_keyword in data_frame.groupby("KEYWORD"):
+        if not isinstance(keyword, str):
+            raise ValueError("The keyword value must be a string.")
+
         if keyword in OIL_KEYWORDS:
             phase = PHASES.OIL.value
             name = OIL_KEYWORDS[keyword]
@@ -63,6 +66,9 @@ def pvt_dataframe_to_api_data(data_frame: pd.DataFrame) -> List[PvtData]:
         else:
             continue
         for pvtnum, df_grouped_on_pvtnum in df_grouped_on_keyword.groupby("PVTNUM"):
+            if not isinstance(pvtnum, int):
+                raise ValueError("The PVTNUM value must be an integer.")
+
             pvt_data = PvtData(
                 pvtnum=pvtnum,
                 name=name,

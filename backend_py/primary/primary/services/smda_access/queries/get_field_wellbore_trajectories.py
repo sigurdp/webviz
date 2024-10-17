@@ -23,14 +23,14 @@ async def get_field_wellbore_trajectories(
     timer = PerfTimer()
     result = await get(access_token=access_token, endpoint=endpoint, params=params)
     print(f"TIME SMDA fetch wellbore trajectories took {timer.lap_s():.2f} seconds")
-    resultdf = pd.DataFrame.from_dict(result)
+    resultdf = pd.DataFrame.from_records(result)
     print(f"TIME SMDA wellbore trajectories to dataframe{timer.lap_s():.2f} seconds")
     wellbore_trajectories: List[WellboreTrajectory] = []
     for wellbore, df in resultdf.groupby("unique_wellbore_identifier"):
         wellbore_trajectories.append(
             WellboreTrajectory(
                 wellbore_uuid=df["wellbore_uuid"].iloc[0],
-                unique_wellbore_identifier=wellbore,
+                unique_wellbore_identifier=str(wellbore),
                 tvd_msl_arr=df["tvd_msl"].tolist(),
                 md_arr=df["md"].tolist(),
                 easting_arr=df["easting"].tolist(),

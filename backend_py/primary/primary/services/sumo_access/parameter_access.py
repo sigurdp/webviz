@@ -93,7 +93,7 @@ def create_ensemble_sensitivities(
     for name, group in df.groupby("name"):
         sensitivities.append(
             EnsembleSensitivity(
-                name=name,
+                name=str(name),
                 type=find_sensitivity_type(list(group["case"].unique())),
                 cases=create_ensemble_sensitivity_cases(group),
             )
@@ -116,7 +116,7 @@ def create_ensemble_sensitivity_cases(
     for case_name, case_df in df.groupby("case"):
         cases.append(
             EnsembleSensitivityCase(
-                name=case_name,
+                name=str(case_name),
                 realizations=case_df["REAL"].unique().tolist(),
             )
         )

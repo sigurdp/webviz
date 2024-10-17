@@ -50,7 +50,7 @@ def compute_vector_statistics_table(
     def p50_func(x: List[float]) -> np.floating:
         return np.nanpercentile(x, q=50)
 
-    agg_dict = {}
+    agg_dict: dict[str, pd.NamedAgg] = {}
     for stat_func in statistic_functions:
         if stat_func == StatisticFunction.MIN:
             agg_dict["MIN"] = pd.NamedAgg(column=vector_name, aggfunc=np.nanmin)
@@ -71,10 +71,10 @@ def compute_vector_statistics_table(
     if summary_vector_table.num_rows == 0:
         return None
 
-    df = summary_vector_table.select(["DATE", vector_name]).to_pandas(timestamp_as_object=True)
+    df: pd.DataFrame = summary_vector_table.select(["DATE", vector_name]).to_pandas(timestamp_as_object=True)
 
-    grouped: pd.core.groupby.DataFrameGroupBy = df.groupby("DATE", as_index=False, sort=True)
-    statistics_df: pd.DataFrame = grouped.agg(**agg_dict)
+    grouped = df.groupby("DATE", as_index=False, sort=True)
+    statistics_df = grouped.aggregate(func=None, engine=None, engine_kwargs=None, **agg_dict)
 
     default_schema = pa.Schema.from_pandas(statistics_df, preserve_index=False)
     schema_to_use = set_date_column_type_to_timestamp_ms(default_schema)

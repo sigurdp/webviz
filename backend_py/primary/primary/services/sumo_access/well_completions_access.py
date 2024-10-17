@@ -166,7 +166,8 @@ class WellCompletionDataConverter:
         no_real = self._well_completions_df["REAL"].nunique() if "REAL" in self._well_completions_df.columns else 1
 
         well_list = []
-        for well_name, well_group in self._well_completions_df.groupby("WELL"):
+        for well_name_s, well_group in self._well_completions_df.groupby("WELL"):
+            well_name = str(well_name_s)
             well_data = self._extract_well(well_group, well_name, no_real)
             well_data.attributes = self._well_attributes[well_name] if well_name in self._well_attributes else {}
             well_list.append(well_data)

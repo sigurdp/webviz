@@ -324,6 +324,9 @@ class GroupTreeAssembler:
         if self._smry_table_sorted_by_date is None:
             raise ValueError("Summary dataframe sorted by date has not been initialized")
 
+        if self._group_tree_df is None:
+            raise ValueError("Group tree DataFrame has not been initialized")
+
         if self._node_static_working_data_dict is None:
             raise ValueError("Static working data for nodes has not been initialized")
 
@@ -752,6 +755,9 @@ def _create_dated_trees(
 
     total_loop_time_ms_start = timer.elapsed_ms()
     for date, grouptree_at_date in grouptree_per_date:
+        if not isinstance(date, pd.Timestamp):
+            raise ValueError("Date must be a pandas Timestamp")
+        
         timer.lap_ms()
         next_date = grouptree_dates[grouptree_dates > date].min()
         if pd.isna(next_date):

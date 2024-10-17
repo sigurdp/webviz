@@ -32,10 +32,12 @@ polars = "^1.6.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^22.12.0"
+pandas-stubs = "^2.2.3.241009"
 pylint = "^2.15.10"
 pytest = "^7.2.1"
-mypy = "^1.9.0"
+mypy = "^1.12.0"
 bandit = "^1.7.5"
+types-Pillow = "^10.2.0.20240822"
 types-requests = "^2.31.0.1"
 types-redis = "^4.6.0"
 
@@ -58,8 +60,16 @@ max-locals = 19
 max-branches = 14
 
 [tool.mypy]
-ignore_missing_imports = true
+#ignore_missing_imports = true
 disallow_untyped_defs = true
+
+# Maybe these?
+#disallow_any_unimported = true
+#warn_return_any = true
+
+[[tool.mypy.overrides]]
+module = "xtgeo,pyarrow.*,fmu.sumo.explorer.*,sumo.wrapper.*,requests_toolbelt.*,msal"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
