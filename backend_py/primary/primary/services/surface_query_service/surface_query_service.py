@@ -11,6 +11,9 @@ from sumo.wrapper import SumoClient
 from primary import config
 from primary.services.sumo_access.sumo_blob_access import get_sas_token_and_blob_store_base_uri_for_case
 
+from webviz_pkg.core_utils.perf_metrics import PerfMetrics
+
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -51,6 +54,9 @@ async def batch_sample_surface_in_points_async(
     x_coords: list[float],
     y_coords: list[float],
 ) -> List[RealizationSampleResult]:
+    
+    perf_metrics = PerfMetrics()
+
     realization_object_ids = await _get_object_uuids_for_surface_realizations(
         sumo_access_token=sumo_access_token,
         case_uuid=case_uuid,
@@ -59,8 +65,14 @@ async def batch_sample_surface_in_points_async(
         surface_attribute=surface_attribute,
         realizations=realizations,
     )
-
+    
+    perf_metrics.record_lap("get-obj-ids")
+    
     sas_token, blob_store_base_uri = get_sas_token_and_blob_store_base_uri_for_case(sumo_access_token, case_uuid)
+
+    #LOGGER.debug(f"Token: {sas_token}")
+
+    perf_metrics.record_lap("sas-token")
 
     request_body = _PointSamplingRequestBody(
         sasToken=sas_token,
@@ -74,6 +86,8 @@ async def batch_sample_surface_in_points_async(
         LOGGER.info(f"Running async go point sampling for surface: {surface_name}")
         response: httpx.Response = await client.post(url=SERVICE_ENDPOINT, json=request_body.model_dump())
 
+    perf_metrics.record_lap("main-call")
+
     json_data: bytes = response.content
     response_body = _PointSamplingResponseBody.model_validate_json(json_data)
 
@@ -81,6 +95,8 @@ async def batch_sample_surface_in_points_async(
     for res in response_body.sampleResultArr:
         values_np = np.asarray(res.sampledValues)
         res.sampledValues = np.where((values_np < response_body.undefLimit), values_np, np.nan).tolist()
+
+    LOGGER.debug(f"------------------ batch_sample_surface_in_points_async() took: {perf_metrics.to_string_s()}")
 
     return response_body.sampleResultArr
 

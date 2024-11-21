@@ -134,7 +134,7 @@ spec:
           cpu: 2000m
       horizontalScaling:
         minReplicas: 1
-        maxReplicas: 16
+        maxReplicas: 8
         resources:
           memory:
             averageUtilization: 60
@@ -145,13 +145,13 @@ spec:
           resources:
             requests:
               memory: 32Gi
-              cpu: 8000m
+              cpu: 32000m
             limits:
               memory: 32Gi
-              cpu: 8000m
+              cpu: 32000m
           horizontalScaling:
-            minReplicas: 16
-            maxReplicas: 16
+            minReplicas: 8
+            maxReplicas: 8
             resources:
               memory:
                 averageUtilization: 60
