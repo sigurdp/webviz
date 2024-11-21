@@ -140,6 +140,23 @@ spec:
             averageUtilization: 60
           cpu:
             averageUtilization: 80
+      environmentConfig:
+        - environment: dev 
+          resources:
+            requests:
+              memory: 32Gi
+              cpu: 8000m
+            limits:
+              memory: 32Gi
+              cpu: 8000m
+          horizontalScaling:
+            minReplicas: 4
+            maxReplicas: 8
+            resources:
+              memory:
+                averageUtilization: 60
+              cpu:
+                averageUtilization: 80
 
     - name: redis-user-session
       image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
