@@ -145,12 +145,12 @@ spec:
           resources:
             requests:
               memory: 32Gi
-              cpu: 32000m
+              cpu: 16000m
             limits:
               memory: 32Gi
-              cpu: 32000m
+              cpu: 16000m
           horizontalScaling:
-            minReplicas: 4
+            minReplicas: 8
             maxReplicas: 8
             resources:
               memory:
