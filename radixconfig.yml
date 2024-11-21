@@ -134,7 +134,7 @@ spec:
           cpu: 2000m
       horizontalScaling:
         minReplicas: 1
-        maxReplicas: 4
+        maxReplicas: 16
         resources:
           memory:
             averageUtilization: 60
