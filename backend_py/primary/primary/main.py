@@ -70,7 +70,7 @@ async def app_lifespan(app: FastAPI):
 
     #app.state.requests_client = httpx.AsyncClient(http2=True, verify=False, limits=limits)
     #app.state.requests_client = httpx.AsyncClient(verify=False)
-    app.state.requests_client = httpx.AsyncClient()
+    app.state.requests_client = httpx.AsyncClient(timeout=300)
     yield
 
     await app.state.requests_client.aclose()
