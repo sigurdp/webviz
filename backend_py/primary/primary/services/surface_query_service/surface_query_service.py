@@ -121,23 +121,25 @@ async def batch_sample_surface_in_points_async(
     LOGGER.info(f"Running async go point sampling for surface: {surface_name}")
     perf_metrics.record_lap("prepare_call")
 
-
-    response: httpx.Response = await async_client.post(url=SERVICE_ENDPOINT, json=json_request_body)
-
+    response: httpx.Response = await async_client.post(
+        url=SERVICE_ENDPOINT, json=json_request_body
+    )
 
     # async with httpx.AsyncClient(timeout=300) as client:
     #     LOGGER.info(f"Running async go point sampling for surface: {surface_name}")
-        
+
     #     perf_metrics.record_lap("prepare_call")
-        
+
     #     response: httpx.Response = await client.post(url=SERVICE_ENDPOINT, json=json_request_body)
 
     perf_metrics.record_lap("main-call")
 
     json_data: bytes = response.content
-    response_body = _PointSamplingResponseBody.model_validate_json(json_data)
 
+    response_body = _PointSamplingResponseBody.model_validate_json(json_data)
     perf_metrics.set_metric("inner-go-call", response_body.calculationTime_ms)
+    
+    perf_metrics.record_lap("validate-response")
 
     # Replace values above the undefLimit with np.nan
     for res in response_body.sampleResultArr:
@@ -145,7 +147,7 @@ async def batch_sample_surface_in_points_async(
         res.sampledValues = np.where(
             (values_np < response_body.undefLimit), values_np, np.nan
         ).tolist()
-
+    perf_metrics.record_lap("post-process")
     LOGGER.debug(
         f"------------------ batch_sample_surface_in_points_async() took: {perf_metrics.to_string_s()}"
     )
