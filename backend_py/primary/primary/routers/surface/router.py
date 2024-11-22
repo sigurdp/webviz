@@ -321,6 +321,7 @@ async def post_get_surface_intersection(
 #@cache(expire=600)
 async def post_sample_surface_in_points(
     request: Request,
+    response: Response,
     case_uuid: str = Query(description="Sumo case uuid"),
     ensemble_name: str = Query(description="Ensemble name"),
     surface_name: str = Query(description="Surface name"),
@@ -331,6 +332,8 @@ async def post_sample_surface_in_points(
 ) -> List[schemas.SurfaceRealizationSampleValues]:
     
     perf_metrics = PerfMetrics()
+    response_perf_metrics = ResponsePerfMetrics(response)
+    
 
     ta = TypeAdapter(list[schemas.SurfaceRealizationSampleValues])
 
@@ -387,6 +390,8 @@ async def post_sample_surface_in_points(
     perf_metrics.record_lap("write-cache")
 
     LOGGER.info(f"Sampled surface in points in: {perf_metrics.to_string()}")
+
+    response_perf_metrics.record_lap("func-total")
 
     return intersections
 
