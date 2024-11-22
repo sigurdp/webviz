@@ -30,8 +30,9 @@ type RealizationSampleResult struct {
 }
 
 type PointSamplingResponse struct {
-	SampleResultArr []RealizationSampleResult `json:"sampleResultArr" binding:"required"`
-	UndefLimit      float32                   `json:"undefLimit" binding:"required"`
+	SampleResultArr    []RealizationSampleResult `json:"sampleResultArr" binding:"required"`
+	UndefLimit         float32                   `json:"undefLimit" binding:"required"`
+	CalculationTime_ms int                       `json:"calculationTime_ms" binding:"required"`
 }
 
 func HandleSampleInPoints(c *gin.Context) {
@@ -66,14 +67,16 @@ func HandleSampleInPoints(c *gin.Context) {
 	// TO-DISCUSS:
 	// Must check this out in relation to the xtgeo code
 	// Undef value and limit seem to be misaligned!!!
+	duration_ms := (time.Now().Sub(startTime)) / time.Millisecond
 	retResultArr := make([]RealizationSampleResult, len(perRealSamplesArr))
 	for i := range retResultArr {
 		retResultArr[i] = RealizationSampleResult(perRealSamplesArr[i])
 	}
 
 	responseBody := PointSamplingResponse{
-		SampleResultArr: retResultArr,
-		UndefLimit:      0.99e30,
+		SampleResultArr:    retResultArr,
+		UndefLimit:         0.99e30,
+		CalculationTime_ms: int(duration_ms),
 	}
 	c.JSON(http.StatusOK, responseBody)
 

@@ -38,6 +38,7 @@ class _PointSamplingRequestBody(BaseModel):
 class _PointSamplingResponseBody(BaseModel):
     sampleResultArr: List[RealizationSampleResult]
     undefLimit: float
+    calculationTime_ms: int
 
 
 # URL of the Go server endpoint
@@ -95,6 +96,9 @@ async def batch_sample_surface_in_points_async(
 
     json_data: bytes = response.content
     response_body = _PointSamplingResponseBody.model_validate_json(json_data)
+
+    perf_metrics.set_metric("inner-go-call", response_body.calculationTime_ms)
+
 
     # Replace values above the undefLimit with np.nan
     for res in response_body.sampleResultArr:
