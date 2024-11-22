@@ -57,7 +57,30 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.name}"
 
 
+
+
+
+import httpx
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    print("start lifespan")
+    #limits = httpx.Limits(max_keepalive_connections=200, max_connections=300)
+
+    #app.state.requests_client = httpx.AsyncClient(http2=True, verify=False, limits=limits)
+    #app.state.requests_client = httpx.AsyncClient(verify=False)
+    app.state.requests_client = httpx.AsyncClient()
+    yield
+
+    await app.state.requests_client.aclose()
+    print("end lifespan")
+
+
+
+
 app = FastAPI(
+    lifespan=app_lifespan,
     generate_unique_id_function=custom_generate_unique_id,
     root_path="/api",
     default_response_class=ORJSONResponse,

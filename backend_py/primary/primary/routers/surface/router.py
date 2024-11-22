@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Annotated, List, Optional, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, Body, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request, Body, status
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 
 from primary.services.sumo_access.case_inspector import CaseInspector
@@ -231,6 +231,7 @@ async def post_get_surface_intersection(
 
 @router.post("/sample_surface_in_points")
 async def post_sample_surface_in_points(
+    request: Request,
     case_uuid: str = Query(description="Sumo case uuid"),
     ensemble_name: str = Query(description="Ensemble name"),
     surface_name: str = Query(description="Surface name"),
@@ -242,7 +243,10 @@ async def post_sample_surface_in_points(
 
     sumo_access_token = authenticated_user.get_sumo_access_token()
 
+    async_client = request.app.state.requests_client
+
     result_arr: List[RealizationSampleResult] = await batch_sample_surface_in_points_async(
+        async_client=async_client,
         sumo_access_token=sumo_access_token,
         case_uuid=case_uuid,
         iteration_name=ensemble_name,

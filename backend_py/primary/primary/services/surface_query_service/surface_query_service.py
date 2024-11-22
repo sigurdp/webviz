@@ -48,6 +48,7 @@ SERVICE_ENDPOINT = f"{config.SURFACE_QUERY_URL}/sample_in_points"
 
 
 async def batch_sample_surface_in_points_async(
+    async_client: httpx.AsyncClient,
     sumo_access_token: str,
     case_uuid: str,
     iteration_name: str,
@@ -117,14 +118,19 @@ async def batch_sample_surface_in_points_async(
 
     json_request_body = request_body.model_dump()
 
-    async with httpx.AsyncClient(timeout=300) as client:
-        LOGGER.info(f"Running async go point sampling for surface: {surface_name}")
+    LOGGER.info(f"Running async go point sampling for surface: {surface_name}")
+    perf_metrics.record_lap("prepare_call")
 
-        perf_metrics.record_lap("prepare_call")
 
-        response: httpx.Response = await client.post(
-            url=SERVICE_ENDPOINT, json=json_request_body
-        )
+    response: httpx.Response = await async_client.post(url=SERVICE_ENDPOINT, json=json_request_body)
+
+
+    # async with httpx.AsyncClient(timeout=300) as client:
+    #     LOGGER.info(f"Running async go point sampling for surface: {surface_name}")
+        
+    #     perf_metrics.record_lap("prepare_call")
+        
+    #     response: httpx.Response = await client.post(url=SERVICE_ENDPOINT, json=json_request_body)
 
     perf_metrics.record_lap("main-call")
 
