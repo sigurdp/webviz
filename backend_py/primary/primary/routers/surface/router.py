@@ -355,6 +355,7 @@ async def post_sample_surface_in_points(
 
     if cached_data:
         LOGGER.info(f"!!!!!!!!!!!!!!!!!!!!Returning CACHED result in: {perf_metrics.to_string()}")
+        response_perf_metrics.record_lap("func-total-cached")
         return ta.validate_json(cached_data)
 
     sumo_access_token = authenticated_user.get_sumo_access_token()
@@ -391,7 +392,7 @@ async def post_sample_surface_in_points(
 
     LOGGER.info(f"Sampled surface in points in: {perf_metrics.to_string()}")
 
-    response_perf_metrics.record_lap("func-total")
+    response_perf_metrics.record_lap("func-total-uncached")
 
     return intersections
 
