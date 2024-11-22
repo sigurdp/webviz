@@ -7,49 +7,34 @@ from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 
 from primary.services.sumo_access.case_inspector import CaseInspector
 from primary.services.sumo_access.surface_access import SurfaceAccess
-from primary.services.smda_access.stratigraphy_access import (
-    StratigraphyAccess,
-    StratigraphicUnit,
-)
-from primary.services.smda_access.stratigraphy_utils import (
-    sort_stratigraphic_names_by_hierarchy,
-)
-from primary.services.smda_access.mocked_drogon_smda_access import (
-    _mocked_stratigraphy_access,
-)
+from primary.services.smda_access.stratigraphy_access import StratigraphyAccess, StratigraphicUnit
+from primary.services.smda_access.stratigraphy_utils import sort_stratigraphic_names_by_hierarchy
+from primary.services.smda_access.mocked_drogon_smda_access import _mocked_stratigraphy_access
 from primary.services.utils.statistic_function import StatisticFunction
-from primary.services.utils.surface_intersect_with_polyline import (
-    intersect_surface_with_polyline,
-)
+from primary.services.utils.surface_intersect_with_polyline import intersect_surface_with_polyline
 from primary.services.utils.authenticated_user import AuthenticatedUser
 from primary.auth.auth_helper import AuthHelper
-from primary.services.surface_query_service.surface_query_service import (
-    batch_sample_surface_in_points_async,
-)
-from primary.services.surface_query_service.surface_query_service import (
-    RealizationSampleResult,
-)
+from primary.services.surface_query_service.surface_query_service import batch_sample_surface_in_points_async
+from primary.services.surface_query_service.surface_query_service import RealizationSampleResult
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 
 from . import converters
 from . import schemas
 from . import dependencies
 
-from .surface_address import (
-    RealizationSurfaceAddress,
-    ObservedSurfaceAddress,
-    StatisticalSurfaceAddress,
-)
+from .surface_address import RealizationSurfaceAddress, ObservedSurfaceAddress, StatisticalSurfaceAddress
 from .surface_address import decode_surf_addr_str
 
-import redis
+#import redis
+import redis.asyncio as redis
+
 from primary import config
-from fastapi_cache import FastAPICache
-from fastapi import FastAPI
-from typing import AsyncIterator
-from fastapi_cache.backends.redis import RedisBackend
-from contextlib import asynccontextmanager
-from fastapi_cache.decorator import cache
+# from fastapi_cache import FastAPICache
+# from fastapi import FastAPI
+# from typing import AsyncIterator
+# from fastapi_cache.backends.redis import RedisBackend
+# from contextlib import asynccontextmanager
+# from fastapi_cache.decorator import cache
 import json
 from pydantic import TypeAdapter
 import hashlib
@@ -362,7 +347,7 @@ async def post_sample_surface_in_points(
     perf_metrics.record_lap("build-key")
 
 
-    cached_data = redis_client.get(my_cache_key)
+    cached_data = await redis_client.get(my_cache_key)
     perf_metrics.record_lap("cache-lookup")
 
     if cached_data:
@@ -398,7 +383,7 @@ async def post_sample_surface_in_points(
         )
     perf_metrics.record_lap("convert")
 
-    redis_client.set(my_cache_key, ta.dump_json(intersections))
+    await redis_client.set(my_cache_key, ta.dump_json(intersections))
     perf_metrics.record_lap("write-cache")
 
     LOGGER.info(f"Sampled surface in points in: {perf_metrics.to_string()}")
