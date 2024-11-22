@@ -82,9 +82,14 @@ async def batch_sample_surface_in_points_async(
         yCoords=y_coords,
     )
 
+    json_request_body = request_body.model_dump()
+
     async with httpx.AsyncClient(timeout=300) as client:
         LOGGER.info(f"Running async go point sampling for surface: {surface_name}")
-        response: httpx.Response = await client.post(url=SERVICE_ENDPOINT, json=request_body.model_dump())
+        
+        perf_metrics.record_lap("prepare_call")
+        
+        response: httpx.Response = await client.post(url=SERVICE_ENDPOINT, json=json_request_body)
 
     perf_metrics.record_lap("main-call")
 
