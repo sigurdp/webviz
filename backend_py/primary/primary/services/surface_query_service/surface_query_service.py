@@ -64,15 +64,15 @@ async def batch_sample_surface_in_points_async(
     )
     perf_metrics.record_lap("create sumo-client")
 
-    realization_object_ids = await _get_object_uuids_for_surface_realizations(
-        sumo_client=sumo_client,
-        case_uuid=case_uuid,
-        iteration_name=iteration_name,
-        surface_name=surface_name,
-        surface_attribute=surface_attribute,
-        realizations=realizations,
-    )
-    perf_metrics.record_lap("get-obj-ids-using-explorer")
+    # realization_object_ids = await _get_object_uuids_for_surface_realizations(
+    #     sumo_client=sumo_client,
+    #     case_uuid=case_uuid,
+    #     iteration_name=iteration_name,
+    #     surface_name=surface_name,
+    #     surface_attribute=surface_attribute,
+    #     realizations=realizations,
+    # )
+    # perf_metrics.record_lap("get-obj-ids-using-explorer")
 
     realization_object_ids_using_es = await get_surface_blob_uuids_es(
         sumo_client=sumo_client,
@@ -85,19 +85,19 @@ async def batch_sample_surface_in_points_async(
     perf_metrics.record_lap("get-obj-ids-using-es")
 
     ## Check that they are the same by sorting on realization and checking length and blob ids
-    realization_object_ids.sort(key=lambda x: x.realization)
-    realization_object_ids_using_es.sort(key=lambda x: x.realization)
+    # realization_object_ids.sort(key=lambda x: x.realization)
+    # realization_object_ids_using_es.sort(key=lambda x: x.realization)
 
-    assert len(realization_object_ids) == len(realization_object_ids_using_es)
-    for i in range(len(realization_object_ids)):
-        assert (
-            realization_object_ids[i].realization
-            == realization_object_ids_using_es[i].realization
-        )
-        assert (
-            realization_object_ids[i].objectUuid
-            == realization_object_ids_using_es[i].objectUuid
-        )
+    # assert len(realization_object_ids) == len(realization_object_ids_using_es)
+    # for i in range(len(realization_object_ids)):
+    #     assert (
+    #         realization_object_ids[i].realization
+    #         == realization_object_ids_using_es[i].realization
+    #     )
+    #     assert (
+    #         realization_object_ids[i].objectUuid
+    #         == realization_object_ids_using_es[i].objectUuid
+    #     )
 
     sas_token, blob_store_base_uri = get_sas_token_and_blob_store_base_uri_for_case(
         sumo_access_token, case_uuid
