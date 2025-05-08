@@ -45,6 +45,16 @@ services:
         "pip install debugpy && python -m debugpy --listen 0.0.0.0:5678 -m uvicorn --proxy-headers --host=0.0.0.0 primary.main:app",
       ]
 
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: ./backend_py/primary/celery-worker.Dockerfile
+    volumes:
+      - ./backend_py/primary/primary:/home/appuser/backend_py/primary/primary
+      - ./backend_py/libs:/home/appuser/backend_py/libs
+
+
   surface-query:
     build:
       context: .
