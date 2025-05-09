@@ -1,13 +1,14 @@
 import asyncio
 import logging
 from io import BytesIO
-from typing import Sequence
+from typing import Sequence, NamedTuple
+import json
 
 import xtgeo
 
 from fmu.sumo.explorer import TimeFilter, TimeType
 from fmu.sumo.explorer.explorer import SumoClient, SearchContext
-from fmu.sumo.explorer.objects import Surface
+from fmu.sumo.explorer.objects import Surface, Document
 
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 from primary.services.utils.otel_span_tracing import otel_span_decorator, start_otel_span, start_otel_span_async
@@ -146,18 +147,79 @@ class SurfaceAccess:
             time=time_filter,
         )
 
-        surf_count = await search_context.length_async()
-        if surf_count > 1:
-            raise MultipleDataMatchesError(
-                f"Multiple ({surf_count}) surfaces found in Sumo for: {surf_str}", Service.SUMO
-            )
-        if surf_count == 0:
-            LOGGER.warning(f"No realization surface found in Sumo for: {surf_str}")
-            return None
 
-        sumo_surf: Surface = await search_context.getitem_async(0)
-        perf_metrics.record_lap("locate")
+        class SingleObjectResult(NamedTuple):
+            object: Document | None
+            hit_count: int
 
+        async def get_single_object(search_context: SearchContext) -> SingleObjectResult:
+            query = {
+                "query": search_context._query,
+                "size": 1,
+                "track_total_hits": True,
+            }
+
+            res = (await search_context._sumo.post_async("/search", json=query)).json()
+            print(json.dumps(res, indent=2))
+            total_hits = res["hits"]["total"]["value"]
+            if total_hits != 1:
+                return SingleObjectResult(None, total_hits)
+
+            obj_dict = res["hits"]["hits"][0]
+            sumo_obj: Surface = search_context._to_sumo(obj_dict)
+            return SingleObjectResult(sumo_obj, total_hits)
+
+
+        async with start_otel_span_async("locate-sumo-object"):
+            sumo_surf, hit_count = await get_single_object(search_context)
+            if not isinstance(sumo_surf, Surface):
+                if hit_count > 1:
+                    raise MultipleDataMatchesError(
+                        f"Multiple ({hit_count}) surfaces found in Sumo for: {surf_str}", Service.SUMO
+                    )
+                LOGGER.warning(f"No realization surface found in Sumo for: {surf_str}")
+                return None
+
+        """
+        async with start_otel_span_async("locate-sumo-object"):
+            query = {
+                "query": search_context._query,
+                "size": 1,
+                "track_total_hits": True,
+            }
+
+            res = (await search_context._sumo.post_async("/search", json=query)).json()
+            #print(json.dumps(res, indent=2))
+            total_hits = res["hits"]["total"]["value"]
+            if total_hits > 1:
+                raise MultipleDataMatchesError(
+                    f"Multiple ({total_hits}) surfaces found in Sumo for: {surf_str}", Service.SUMO
+                )
+            if total_hits == 0:
+                LOGGER.warning(f"No realization surface found in Sumo for: {surf_str}")
+                return None
+
+            obj = res["hits"]["hits"][0]
+            sumo_surf: Surface = search_context._to_sumo(obj)
+            perf_metrics.record_lap("locate")
+        """
+
+        """
+        async with start_otel_span_async("locate-sumo-object"):
+            surf_uuid_arr = await search_context.uuids_async
+            surf_count = len(surf_uuid_arr)
+            if surf_count > 1:
+                raise MultipleDataMatchesError(
+                    f"Multiple ({surf_count}) surfaces found in Sumo for: {surf_str}", Service.SUMO
+                )
+            if surf_count == 0:
+                LOGGER.warning(f"No realization surface found in Sumo for: {surf_str}")
+                return None
+
+            sumo_surf: Surface = await search_context.get_object_async(surf_uuid_arr[0])
+            perf_metrics.record_lap("locate")
+        """
+            
         async with start_otel_span_async("download-blob") as span:
             byte_stream: BytesIO = await sumo_surf.blob_async
             size_mb = byte_stream.getbuffer().nbytes / (1024 * 1024)
