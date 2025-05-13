@@ -237,14 +237,19 @@ async def get_ri_isect(
 import datetime
 from primary.celery_worker.tasks import test_tasks
 from primary.middleware.add_browser_cache import no_cache
+from celery.result import AsyncResult
 
 
 
 @router.get("/celery_test")
 @no_cache
 async def get_celery_test() -> str:
-    LOGGER.info(f"celery_test !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    task = test_tasks.process_data.delay({"item": "myItem"})
-    return f"celery_test: time: {datetime.datetime.now()}"
+    LOGGER.info(f"celery_test start !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    task: AsyncResult = test_tasks.process_data.delay({"item": "myItem"})
+
+    LOGGER.info(f"celery_test task: {task.id=}, {task.status=}, {task.result=}")
+
+    LOGGER.info(f"celery_test end !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    return f"celery_test: time: {datetime.datetime.now()}  {task=}"
 
 
