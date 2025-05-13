@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
+from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
 
 # A lot of the configuration will be read from environment variables during the execution of this function.
@@ -21,6 +22,8 @@ def setup_azure_monitor_telemetry(fastapi_app: FastAPI) -> None:
     FastAPIInstrumentor.instrument_app(fastapi_app)
 
     HTTPXClientInstrumentor().instrument()
+
+    CeleryInstrumentor().instrument()
 
     # Should we keep Redis instrumented or does it generate more noise than insights?
     RedisInstrumentor().instrument()

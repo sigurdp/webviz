@@ -49,6 +49,9 @@ services:
     build:
       context: .
       dockerfile: ./backend_py/primary/celery-worker.Dockerfile
+    environment:
+      - APPLICATIONINSIGHTS_CONNECTION_STRING
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=celery-worker, service.namespace=local
     volumes:
       - ./backend_py/primary/primary:/home/appuser/backend_py/primary/primary
       - ./backend_py/libs:/home/appuser/backend_py/libs

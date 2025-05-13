@@ -136,6 +136,25 @@ spec:
               cpu:
                 averageUtilization: 80
 
+    - name: celery-worker
+      dockerFileName: ./backend_py/primary/celery-worker.Dockerfile
+      resources:
+        requests:
+          memory: 8Gi
+          cpu: 2000m
+        limits:
+          memory: 8Gi
+      environmentConfig:
+        - environment: dev
+          secretRefs:
+            azureKeyVaults:
+              - name: webviz
+                items:
+                  - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-DEV
+                    envVar: APPLICATIONINSIGHTS_CONNECTION_STRING
+          variables:
+            OTEL_RESOURCE_ATTRIBUTES: service.name=celery-worker, service.namespace=dev
+
     - name: surface-query
       dockerFileName: ./backend_go/surface-query-prod.Dockerfile
       ports:
