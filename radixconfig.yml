@@ -14,6 +14,12 @@ spec:
     - name: dev
       build:
         from: dev
+      secretRefs:
+        azureKeyVaults:
+          - name: webviz
+            items:
+              - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-DEV
+                envVar: APPLICATIONINSIGHTS_CONNECTION_STRING
 
   components:
     - name: frontend
@@ -113,12 +119,6 @@ spec:
                 averageUtilization: 80
 
         - environment: dev
-          secretRefs:
-            azureKeyVaults:
-              - name: webviz
-                items:
-                  - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-DEV
-                    envVar: APPLICATIONINSIGHTS_CONNECTION_STRING
           variables:
             OTEL_RESOURCE_ATTRIBUTES: service.name=primary-backend, service.namespace=dev
           resources:
@@ -164,12 +164,6 @@ spec:
           memory: 8Gi
       environmentConfig:
         - environment: dev
-          secretRefs:
-            azureKeyVaults:
-              - name: webviz
-                items:
-                  - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-DEV
-                    envVar: APPLICATIONINSIGHTS_CONNECTION_STRING
           variables:
             OTEL_RESOURCE_ATTRIBUTES: service.name=celery-worker, service.namespace=dev
 
