@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 import xtgeo
 
+from celery.signals import worker_process_init
+
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 
 from primary.services.utils.otel_span_tracing import otel_span_decorator, start_otel_span, start_otel_span_async
@@ -26,20 +28,29 @@ from primary.routers.surface.converters import to_api_surface_data_float
 
 LOGGER = logging.getLogger(__name__)
 
-
 load_dotenv()
 
-AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-CONTAINER_NAME = "celery-results"
 
-blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-container_client: ContainerClient = blob_service_client.get_container_client(CONTAINER_NAME)
+_CONTAINER_CLIENT: ContainerClient | None = None
 
-try:
-    container_client.create_container()
-except Exception:
-    # Container probably already exists
-    pass  
+@worker_process_init.connect(weak=False)
+def init_blob_client_for_worker(*args, **kwargs):
+    LOGGER.info("Entering init_blob_client_for_worker()")
+
+    global _CONTAINER_CLIENT
+
+    azure_storage_connection_string = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+    container_name = "celery-results"
+
+    blob_service_client = BlobServiceClient.from_connection_string(azure_storage_connection_string)
+    _CONTAINER_CLIENT = blob_service_client.get_container_client(container_name)
+
+    try:
+        _CONTAINER_CLIENT.create_container()
+    except Exception:
+        # Container probably already exists
+        pass  
+
 
 
 def pydantic_to_msgpack(model: BaseModel) -> bytes:
@@ -106,7 +117,7 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
     byte_stream = io.BytesIO()
     xtgeo_surf.to_file(byte_stream, fformat="irap_binary")
     byte_stream.seek(0)
-    container_client.upload_blob(name=gri_blob_name, data=byte_stream, overwrite=True)
+    _CONTAINER_CLIENT.upload_blob(name=gri_blob_name, data=byte_stream, overwrite=True)
     perf_metrics.record_lap("store-irap")
 
     # byte_stream = io.BytesIO()
@@ -118,7 +129,7 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
     msgpacked_bytes = pydantic_to_msgpack(surf_data_response)
 
     content_settings = ContentSettings(content_type="application/vnd.msgpack")
-    container_client.upload_blob(name=msgpack_blob_name, data=msgpacked_bytes, content_settings=content_settings, overwrite=True)
+    _CONTAINER_CLIENT.upload_blob(name=msgpack_blob_name, data=msgpacked_bytes, content_settings=content_settings, overwrite=True)
     perf_metrics.record_lap("store-msgpack")
 
     LOGGER.debug(f"do_async_work took: {perf_metrics.to_string()}")

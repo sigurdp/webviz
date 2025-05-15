@@ -272,7 +272,7 @@ async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
 
     result: AsyncResult = test_tasks.surface_from_addr.delay(authenticated_user._sumo_access_token, surf_addr_str)
 
-    timeout = 1.0  # seconds
+    timeout = 10.0  # seconds
     poll_interval = 0.5  # seconds
     waited = 0
 
