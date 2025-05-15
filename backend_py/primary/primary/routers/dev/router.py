@@ -234,12 +234,18 @@ async def get_ri_isect(
     return "OK"
 
 
+
 import datetime
+import os
 from fastapi import Request
 from primary.auth.auth_helper import AuthHelper
 from primary.celery_worker.tasks import test_tasks
 from primary.middleware.add_browser_cache import no_cache
 from celery.result import AsyncResult
+
+from azure.storage.blob import BlobServiceClient, ContainerClient, ContentSettings
+
+from ..surface import schemas
 
 
 
@@ -285,12 +291,36 @@ async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
 
     LOGGER.info(f"get_celery_surf end !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
-    if result.successful():
-        return f"get_celery_surf: time: {datetime.datetime.now()}  {result.id=}, {result.status=}, {result.result=}"
+    if not result.successful():
+        if result.failed():
+            raise HTTPException(status_code=500, detail="f[{datetime.datetime.now()]) {str(result.result)}")
+        else:
+            raise HTTPException(status_code=202, detail=f"Task still running  ({datetime.datetime.now()})")
 
-    if result.failed():
-        raise HTTPException(status_code=500, detail="f[{datetime.datetime.now()]) {str(result.result)}")
-    else:
-        raise HTTPException(status_code=202, detail=f"Task still running  ({datetime.datetime.now()})")
+
+    blob_name_without_extension = str(result.result)
+    msgpack_blob_name = blob_name_without_extension + ".msgpack"
+
+    blob_download_ok = False
+    try:
+        azure_storage_connection_string = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+        container_name = "celery-results"
+
+        blob_service_client = BlobServiceClient.from_connection_string(azure_storage_connection_string)
+        container_client: ContainerClient = blob_service_client.get_container_client(container_name)
+        blob_client = container_client.get_blob_client(blob=msgpack_blob_name)
+        download_stream = blob_client.download_blob()
+        blob_data = download_stream.readall()
+
+        ret_data: schemas.SurfaceDataFloat = test_tasks.msgpack_to_pydantic(schemas.SurfaceDataFloat, blob_data)
+        #return ret_data.model_dump_json()
+
+        blob_download_ok = True
+
+    except Exception as e:
+        LOGGER.error(f"Failed to connect to Azure Blob Storage")
+
+    return f"get_celery_surf: time: {datetime.datetime.now()}  {result.id=}, {result.status=}, {result.result=}, {blob_download_ok=}"
+
 
 

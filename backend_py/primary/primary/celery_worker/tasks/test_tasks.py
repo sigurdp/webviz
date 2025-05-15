@@ -149,5 +149,5 @@ def surface_from_addr(sumo_access_token: str, surf_addr_str: str) -> str:
 
     LOGGER.info(f"surface_from_addr done, {blob_name=}")
 
-    return f"surface_from_addr OK"
+    return blob_name
 
