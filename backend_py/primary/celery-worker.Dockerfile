@@ -24,4 +24,4 @@ COPY --chown=appuser ./backend_py/libs    /home/appuser/backend_py/libs
 COPY --chown=appuser ./backend_py/primary /home/appuser/backend_py/primary
 RUN poetry install --only main
 
-CMD ["celery", "--app", "primary.celery_worker.celery_main.celery_app", "worker", "--loglevel=info"]
+CMD ["celery", "--app", "primary.celery_worker.celery_main.celery_app", "worker", "--loglevel=info", "--concurrency=2"]

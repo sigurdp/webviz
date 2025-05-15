@@ -50,3 +50,33 @@ def init_celery_tracing(*args, **kwargs):
 
 
 
+def get_cpu_limit_cgroups_v1():
+    try:
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "r") as quota_file:
+            quota = int(quota_file.read())
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us", "r") as period_file:
+            period = int(period_file.read())
+        if quota > 0:
+            return quota // period
+        else:
+            return -os.cpu_count()  # No quota set
+    except Exception:
+        return -os.cpu_count()  # Fallback
+
+
+def get_cpu_limit_cgroups_v2():
+    try:
+        with open("/sys/fs/cgroup/cpu.max", "r") as f:
+            contents = f.read().strip()
+            quota, period = contents.split()
+            if quota == "max":
+                return os.cpu_count()
+            return int(int(quota) / int(period))
+    except Exception:
+        return -os.cpu_count()
+    
+
+print("============================================================================")
+print(get_cpu_limit_cgroups_v1())
+print(get_cpu_limit_cgroups_v2())
+print("============================================================================")

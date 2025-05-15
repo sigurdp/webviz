@@ -98,15 +98,16 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
         raise ValueError(f"Unsupported address type: {addr.address_type}")
     
 
-    access = SurfaceAccess.from_iteration_name(sumo_access_token, addr.case_uuid, addr.ensemble_name)
-    xtgeo_surf: xtgeo.RegularSurface = await access.get_realization_surface_data_async(
-        real_num=addr.realization,
-        name=addr.name,
-        attribute=addr.attribute,
-        time_or_interval_str=addr.iso_time_or_interval,
-    )
-    perf_metrics.record_lap("get-xtgeo")
-    LOGGER.info(f"xtgeo_surf: {xtgeo_surf=}")
+    async with start_otel_span_async("get-xtgeo-surf"):
+        access = SurfaceAccess.from_iteration_name(sumo_access_token, addr.case_uuid, addr.ensemble_name)
+        xtgeo_surf: xtgeo.RegularSurface = await access.get_realization_surface_data_async(
+            real_num=addr.realization,
+            name=addr.name,
+            attribute=addr.attribute,
+            time_or_interval_str=addr.iso_time_or_interval,
+        )
+        perf_metrics.record_lap("get-xtgeo")
+        LOGGER.info(f"xtgeo_surf: {xtgeo_surf=}")
 
     blob_name_without_extension = str(uuid.uuid4())
 
@@ -114,23 +115,25 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
     # xtg_blob_name = blob_name_without_extension + ".xtg"
     msgpack_blob_name = blob_name_without_extension + ".msgpack"
 
-    byte_stream = io.BytesIO()
-    xtgeo_surf.to_file(byte_stream, fformat="irap_binary")
-    byte_stream.seek(0)
-    _CONTAINER_CLIENT.upload_blob(name=gri_blob_name, data=byte_stream, overwrite=True)
-    perf_metrics.record_lap("store-irap")
+    with start_otel_span("irap-to-blob-store"):
+        byte_stream = io.BytesIO()
+        xtgeo_surf.to_file(byte_stream, fformat="irap_binary")
+        byte_stream.seek(0)
+        _CONTAINER_CLIENT.upload_blob(name=gri_blob_name, data=byte_stream, overwrite=True)
+        perf_metrics.record_lap("store-irap")
 
     # byte_stream = io.BytesIO()
     # xtgeo_surf.to_file(byte_stream, fformat="xtgregsurf")
     # byte_stream.seek(0)
     # container_client.upload_blob(name=xtg_blob_name, data=byte_stream, overwrite=True)
 
-    surf_data_response = to_api_surface_data_float(xtgeo_surf)
-    msgpacked_bytes = pydantic_to_msgpack(surf_data_response)
+    with start_otel_span("msgpack-to-blob-store"):
+        surf_data_response = to_api_surface_data_float(xtgeo_surf)
+        msgpacked_bytes = pydantic_to_msgpack(surf_data_response)
 
-    content_settings = ContentSettings(content_type="application/vnd.msgpack")
-    _CONTAINER_CLIENT.upload_blob(name=msgpack_blob_name, data=msgpacked_bytes, content_settings=content_settings, overwrite=True)
-    perf_metrics.record_lap("store-msgpack")
+        content_settings = ContentSettings(content_type="application/vnd.msgpack")
+        _CONTAINER_CLIENT.upload_blob(name=msgpack_blob_name, data=msgpacked_bytes, content_settings=content_settings, overwrite=True)
+        perf_metrics.record_lap("store-msgpack")
 
     LOGGER.debug(f"do_async_work took: {perf_metrics.to_string()}")
 
