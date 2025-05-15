@@ -22,7 +22,8 @@ class HTTPXAsyncClientWrapper:
     def client(self) -> httpx.AsyncClient:
         """Get the async client instance."""
         if self._async_client is None:
-            raise RuntimeError("HTTPXAsyncClientWrapper not initialized. Call start() first.")
+            return httpx.AsyncClient()
+            #raise RuntimeError("HTTPXAsyncClientWrapper not initialized. Call start() first.")
         return self._async_client
 
     def start(self) -> None:

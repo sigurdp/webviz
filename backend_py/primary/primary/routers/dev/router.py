@@ -235,6 +235,8 @@ async def get_ri_isect(
 
 
 import datetime
+from fastapi import Request
+from primary.auth.auth_helper import AuthHelper
 from primary.celery_worker.tasks import test_tasks
 from primary.middleware.add_browser_cache import no_cache
 from celery.result import AsyncResult
@@ -245,11 +247,50 @@ from celery.result import AsyncResult
 @no_cache
 async def get_celery_test() -> str:
     LOGGER.info(f"celery_test start !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    task: AsyncResult = test_tasks.process_data.delay({"item": "myItem"})
+    result: AsyncResult = test_tasks.capitalize_string.delay("my lowercase string")
 
-    LOGGER.info(f"celery_test task: {task.id=}, {task.status=}, {task.result=}")
+    LOGGER.info(f"celery_test result: {result.id=}, {result.status=}, {result.result=}")
 
     LOGGER.info(f"celery_test end !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    return f"celery_test: time: {datetime.datetime.now()}  {task=}"
+
+    return f"celery_test: time: {datetime.datetime.now()}  {result.id=}, {result.status=}"
+
+
+@router.get("/celery_surf")
+@no_cache
+async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
+    LOGGER.info(f"get_celery_surf start !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
+    authenticated_user = AuthHelper.get_authenticated_user(request)
+
+    # case_uuid = "b182dc88-9bb5-4076-ad33-1905c3d8c10b"
+    # ensemble_name = "iter-0"
+    # result: AsyncResult = test_tasks.surface_meta.delay(authenticated_user._sumo_access_token, case_uuid, ensemble_name)
+
+    #surf_addr_str = "REAL~~aea92953-b5a3-49c6-9119-5ab34dd10bc4~~iter-0~~VOLANTIS GP. Top~~DS_extract_geogrid~~0"
+    #surf_addr_str = "STAT~~aea92953-b5a3-49c6-9119-5ab34dd10bc4~~iter-0~~VOLANTIS%20GP.%20Top~~DS_extract_geogrid~~MEAN~~*"
+
+    result: AsyncResult = test_tasks.surface_from_addr.delay(authenticated_user._sumo_access_token, surf_addr_str)
+
+    timeout = 1.0  # seconds
+    poll_interval = 0.5  # seconds
+    waited = 0
+
+    while not result.ready() and waited < timeout:
+        await asyncio.sleep(poll_interval)
+        waited += poll_interval
+
+    LOGGER.info(result)
+    LOGGER.info(f"get_celery_surf task: {waited=} - {result.id=}, {result.status=}, {result.result=}")
+
+    LOGGER.info(f"get_celery_surf end !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
+    if result.successful():
+        return f"get_celery_surf: time: {datetime.datetime.now()}  {result.id=}, {result.status=}, {result.result=}"
+
+    if result.failed():
+        raise HTTPException(status_code=500, detail="f[{datetime.datetime.now()]) {str(result.result)}")
+    else:
+        raise HTTPException(status_code=202, detail=f"Task still running  ({datetime.datetime.now()})")
 
 

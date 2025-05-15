@@ -136,6 +136,8 @@ async def get_surface_data(
 
     access_token = authenticated_user.get_sumo_access_token()
 
+    LOGGER.info(f"Getting surface data for address: {surf_addr_str}")
+
     addr = decode_surf_addr_str(surf_addr_str)
     if not isinstance(addr, RealizationSurfaceAddress | ObservedSurfaceAddress | StatisticalSurfaceAddress):
         raise HTTPException(status_code=404, detail="Endpoint only supports address types REAL, OBS and STAT")
