@@ -39,12 +39,14 @@ def init_celery_tracing(*args, **kwargs):
     if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
         from azure.monitor.opentelemetry import configure_azure_monitor
         from opentelemetry.instrumentation.celery import CeleryInstrumentor
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
         LOGGER.info("Configuring Azure Monitor telemetry for celery worker")
 
         configure_azure_monitor(logging_formatter=logging.Formatter("[%(name)s]: %(message)s"))
 
         CeleryInstrumentor().instrument()
+        HTTPXClientInstrumentor().instrument()
     else:
         LOGGER.warning("Skipping telemetry configuration for celery worker, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
 

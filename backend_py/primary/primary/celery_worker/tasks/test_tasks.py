@@ -111,16 +111,16 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
 
     blob_name_without_extension = str(uuid.uuid4())
 
-    gri_blob_name = blob_name_without_extension + ".gri"
+    #gri_blob_name = blob_name_without_extension + ".gri"
     # xtg_blob_name = blob_name_without_extension + ".xtg"
     msgpack_blob_name = blob_name_without_extension + ".msgpack"
 
-    with start_otel_span("irap-to-blob-store"):
-        byte_stream = io.BytesIO()
-        xtgeo_surf.to_file(byte_stream, fformat="irap_binary")
-        byte_stream.seek(0)
-        _CONTAINER_CLIENT.upload_blob(name=gri_blob_name, data=byte_stream, overwrite=True)
-        perf_metrics.record_lap("store-irap")
+    # with start_otel_span("irap-to-blob-store"):
+    #     byte_stream = io.BytesIO()
+    #     xtgeo_surf.to_file(byte_stream, fformat="irap_binary")
+    #     byte_stream.seek(0)
+    #     _CONTAINER_CLIENT.upload_blob(name=gri_blob_name, data=byte_stream, overwrite=True)
+    #     perf_metrics.record_lap("store-irap")
 
     # byte_stream = io.BytesIO()
     # xtgeo_surf.to_file(byte_stream, fformat="xtgregsurf")

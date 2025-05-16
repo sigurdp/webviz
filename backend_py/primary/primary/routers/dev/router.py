@@ -243,6 +243,8 @@ from primary.celery_worker.tasks import test_tasks
 from primary.middleware.add_browser_cache import no_cache
 from celery.result import AsyncResult
 
+from primary.services.utils.otel_span_tracing import otel_span_decorator, start_otel_span, start_otel_span_async
+
 from azure.storage.blob import BlobServiceClient, ContainerClient, ContentSettings
 
 from ..surface import schemas
@@ -276,15 +278,17 @@ async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
     #surf_addr_str = "REAL~~aea92953-b5a3-49c6-9119-5ab34dd10bc4~~iter-0~~VOLANTIS GP. Top~~DS_extract_geogrid~~0"
     #surf_addr_str = "STAT~~aea92953-b5a3-49c6-9119-5ab34dd10bc4~~iter-0~~VOLANTIS%20GP.%20Top~~DS_extract_geogrid~~MEAN~~*"
 
-    result: AsyncResult = test_tasks.surface_from_addr.delay(authenticated_user._sumo_access_token, surf_addr_str)
+    async with start_otel_span_async("schedule-task"):
+        result: AsyncResult = test_tasks.surface_from_addr.delay(authenticated_user._sumo_access_token, surf_addr_str)
 
     timeout = 10.0  # seconds
     poll_interval = 0.5  # seconds
     waited = 0
 
-    while not result.ready() and waited < timeout:
-        await asyncio.sleep(poll_interval)
-        waited += poll_interval
+    async with start_otel_span_async("poll-task"):
+        while not result.ready() and waited < timeout:
+            await asyncio.sleep(poll_interval)
+            waited += poll_interval
 
     LOGGER.info(result)
     LOGGER.info(f"get_celery_surf task: {waited=} - {result.id=}, {result.status=}, {result.result=}")
@@ -300,25 +304,30 @@ async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
 
     blob_name_without_extension = str(result.result)
     msgpack_blob_name = blob_name_without_extension + ".msgpack"
-
     blob_download_ok = False
-    try:
-        azure_storage_connection_string = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
-        container_name = "celery-results"
 
-        blob_service_client = BlobServiceClient.from_connection_string(azure_storage_connection_string)
-        container_client: ContainerClient = blob_service_client.get_container_client(container_name)
-        blob_client = container_client.get_blob_client(blob=msgpack_blob_name)
-        download_stream = blob_client.download_blob()
-        blob_data = download_stream.readall()
+    with start_otel_span("download-task-result"):
+        try:
+            azure_storage_connection_string = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+            container_name = "celery-results"
 
-        ret_data: schemas.SurfaceDataFloat = test_tasks.msgpack_to_pydantic(schemas.SurfaceDataFloat, blob_data)
-        #return ret_data.model_dump_json()
+            with start_otel_span("get-client"):
+                blob_service_client = BlobServiceClient.from_connection_string(azure_storage_connection_string)
+                container_client: ContainerClient = blob_service_client.get_container_client(container_name)
 
-        blob_download_ok = True
+            with start_otel_span("download"):
+                blob_client = container_client.get_blob_client(blob=msgpack_blob_name)
+                download_stream = blob_client.download_blob()
+                blob_data = download_stream.readall()
 
-    except Exception as e:
-        LOGGER.error(f"Failed to connect to Azure Blob Storage")
+            with start_otel_span("unpack"):
+                ret_data: schemas.SurfaceDataFloat = test_tasks.msgpack_to_pydantic(schemas.SurfaceDataFloat, blob_data)
+                #return ret_data.model_dump_json()
+
+            blob_download_ok = True
+
+        except Exception as e:
+            LOGGER.error(f"Failed to connect to Azure Blob Storage")
 
     return f"get_celery_surf: time: {datetime.datetime.now()}  {result.id=}, {result.status=}, {result.result=}, {blob_download_ok=}"
 
