@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import xtgeo
 
 from celery.signals import worker_process_init
+from celery import Task
 
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 
@@ -86,10 +87,11 @@ def surface_meta(sumo_access_token: str, case_uuid:str, ensemble_name: str) -> s
 
 
 @otel_span_decorator()
-async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
+async def do_async_work(task: Task, sumo_access_token: str, surf_addr_str: str) -> str:
     LOGGER.info(f"do_async_work --- : {surf_addr_str=}")
 
     perf_metrics = PerfMetrics()
+    task.update_state(state="PROGRESS", meta={"status": "Starting"})
 
     addr = decode_surf_addr_str(surf_addr_str)
     LOGGER.info(f"decoded addr: {addr=}")
@@ -99,6 +101,7 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
     
 
     async with start_otel_span_async("get-xtgeo-surf"):
+        task.update_state(state="PROGRESS", meta={"status": "Downloading"})
         access = SurfaceAccess.from_iteration_name(sumo_access_token, addr.case_uuid, addr.ensemble_name)
         xtgeo_surf: xtgeo.RegularSurface = await access.get_realization_surface_data_async(
             real_num=addr.realization,
@@ -128,6 +131,7 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
     # container_client.upload_blob(name=xtg_blob_name, data=byte_stream, overwrite=True)
 
     with start_otel_span("msgpack-to-blob-store"):
+        task.update_state(state="PROGRESS", meta={"status": "MsgPackToBlobStore"})
         surf_data_response = to_api_surface_data_float(xtgeo_surf)
         msgpacked_bytes = pydantic_to_msgpack(surf_data_response)
 
@@ -135,17 +139,20 @@ async def do_async_work(sumo_access_token: str, surf_addr_str: str) -> str:
         _CONTAINER_CLIENT.upload_blob(name=msgpack_blob_name, data=msgpacked_bytes, content_settings=content_settings, overwrite=True)
         perf_metrics.record_lap("store-msgpack")
 
+    task.update_state(state="PROGRESS", meta={"status": "Done"})
     LOGGER.debug(f"do_async_work took: {perf_metrics.to_string()}")
 
     return blob_name_without_extension
 
 
 
-@celery_app.task
-def surface_from_addr(sumo_access_token: str, surf_addr_str: str) -> str:
+@celery_app.task(bind=True)
+def surface_from_addr(self, sumo_access_token: str, surf_addr_str: str) -> str:
     LOGGER.info(f"surface_from_addr --- : {surf_addr_str=}")
 
-    blob_name = asyncio.run(do_async_work(sumo_access_token, surf_addr_str))
+    self.update_state("PROGRESS", meta={"status": "Before async"})
+
+    blob_name = asyncio.run(do_async_work(self, sumo_access_token, surf_addr_str))
 
     LOGGER.info(f"surface_from_addr done, {blob_name=}")
 

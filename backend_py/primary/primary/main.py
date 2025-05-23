@@ -28,6 +28,7 @@ from primary.routers.pvt.router import router as pvt_router
 from primary.routers.rft.router import router as rft_router
 from primary.routers.seismic.router import router as seismic_router
 from primary.routers.surface.router import router as surface_router
+from primary.routers.surface.router_celery import router as surface_router_celery
 from primary.routers.timeseries.router import router as timeseries_router
 from primary.routers.vfp.router import router as vfp_router
 from primary.routers.well.router import router as well_router
@@ -93,6 +94,7 @@ app.include_router(explore_router, tags=["explore"])
 app.include_router(timeseries_router, prefix="/timeseries", tags=["timeseries"])
 app.include_router(inplace_volumetrics_router, prefix="/inplace_volumetrics", tags=["inplace_volumetrics"])
 app.include_router(surface_router, prefix="/surface", tags=["surface"])
+app.include_router(surface_router_celery, prefix="/surface", tags=["surface"])
 app.include_router(parameters_router, prefix="/parameters", tags=["parameters"])
 app.include_router(grid3d_router, prefix="/grid3d", tags=["grid3d"])
 app.include_router(flow_network_router, prefix="/flow_network", tags=["flow_network"])

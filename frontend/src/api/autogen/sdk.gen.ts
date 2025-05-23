@@ -77,6 +77,11 @@ import type {
     DeprecatedGetStratigraphicUnitsData_api,
     DeprecatedGetStratigraphicUnitsResponse_api,
     DeprecatedGetStratigraphicUnitsError_api,
+    GetCeleryPollingSurfaceDataData_api,
+    GetCeleryPollingSurfaceDataResponse_api,
+    GetCeleryPollingSurfaceDataError_api,
+    GetSigurdExperimentData_api,
+    GetSigurdExperimentResponse_api,
     GetParameterNamesAndDescriptionData_api,
     GetParameterNamesAndDescriptionResponse_api,
     GetParameterNamesAndDescriptionError_api,
@@ -641,6 +646,35 @@ export const deprecatedGetStratigraphicUnits = <ThrowOnError extends boolean = f
     >({
         ...options,
         url: "/surface/deprecated_stratigraphic_units",
+    });
+};
+
+/**
+ * Get Celery Polling Surface Data
+ * Get surface data via Celery.
+ */
+export const getCeleryPollingSurfaceData = <ThrowOnError extends boolean = false>(
+    options: Options<GetCeleryPollingSurfaceDataData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<
+        GetCeleryPollingSurfaceDataResponse_api,
+        GetCeleryPollingSurfaceDataError_api,
+        ThrowOnError
+    >({
+        ...options,
+        url: "/surface/celery_polling_surface_data",
+    });
+};
+
+/**
+ * Get Sigurd Experiment
+ */
+export const getSigurdExperiment = <ThrowOnError extends boolean = false>(
+    options?: Options<GetSigurdExperimentData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<GetSigurdExperimentResponse_api, unknown, ThrowOnError>({
+        ...options,
+        url: "/surface/sigurd_experiment",
     });
 };
 

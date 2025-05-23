@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"runtime"
@@ -12,6 +13,7 @@ import (
 	"surface_query/handlers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 	"github.com/lmittmann/tint"
 )
 
@@ -30,6 +32,40 @@ func main() {
 	logger.Info(fmt.Sprintf("Num logical CPUs=%v, GOMAXPROCS=%v", numCpus, goMaxProcs))
 
 	router := gin.Default()
+
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	redisOpt := asynq.RedisClientOpt{
+		Addr: "redis-cache:6379",
+	}
+
+	srv := asynq.NewServer(
+		redisOpt,
+		asynq.Config{
+			Concurrency: 10,
+			Queues: map[string]int{
+				"default":  6,
+				"critical": 4,
+			},
+		},
+	)
+
+	mux := asynq.NewServeMux()
+	mux.HandleFunc("test:dummyOp", handlers.HandleDummyOpTask)
+
+	go func() {
+		if err := srv.Run(mux); err != nil {
+			log.Fatalf("Could not start Asynq server: %v", err)
+		}
+	}()
+
+	logger.Info("Asynq Worker is running...")
+
+	dummyOpHandlers := handlers.NewDummyOpHandlers(redisOpt)
+	router.POST("/dummy_op", dummyOpHandlers.HandleEnqueueDummyOp)
+	router.GET("/dummy_op_status/:task_id", dummyOpHandlers.HandleStatusDummyOp)
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	router.GET("/", handlers.HandleRoot)
 	router.POST("/sample_in_points", handlers.HandleSampleInPoints)

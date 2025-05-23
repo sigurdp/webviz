@@ -10,6 +10,10 @@ import { rotatePoint2Around } from "@lib/utils/vec2";
 import { ContentError, ContentInfo } from "@modules/_shared/components/ContentMessage";
 import { usePropagateApiErrorToStatusWriter } from "@modules/_shared/hooks/usePropagateApiErrorToStatusWriter";
 import { useSurfaceDataQueryByAddress } from "@modules_shared/Surface";
+import { SurfaceDataFloat_trans } from "@modules_shared/Surface/queryDataTransforms";
+//import { useCelerySurfaceDataQueryByAddress, UseQueryResultWithProgress } from "@modules_shared/Surface/queryHooks";
+import { useCeleryPollingSurfaceDataQueryByAddress } from "@modules_shared/Surface/queryHooks";
+
 
 import type { Interfaces } from "./interfaces";
 
@@ -19,7 +23,10 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     const statusWriter = useViewStatusWriter(props.viewContext);
 
     //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "png", null, true);
-    const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, true);
+    //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, true);
+    const surfDataQuery = useCeleryPollingSurfaceDataQueryByAddress(surfaceAddress, true);
+
+    console.log(`ProgressMsg: ${surfDataQuery.progressMsg}`);
 
     const isLoading = surfDataQuery.isFetching;
     statusWriter.setLoading(isLoading);
@@ -27,7 +34,7 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     const hasError = surfDataQuery.isError;
     usePropagateApiErrorToStatusWriter(surfDataQuery, statusWriter);
 
-    const surfData = surfDataQuery.data;
+    const surfData = surfDataQuery.data && "valuesFloat32Arr" in surfDataQuery.data ? surfDataQuery.data : null;
 
     return (
         <div className="relative w-full h-full flex flex-col">

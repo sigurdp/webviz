@@ -173,6 +173,16 @@ export type EnsembleSensitivityCase_api = {
     realizations: Array<number>;
 };
 
+export type ErrorInfo_api = {
+    message: string;
+    code: number;
+};
+
+export type ErrorTaskResp_api = {
+    status: "error";
+    error: ErrorInfo_api;
+};
+
 export type FenceMeshSection_api = {
     vertices_uz_b64arr: B64FloatArray_api;
     poly_indices_b64arr: B64UintArray_api;
@@ -302,6 +312,11 @@ export type HttpValidationError_api = {
     detail?: Array<ValidationError_api>;
 };
 
+export type InProgressTaskResp_api = {
+    status: "inProgress";
+    progress: ProgressInfo_api;
+};
+
 /**
  * Statistical volumetric data for single volume table
  *
@@ -402,6 +417,17 @@ export type InplaceVolumetricsTableDefinition_api = {
     identifiersWithValues: Array<InplaceVolumetricsIdentifierWithValues_api>;
 };
 
+export type MyAscResult_api = {
+    format: "asc";
+    the_string: string;
+    the_value: number;
+};
+
+export type MyBinResult_api = {
+    format: "bin";
+    base64_str: string;
+};
+
 export type NetworkNode_api = {
     node_type: "Group" | "Well";
     node_label: string;
@@ -474,6 +500,10 @@ export type PolylineIntersection_api = {
     grid_dimensions: GridDimensions_api;
     min_grid_prop_value: number;
     max_grid_prop_value: number;
+};
+
+export type ProgressInfo_api = {
+    progress_message: string;
 };
 
 export type PvtData_api = {
@@ -744,6 +774,16 @@ export type StratigraphicUnit_api = {
     lithologyType?: number | number | string;
 };
 
+export type SuccessTaskRespMyAscResult_api = {
+    status: "success";
+    data: MyAscResult_api;
+};
+
+export type SuccessTaskRespMyBinResult_api = {
+    status: "success";
+    data: MyBinResult_api;
+};
+
 /**
  * A single observation of a summary vector at a specific date.
  */
@@ -920,6 +960,11 @@ export type TableColumnStatisticalData_api = {
     statisticValues: {
         [key: string]: Array<number>;
     };
+};
+
+export type TaskProgress_api = {
+    progress: string;
+    task_id: string;
 };
 
 export enum UnitType_api {
@@ -2250,6 +2295,54 @@ export type DeprecatedGetStratigraphicUnitsResponses_api = {
 
 export type DeprecatedGetStratigraphicUnitsResponse_api =
     DeprecatedGetStratigraphicUnitsResponses_api[keyof DeprecatedGetStratigraphicUnitsResponses_api];
+
+export type GetCeleryPollingSurfaceDataData_api = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Surface address string, supported address types are *REAL*, *OBS* and *STAT*
+         */
+        surf_addr_str: string;
+    };
+    url: "/surface/celery_polling_surface_data";
+};
+
+export type GetCeleryPollingSurfaceDataErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type GetCeleryPollingSurfaceDataError_api =
+    GetCeleryPollingSurfaceDataErrors_api[keyof GetCeleryPollingSurfaceDataErrors_api];
+
+export type GetCeleryPollingSurfaceDataResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: SurfaceDataFloat_api | TaskProgress_api;
+};
+
+export type GetCeleryPollingSurfaceDataResponse_api =
+    GetCeleryPollingSurfaceDataResponses_api[keyof GetCeleryPollingSurfaceDataResponses_api];
+
+export type GetSigurdExperimentData_api = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: "/surface/sigurd_experiment";
+};
+
+export type GetSigurdExperimentResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: SuccessTaskRespMyAscResult_api | SuccessTaskRespMyBinResult_api | InProgressTaskResp_api | ErrorTaskResp_api;
+};
+
+export type GetSigurdExperimentResponse_api = GetSigurdExperimentResponses_api[keyof GetSigurdExperimentResponses_api];
 
 export type GetParameterNamesAndDescriptionData_api = {
     body?: never;

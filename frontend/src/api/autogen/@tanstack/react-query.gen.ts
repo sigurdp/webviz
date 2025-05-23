@@ -30,6 +30,8 @@ import {
     getDeltaSurfaceData,
     getMisfitSurfaceData,
     deprecatedGetStratigraphicUnits,
+    getCeleryPollingSurfaceData,
+    getSigurdExperiment,
     getParameterNamesAndDescription,
     getParameter,
     getParameters,
@@ -110,6 +112,8 @@ import type {
     GetDeltaSurfaceDataData_api,
     GetMisfitSurfaceDataData_api,
     DeprecatedGetStratigraphicUnitsData_api,
+    GetCeleryPollingSurfaceDataData_api,
+    GetSigurdExperimentData_api,
     GetParameterNamesAndDescriptionData_api,
     GetParameterData_api,
     GetParametersData_api,
@@ -747,6 +751,44 @@ export const deprecatedGetStratigraphicUnitsOptions = (options: Options<Deprecat
             return data;
         },
         queryKey: deprecatedGetStratigraphicUnitsQueryKey(options),
+    });
+};
+
+export const getCeleryPollingSurfaceDataQueryKey = (options: Options<GetCeleryPollingSurfaceDataData_api>) => [
+    createQueryKey("getCeleryPollingSurfaceData", options),
+];
+
+export const getCeleryPollingSurfaceDataOptions = (options: Options<GetCeleryPollingSurfaceDataData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getCeleryPollingSurfaceData({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getCeleryPollingSurfaceDataQueryKey(options),
+    });
+};
+
+export const getSigurdExperimentQueryKey = (options?: Options<GetSigurdExperimentData_api>) => [
+    createQueryKey("getSigurdExperiment", options),
+];
+
+export const getSigurdExperimentOptions = (options?: Options<GetSigurdExperimentData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getSigurdExperiment({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getSigurdExperimentQueryKey(options),
     });
 };
 

@@ -7,6 +7,11 @@ from primary import config
 celeryconfig = {
     "broker_url": config.CELERY_BROKER_URL,
     "result_backend": config.CELERY_RESULT_BACKEND,
+    
+    "task_track_started": True,
+    # "result_extended": True,
+    # "worker_send_task_events": True,
+    # "result_persistent ": True,
 
     # Celery defaults
     # "worker_log_format": "[%(asctime)s: %(levelname)s/%(processName)s] %(message)s",

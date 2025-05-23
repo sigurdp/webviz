@@ -282,13 +282,14 @@ async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
         result: AsyncResult = test_tasks.surface_from_addr.delay(authenticated_user._sumo_access_token, surf_addr_str)
 
     timeout = 10.0  # seconds
-    poll_interval = 0.5  # seconds
+    poll_interval = 0.1  # seconds
     waited = 0
-
     async with start_otel_span_async("poll-task"):
         while not result.ready() and waited < timeout:
             await asyncio.sleep(poll_interval)
             waited += poll_interval
+            LOGGER.debug(f"waiting for task {result.id} to complete... {waited=:.1f} {result.status=} {result.state=} {result.info=}")
+            
 
     LOGGER.info(result)
     LOGGER.info(f"get_celery_surf task: {waited=} - {result.id=}, {result.status=}, {result.result=}")
@@ -330,6 +331,46 @@ async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
             LOGGER.error(f"Failed to connect to Azure Blob Storage")
 
     return f"get_celery_surf: time: {datetime.datetime.now()}  {result.id=}, {result.status=}, {result.result=}, {blob_download_ok=}"
+
+
+
+
+import json
+from primary import config
+from primary.services.utils.httpx_async_client_wrapper import HTTPX_ASYNC_CLIENT_WRAPPER
+
+
+@router.get("/go_test")
+@no_cache
+async def get_go_test() -> str:
+
+    LOGGER.info(f"get_go_test start !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
+    req_body = {
+        "myString": "HeiSigurd",
+        "myInt": 123,
+    }
+    post_response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(url=f"{config.SURFACE_QUERY_URL}/dummy_op", json=req_body)
+    task_id = post_response.json()["task_id"]
+    LOGGER.info(f"get_go_test post_response: {task_id=}  {post_response=}  {post_response.text=}")
+
+    timeout = 10.0  # seconds
+    poll_interval = 0.1  # seconds
+    waited = 0
+    is_result_ready = False
+    while not is_result_ready and waited < timeout:
+        await asyncio.sleep(poll_interval)
+        waited += poll_interval
+
+        poll_response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(url=f"{config.SURFACE_QUERY_URL}/dummy_op_status/{task_id}")
+        LOGGER.debug(f"get_go_test poll_response: {poll_response=}  {poll_response.text=}")
+
+        status = poll_response.json()["status"]
+        is_result_ready = status in ["completed", "archived"]
+        LOGGER.info(f"get_go_test response: {is_result_ready=}  {status=}   {poll_response=}  {poll_response.text=}")
+
+    return f"get_go_test: time: {datetime.datetime.now()}"
+
 
 
 
