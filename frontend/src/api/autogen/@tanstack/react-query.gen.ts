@@ -30,6 +30,10 @@ import {
     getDeltaSurfaceData,
     getMisfitSurfaceData,
     deprecatedGetStratigraphicUnits,
+    postAlwaysLongRunning,
+    getAlwaysLongRunningStatus,
+    getMaybeLongRunning,
+    getDummyWithMultipleModels,
     getParameterNamesAndDescription,
     getParameter,
     getParameters,
@@ -110,6 +114,12 @@ import type {
     GetDeltaSurfaceDataData_api,
     GetMisfitSurfaceDataData_api,
     DeprecatedGetStratigraphicUnitsData_api,
+    PostAlwaysLongRunningData_api,
+    PostAlwaysLongRunningError_api,
+    PostAlwaysLongRunningResponse_api,
+    GetAlwaysLongRunningStatusData_api,
+    GetMaybeLongRunningData_api,
+    GetDummyWithMultipleModelsData_api,
     GetParameterNamesAndDescriptionData_api,
     GetParameterData_api,
     GetParametersData_api,
@@ -747,6 +757,100 @@ export const deprecatedGetStratigraphicUnitsOptions = (options: Options<Deprecat
             return data;
         },
         queryKey: deprecatedGetStratigraphicUnitsQueryKey(options),
+    });
+};
+
+export const postAlwaysLongRunningQueryKey = (options: Options<PostAlwaysLongRunningData_api>) => [
+    createQueryKey("postAlwaysLongRunning", options),
+];
+
+export const postAlwaysLongRunningOptions = (options: Options<PostAlwaysLongRunningData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postAlwaysLongRunning({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postAlwaysLongRunningQueryKey(options),
+    });
+};
+
+export const postAlwaysLongRunningMutation = (options?: Partial<Options<PostAlwaysLongRunningData_api>>) => {
+    const mutationOptions: UseMutationOptions<
+        PostAlwaysLongRunningResponse_api,
+        AxiosError<PostAlwaysLongRunningError_api>,
+        Options<PostAlwaysLongRunningData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postAlwaysLongRunning({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const getAlwaysLongRunningStatusQueryKey = (options: Options<GetAlwaysLongRunningStatusData_api>) => [
+    createQueryKey("getAlwaysLongRunningStatus", options),
+];
+
+export const getAlwaysLongRunningStatusOptions = (options: Options<GetAlwaysLongRunningStatusData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getAlwaysLongRunningStatus({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getAlwaysLongRunningStatusQueryKey(options),
+    });
+};
+
+export const getMaybeLongRunningQueryKey = (options: Options<GetMaybeLongRunningData_api>) => [
+    createQueryKey("getMaybeLongRunning", options),
+];
+
+export const getMaybeLongRunningOptions = (options: Options<GetMaybeLongRunningData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getMaybeLongRunning({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getMaybeLongRunningQueryKey(options),
+    });
+};
+
+export const getDummyWithMultipleModelsQueryKey = (options?: Options<GetDummyWithMultipleModelsData_api>) => [
+    createQueryKey("getDummyWithMultipleModels", options),
+];
+
+export const getDummyWithMultipleModelsOptions = (options?: Options<GetDummyWithMultipleModelsData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getDummyWithMultipleModels({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getDummyWithMultipleModelsQueryKey(options),
     });
 };
 

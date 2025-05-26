@@ -77,6 +77,17 @@ import type {
     DeprecatedGetStratigraphicUnitsData_api,
     DeprecatedGetStratigraphicUnitsResponse_api,
     DeprecatedGetStratigraphicUnitsError_api,
+    PostAlwaysLongRunningData_api,
+    PostAlwaysLongRunningResponse_api,
+    PostAlwaysLongRunningError_api,
+    GetAlwaysLongRunningStatusData_api,
+    GetAlwaysLongRunningStatusResponse_api,
+    GetAlwaysLongRunningStatusError_api,
+    GetMaybeLongRunningData_api,
+    GetMaybeLongRunningResponse_api,
+    GetMaybeLongRunningError_api,
+    GetDummyWithMultipleModelsData_api,
+    GetDummyWithMultipleModelsResponse_api,
     GetParameterNamesAndDescriptionData_api,
     GetParameterNamesAndDescriptionResponse_api,
     GetParameterNamesAndDescriptionError_api,
@@ -641,6 +652,58 @@ export const deprecatedGetStratigraphicUnits = <ThrowOnError extends boolean = f
     >({
         ...options,
         url: "/surface/deprecated_stratigraphic_units",
+    });
+};
+
+/**
+ * Post Always Long Running
+ */
+export const postAlwaysLongRunning = <ThrowOnError extends boolean = false>(
+    options: Options<PostAlwaysLongRunningData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<PostAlwaysLongRunningResponse_api, PostAlwaysLongRunningError_api, ThrowOnError>({
+        ...options,
+        url: "/surface/always_long_running",
+    });
+};
+
+/**
+ * Get Always Long Running Status
+ */
+export const getAlwaysLongRunningStatus = <ThrowOnError extends boolean = false>(
+    options: Options<GetAlwaysLongRunningStatusData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<
+        GetAlwaysLongRunningStatusResponse_api,
+        GetAlwaysLongRunningStatusError_api,
+        ThrowOnError
+    >({
+        ...options,
+        url: "/surface/always_long_running_status",
+    });
+};
+
+/**
+ * Get Maybe Long Running
+ */
+export const getMaybeLongRunning = <ThrowOnError extends boolean = false>(
+    options: Options<GetMaybeLongRunningData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<GetMaybeLongRunningResponse_api, GetMaybeLongRunningError_api, ThrowOnError>({
+        ...options,
+        url: "/surface/maybe_long_running",
+    });
+};
+
+/**
+ * Get Dummy With Multiple Models
+ */
+export const getDummyWithMultipleModels = <ThrowOnError extends boolean = false>(
+    options?: Options<GetDummyWithMultipleModelsData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<GetDummyWithMultipleModelsResponse_api, unknown, ThrowOnError>({
+        ...options,
+        url: "/surface/dummy_with_multiple_models",
     });
 };
 

@@ -28,6 +28,7 @@ from primary.routers.pvt.router import router as pvt_router
 from primary.routers.rft.router import router as rft_router
 from primary.routers.seismic.router import router as seismic_router
 from primary.routers.surface.router import router as surface_router
+from primary.routers.surface.router_lro_spike import router as router_lro_spike
 from primary.routers.timeseries.router import router as timeseries_router
 from primary.routers.vfp.router import router as vfp_router
 from primary.routers.well.router import router as well_router
@@ -93,6 +94,7 @@ app.include_router(explore_router, tags=["explore"])
 app.include_router(timeseries_router, prefix="/timeseries", tags=["timeseries"])
 app.include_router(inplace_volumetrics_router, prefix="/inplace_volumetrics", tags=["inplace_volumetrics"])
 app.include_router(surface_router, prefix="/surface", tags=["surface"])
+app.include_router(router_lro_spike, prefix="/surface", tags=["surface"])
 app.include_router(parameters_router, prefix="/parameters", tags=["parameters"])
 app.include_router(grid3d_router, prefix="/grid3d", tags=["grid3d"])
 app.include_router(flow_network_router, prefix="/flow_network", tags=["flow_network"])
@@ -120,7 +122,7 @@ app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total-ex
 
 # Add out custom middleware to enforce that user is logged in
 # Also redirects to /login endpoint for some select paths
-unprotected_paths = ["/logout", "/logged_in_user", "/alive", "/openapi.json"]
+unprotected_paths = ["/logout", "/logged_in_user", "/alive", "/openapi.json", "/surface/always_long_running", "/surface/always_long_running_status", "/surface/maybe_long_running"]
 paths_redirected_to_login = ["/", "/alive_protected"]
 
 app.add_middleware(

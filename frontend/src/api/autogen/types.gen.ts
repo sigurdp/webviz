@@ -173,6 +173,10 @@ export type EnsembleSensitivityCase_api = {
     realizations: Array<number>;
 };
 
+export type ErrorInfo_api = {
+    message: string;
+};
+
 export type FenceMeshSection_api = {
     vertices_uz_b64arr: B64FloatArray_api;
     poly_indices_b64arr: B64UintArray_api;
@@ -402,6 +406,48 @@ export type InplaceVolumetricsTableDefinition_api = {
     identifiersWithValues: Array<InplaceVolumetricsIdentifierWithValues_api>;
 };
 
+export type LroErrorResp_api = {
+    status: "failure";
+    error: ErrorInfo_api;
+};
+
+export type LroInProgressResp_api = {
+    status: "in_progress";
+    operation_id: string;
+    poll_url?: string | null;
+    progress?: ProgressInfo_api | null;
+};
+
+export type LroSuccessRespMyAscResult_api = {
+    status: "success";
+    data: MyAscResult_api;
+};
+
+export type LroSuccessRespMyBinResult_api = {
+    status: "success";
+    data: MyBinResult_api;
+};
+
+export type LroSuccessRespMyResult_api = {
+    status: "success";
+    data: MyResult_api;
+};
+
+export type MyAscResult_api = {
+    format: "asc";
+    the_string: string;
+    the_value: number;
+};
+
+export type MyBinResult_api = {
+    format: "bin";
+    base64_str: string;
+};
+
+export type MyResult_api = {
+    my_string: string;
+};
+
 export type NetworkNode_api = {
     node_type: "Group" | "Well";
     node_label: string;
@@ -474,6 +520,10 @@ export type PolylineIntersection_api = {
     grid_dimensions: GridDimensions_api;
     min_grid_prop_value: number;
     max_grid_prop_value: number;
+};
+
+export type ProgressInfo_api = {
+    progress_message: string;
 };
 
 export type PvtData_api = {
@@ -2250,6 +2300,109 @@ export type DeprecatedGetStratigraphicUnitsResponses_api = {
 
 export type DeprecatedGetStratigraphicUnitsResponse_api =
     DeprecatedGetStratigraphicUnitsResponses_api[keyof DeprecatedGetStratigraphicUnitsResponses_api];
+
+export type PostAlwaysLongRunningData_api = {
+    body?: never;
+    path?: never;
+    query: {
+        a: string;
+        b: string;
+        delay?: number;
+    };
+    url: "/surface/always_long_running";
+};
+
+export type PostAlwaysLongRunningErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type PostAlwaysLongRunningError_api = PostAlwaysLongRunningErrors_api[keyof PostAlwaysLongRunningErrors_api];
+
+export type PostAlwaysLongRunningResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api;
+};
+
+export type PostAlwaysLongRunningResponse_api = PostAlwaysLongRunningResponses_api[keyof PostAlwaysLongRunningResponses_api];
+
+export type GetAlwaysLongRunningStatusData_api = {
+    body?: never;
+    path?: never;
+    query: {
+        task_id: string;
+    };
+    url: "/surface/always_long_running_status";
+};
+
+export type GetAlwaysLongRunningStatusErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type GetAlwaysLongRunningStatusError_api = GetAlwaysLongRunningStatusErrors_api[keyof GetAlwaysLongRunningStatusErrors_api];
+
+export type GetAlwaysLongRunningStatusResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api | LroErrorResp_api | LroSuccessRespMyResult_api;
+};
+
+export type GetAlwaysLongRunningStatusResponse_api =
+    GetAlwaysLongRunningStatusResponses_api[keyof GetAlwaysLongRunningStatusResponses_api];
+
+export type GetMaybeLongRunningData_api = {
+    body?: never;
+    path?: never;
+    query: {
+        a: string;
+        b: string;
+        delay?: number;
+    };
+    url: "/surface/maybe_long_running";
+};
+
+export type GetMaybeLongRunningErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type GetMaybeLongRunningError_api = GetMaybeLongRunningErrors_api[keyof GetMaybeLongRunningErrors_api];
+
+export type GetMaybeLongRunningResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api | LroErrorResp_api | LroSuccessRespMyResult_api;
+};
+
+export type GetMaybeLongRunningResponse_api = GetMaybeLongRunningResponses_api[keyof GetMaybeLongRunningResponses_api];
+
+export type GetDummyWithMultipleModelsData_api = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: "/surface/dummy_with_multiple_models";
+};
+
+export type GetDummyWithMultipleModelsResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api | LroErrorResp_api | LroSuccessRespMyAscResult_api | LroSuccessRespMyBinResult_api;
+};
+
+export type GetDummyWithMultipleModelsResponse_api =
+    GetDummyWithMultipleModelsResponses_api[keyof GetDummyWithMultipleModelsResponses_api];
 
 export type GetParameterNamesAndDescriptionData_api = {
     body?: never;
