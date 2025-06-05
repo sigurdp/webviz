@@ -349,25 +349,27 @@ async def get_go_test() -> str:
     req_body = {
         "myString": "HeiSigurd",
         "myInt": 123,
+        "durationSec": 3,
+        "shouldFail": False,
     }
-    post_response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(url=f"{config.SURFACE_QUERY_URL}/dummy_op", json=req_body)
-    task_id = post_response.json()["task_id"]
+    post_response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(url=f"{config.SURFACE_QUERY_URL}/enqueue_task/dummyOp", json=req_body)
+    task_id = post_response.json()["taskId"]
     LOGGER.info(f"get_go_test post_response: {task_id=}  {post_response=}  {post_response.text=}")
 
     timeout = 10.0  # seconds
     poll_interval = 0.1  # seconds
     waited = 0
-    is_result_ready = False
-    while not is_result_ready and waited < timeout:
+    has_completed = False
+    while not has_completed and waited < timeout:
         await asyncio.sleep(poll_interval)
         waited += poll_interval
 
-        poll_response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(url=f"{config.SURFACE_QUERY_URL}/dummy_op_status/{task_id}")
+        poll_response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(url=f"{config.SURFACE_QUERY_URL}/task_status/{task_id}")
         LOGGER.debug(f"get_go_test poll_response: {poll_response=}  {poll_response.text=}")
 
         status = poll_response.json()["status"]
-        is_result_ready = status in ["completed", "archived"]
-        LOGGER.info(f"get_go_test response: {is_result_ready=}  {status=}   {poll_response=}  {poll_response.text=}")
+        has_completed = status in ["succeeded", "failed"]
+        LOGGER.info(f"get_go_test response: {has_completed=}  {status=}   {poll_response=}  {poll_response.text=}")
 
     return f"get_go_test: time: {datetime.datetime.now()}"
 

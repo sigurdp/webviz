@@ -68,7 +68,7 @@ func SurfaceInterpolateBilinear(xV, yV []float64, zV []float32, x, y float64) fl
 	// }
 	for i := 0; i <= 3; i++ {
 		if zV[i] >= UndefMap {
-			fmt.Println("Error in SurfaceInterpolateNearestNode: zV[i] is undefined")
+			//fmt.Println("Error in SurfaceInterpolateBilinear: zV[i] is undefined")
 			return UndefMap
 		}
 	}

@@ -10,7 +10,12 @@ import (
 
 	_ "go.uber.org/automaxprocs"
 
+	_ "github.com/joho/godotenv/autoload"
+
+	"surface_query/config"
 	"surface_query/handlers"
+	"surface_query/tasks"
+	"surface_query/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
@@ -23,6 +28,14 @@ func main() {
 
 	logger.Info("Starting surface query server...")
 
+	var cfg config.Config
+	if err := config.Load(&cfg); err != nil {
+		logger.Error("failed to load config from environment variables:", "err", err)
+		os.Exit(1)
+	}
+	logger.Info(fmt.Sprintf("RedisUrl=%v", cfg.RedisUrl))
+	logger.Info(fmt.Sprintf("AzureStorageContainerName=%v", cfg.AzureStorageContainerName))
+
 	// Can be used to force the number of CPUs that can be executing simultaneously
 	// Should not be needed as long as automaxprocs does its job
 	//runtime.GOMAXPROCS(4)
@@ -31,41 +44,43 @@ func main() {
 	goMaxProcs := runtime.GOMAXPROCS(0)
 	logger.Info(fmt.Sprintf("Num logical CPUs=%v, GOMAXPROCS=%v", numCpus, goMaxProcs))
 
-	router := gin.Default()
+	router := gin.New()
+	router.Use(utils.SlogBackedGinLogger(logger))
+	router.Use(gin.Recovery())
 
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	redisOpt := asynq.RedisClientOpt{
-		Addr: "redis-cache:6379",
+	// ============================================================================================
+
+	tempUserStoreFactory := utils.NewTempUserStoreFactory(cfg.RedisUrl, cfg.AzureStorageConnectionString, cfg.AzureStorageContainerName, 2*time.Minute)
+
+	// Parse the RedisUrl for usage with asynq
+	asynqRedisConnOpt, err := asynq.ParseRedisURI(cfg.RedisUrl)
+	if err != nil {
+		logger.Error("failed to parse Redis URL for usage with asynq", "err", err)
+		os.Exit(1)
 	}
 
-	srv := asynq.NewServer(
-		redisOpt,
-		asynq.Config{
-			Concurrency: 10,
-			Queues: map[string]int{
-				"default":  6,
-				"critical": 4,
-			},
-		},
+	asynqServer := asynq.NewServer(
+		asynqRedisConnOpt,
+		asynq.Config{Concurrency: 2},
 	)
 
+	taskDeps := tasks.NewTaskDeps(tempUserStoreFactory)
+
 	mux := asynq.NewServeMux()
-	mux.HandleFunc("test:dummyOp", handlers.HandleDummyOpTask)
+	mux.HandleFunc("dummy", taskDeps.ProcessDummyTask)
+	mux.HandleFunc("sample_in_points", taskDeps.ProcessSampleInPointsTask)
 
 	go func() {
-		if err := srv.Run(mux); err != nil {
-			log.Fatalf("Could not start Asynq server: %v", err)
+		if err := asynqServer.Run(mux); err != nil {
+			log.Fatalf("could not start Asynq server: %v", err)
 		}
 	}()
-
 	logger.Info("Asynq Worker is running...")
 
-	dummyOpHandlers := handlers.NewDummyOpHandlers(redisOpt)
-	router.POST("/dummy_op", dummyOpHandlers.HandleEnqueueDummyOp)
-	router.GET("/dummy_op_status/:task_id", dummyOpHandlers.HandleStatusDummyOp)
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	httpBridgeHandler := tasks.NewHttpBridgeHandlers(asynqRedisConnOpt)
+	httpBridgeHandler.MapRoutes(router)
+
+	// ============================================================================================
 
 	router.GET("/", handlers.HandleRoot)
 	router.POST("/sample_in_points", handlers.HandleSampleInPoints)
