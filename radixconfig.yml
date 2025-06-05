@@ -180,6 +180,8 @@ spec:
       ports:
         - name: http
           port: 5001
+      secrets:
+        - AZURE_STORAGE_CONNECTION_STRING
       resources:
         requests:
           memory: 8Gi
