@@ -6,43 +6,99 @@ import msgpack
 from typing import Type, Literal
 
 import redis.asyncio as redis
-from dotenv import load_dotenv
 from aiocache import BaseCache, RedisCache
 from aiocache.serializers import MsgPackSerializer, PickleSerializer, StringSerializer
 from redis.asyncio.connection import ConnectKwargs, parse_url
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 from azure.storage.blob.aio import BlobServiceClient, ContainerClient, StorageStreamDownloader, BlobClient
 from azure.storage.blob import ContentSettings
-from azure.core.exceptions import ResourceExistsError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.storage.blob import ContainerClient as SyncContainerClient
 from pydantic import BaseModel
-
-from primary import config
 
 from .authenticated_user import AuthenticatedUser
 
 
+_REDIS_KEY_PREFIX = "temp_user_store_index"
+_BLOB_CONTAINER_NAME = "test-user-scoped-temp-storage"
+
+
 LOGGER = logging.getLogger(__name__)
 
-load_dotenv()
-AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 
-BLOB_CONTAINER_NAME = "test-user-scoped-temp-storage"
+class TempUserStoreFactory:
+    _instance = None
 
-REDIS_NAMESPACE = "userScopedTempStorageIndex"
-REDIS_TTL = 20 # 20 seconds for testing
+    def __init__(self, aio_cache: BaseCache, container_client: ContainerClient):
+        self._aio_cache = aio_cache
+        self._container_client = container_client
+
+    @classmethod
+    def initialize(cls, redis_url: str, storage_account_conn_string: str, ttl_s: float):
+        if cls._instance is not None:
+            raise RuntimeError("TempUserStoreFactory is already initialized")
+
+        # Do a hard fail if the storage container does not exist
+        # We don't create the container automatically since currently, the container will require manual
+        # setup anyways in order to configure lifecycle policies.
+        if not _check_if_blob_container_exists(storage_account_conn_string, _BLOB_CONTAINER_NAME):
+            raise RuntimeError(f"Blob container specified for TempUserStore does not exist: {_BLOB_CONTAINER_NAME}")
+
+        redis_url_options: ConnectKwargs = parse_url(redis_url)
+        aio_cache = RedisCache(
+            endpoint=redis_url_options["host"],
+            port=redis_url_options["port"],
+            serializer=StringSerializer(),
+            namespace=_REDIS_KEY_PREFIX,
+            ttl=ttl_s,
+        )
+
+        blob_service_client = BlobServiceClient.from_connection_string(storage_account_conn_string)
+        container_client = blob_service_client.get_container_client(_BLOB_CONTAINER_NAME)
+
+        cls._instance = cls(aio_cache, container_client)
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            raise RuntimeError("TempUserStoreFactory is not initialized, call initialize() first")
+        return cls._instance
+
+    def get_store_for_user(self, authenticated_user: AuthenticatedUser) -> "TempUserStore":
+        if not authenticated_user:
+            raise ValueError("An authenticated_user must be specified")
+
+        return TempUserStore(self._aio_cache, self._container_client, authenticated_user)
 
 
+class TempUserStore:
+    """
+    The class provides a temporary user-scoped storage system using Redis and Azure Blob Storage.
 
-class UserScopedTempStorage:
+    Redis is used for fast indexing and lookups, while Azure Blob Storage is used for the actual data payloads.
+
+    Each user gets their own storage area to prevent data leakage between users.
+
+    This is a temporary storage solution with automatic expiration (set by a ttl in seconds). The TTL determines
+    when the Redis entries expire, but does not affect the actual Blob data. Cleanup of blob data must be managed
+    separately by using Azure Blob Storage lifecycle policies or manual deletion.
+
+    It is very important that the lifetime of the blob data **must** be longer than the specified TTL. Otherwise, we
+    risk having Redis entries pointing to blobs that no longer exist, which would lead to cache misses and errors.
+
+    The current assumption is that TTL is in the order of hours, which would mean that a lifecycle policy that
+    deletes blobs older than a day or two would be appropriate.
+    """
+
     def __init__(self, aio_cache: BaseCache, container_client: ContainerClient, authenticated_user: AuthenticatedUser):
         self._cache = aio_cache
         self._container_client = container_client
-        self._authenticated_user_id = authenticated_user.get_user_id()
+        self._user_id = authenticated_user.get_user_id()
 
     async def put_bytes(self, key: str, payload: bytes, blob_extension: str) -> bool:
         perf_metrics = PerfMetrics()
 
-        #blob_name = self._make_full_blob_name_from_payload(payload, blob_extension)
+        # blob_name = self._make_full_blob_name_from_payload(payload, blob_extension)
         blob_name = self._make_full_blob_name(key, blob_extension)
         perf_metrics.record_lap("make-blob-name")
 
@@ -94,7 +150,7 @@ class UserScopedTempStorage:
             blob_extension = "json"
         else:
             raise ValueError(f"Unsupported serialize_as value: {serialize_as}")
-        
+
         perf_metrics.record_lap("serialize")
 
         ret_val = await self.put_bytes(key, payload, blob_extension=blob_extension)
@@ -105,7 +161,9 @@ class UserScopedTempStorage:
 
         return ret_val
 
-    async def get_pydantic(self, model_class: Type[BaseModel], key: str, serialized_as: Literal["msgpack", "json"]) -> BaseModel | None:
+    async def get_pydantic(
+        self, model_class: Type[BaseModel], key: str, serialized_as: Literal["msgpack", "json"]
+    ) -> BaseModel | None:
         perf_metrics = PerfMetrics()
 
         payload = await self.get_bytes(key)
@@ -121,12 +179,10 @@ class UserScopedTempStorage:
                 model = model_class.model_validate_json(payload.decode("utf-8"))
             else:
                 raise ValueError(f"Unsupported serialized_as value: {serialized_as}")
-            
+
             perf_metrics.record_lap("deserialize")
         except Exception as e:
-            LOGGER.debug(
-                f"##### get_pydantic() deserialize failed took: {perf_metrics.to_string()}  [{key=}]"
-            )
+            LOGGER.debug(f"##### get_pydantic() deserialize failed took: {perf_metrics.to_string()}  [{key=}]")
             return None
 
         size_mb = len(payload) / (1024 * 1024)
@@ -135,14 +191,14 @@ class UserScopedTempStorage:
         return model
 
     def _make_full_redis_key(self, key: str) -> str:
-        return f"user:{self._authenticated_user_id}:{key}"
+        return f"user:{self._user_id}:{key}"
 
     def _make_full_blob_name(self, key: str, extension: str) -> str:
-        return f"user__{self._authenticated_user_id}/key__{key}.{extension}"
+        return f"user__{self._user_id}/key__{key}.{extension}"
 
     def _make_full_blob_name_from_payload(self, payload: bytes, extension: str) -> str:
         # We could remove the user id from the blob name to save space which will de-dupe the blob payloads
-        return f"user__{self._authenticated_user_id}/payload__{_compute_payload_hash(payload)}.{extension}"
+        return f"user__{self._user_id}/payload__{_compute_payload_hash(payload)}.{extension}"
 
 
 def _pydantic_to_msgpack(model: BaseModel) -> bytes:
@@ -177,8 +233,8 @@ async def _upload_or_refresh_blob(container_client: ContainerClient, blob_key: s
         # existing_blob_properties = await blob_client.get_blob_properties()
         # metadata = existing_blob_properties.metadata
         # metadata["refreshedAt"] = datetime.utcnow().isoformat())
-        
-        metadata =  {"refreshedAt": datetime.datetime.utcnow().isoformat()}
+
+        metadata = {"refreshedAt": datetime.datetime.utcnow().isoformat()}
         await blob_client.set_blob_metadata(metadata)
         LOGGER.debug(f"##### _upload_or_refresh_blob() REFRESHED {metadata=}")
 
@@ -196,37 +252,25 @@ async def _download_blob(container_client: ContainerClient, blob_name: str) -> b
         return None
 
 
-_redis_url_options: ConnectKwargs = parse_url(config.REDIS_CACHE_URL)
-
-_aio_cache = RedisCache(
-    endpoint=_redis_url_options["host"],
-    port=_redis_url_options["port"],
-    serializer=StringSerializer(),
-    namespace=REDIS_NAMESPACE,
-    ttl=REDIS_TTL
-)
-
-_blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-_container_client = _blob_service_client.get_container_client(BLOB_CONTAINER_NAME)
-
-
-def _ensure_container_is_created():
-    from azure.storage.blob import ContainerClient as SyncContainerClient
-
+def _check_if_blob_container_exists(storage_account_conn_string: str, container_name: str) -> bool:
     sync_container_client = SyncContainerClient.from_connection_string(
-        conn_str=AZURE_STORAGE_CONNECTION_STRING, container_name=BLOB_CONTAINER_NAME
+        conn_str=storage_account_conn_string,
+        container_name=container_name,
     )
 
     try:
-        sync_container_client.create_container()
-    except Exception:
-        pass  # Container probably already exists
-    finally:
-        sync_container_client.close()
+        sync_container_client.get_container_properties()
+        return True
+    except ResourceNotFoundError:
+        return False
+    except Exception as e:
+        LOGGER.error(f"Failed to check if blob container exists: {e}")
+        return False
 
 
-_ensure_container_is_created()
-
-
-def get_user_scoped_temp_storage(authenticated_user: AuthenticatedUser) -> UserScopedTempStorage:
-    return UserScopedTempStorage(_aio_cache, _container_client, authenticated_user)
+def get_temp_user_store_for_user(authenticated_user: AuthenticatedUser) -> TempUserStore:
+    """
+    Convenience function to get a TempUserStore instance for the specified authenticated user.
+    """
+    factory = TempUserStoreFactory.get_instance()
+    return factory.get_store_for_user(authenticated_user)

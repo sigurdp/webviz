@@ -13,24 +13,30 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Constants scoped to this file
+const (
+	tus_redisKeyPrefix    = "temp_user_store_index"
+	tus_blobContainerName = "test-user-scoped-temp-storage"
+)
+
 type TempUserStoreFactory struct {
 	redisClient     *redis.Client
 	containerClient *container.Client
-	ttl             time.Duration
+	ttlDuration     time.Duration
 }
 
 type TempUserStore struct {
 	redisClient     *redis.Client
 	containerClient *container.Client
-	ttl             time.Duration
+	ttlDuration     time.Duration
 	userId          string
 }
 
 // Creates factory for later creation of TempUserStore instances
 // This is useful to avoid creating a new Redis client and Azure Blob Storage client for each user
 // Note that function will panic if it fails to create the Redis or Azure Blob Storage clients
-func NewTempUserStoreFactory(redisUrl string, storageAccountConnStr string, containerName string, ttl time.Duration) *TempUserStoreFactory {
-	slog.Info("Creating TempUserStoreFactory", "redisUrl", redisUrl, "containerName", containerName, "ttl", ttl)
+func NewTempUserStoreFactory(redisUrl string, storageAccountConnStr string, ttlInSeconds int) *TempUserStoreFactory {
+	slog.Info("Creating TempUserStoreFactory", "redisUrl", redisUrl, "blobContainerName", tus_blobContainerName, "ttl(s)", ttlInSeconds)
 
 	redisOpts, err := redis.ParseURL(redisUrl)
 	if err != nil {
@@ -39,7 +45,7 @@ func NewTempUserStoreFactory(redisUrl string, storageAccountConnStr string, cont
 
 	redisClient := redis.NewClient(redisOpts)
 
-	containerClient, err := container.NewClientFromConnectionString(storageAccountConnStr, containerName, nil)
+	containerClient, err := container.NewClientFromConnectionString(storageAccountConnStr, tus_blobContainerName, nil)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create container client: %v", err))
 	}
@@ -58,11 +64,11 @@ func NewTempUserStoreFactory(redisUrl string, storageAccountConnStr string, cont
 	return &TempUserStoreFactory{
 		redisClient:     redisClient,
 		containerClient: containerClient,
-		ttl:             ttl,
+		ttlDuration:     time.Duration(ttlInSeconds) * time.Second,
 	}
 }
 
-// Returns a scoped store for a given user.
+// Returns a user scoped temp store for a given user.
 func (f *TempUserStoreFactory) ForUser(userId string) *TempUserStore {
 	if userId == "" {
 		panic("userId must not be empty")
@@ -72,7 +78,7 @@ func (f *TempUserStoreFactory) ForUser(userId string) *TempUserStore {
 		userId:          userId,
 		redisClient:     f.redisClient,
 		containerClient: f.containerClient,
-		ttl:             f.ttl,
+		ttlDuration:     f.ttlDuration,
 	}
 }
 
@@ -96,15 +102,19 @@ func (s *TempUserStore) PutBytes(ctx context.Context, key string, payloadBytes [
 
 	// For now, mimick the prefix in aiocache
 	// redo this when we switch away from aiocache, but we still probably want a prefix for the Redis keys
-	redisKey := fmt.Sprintf("userScopedTempStorageIndex:user:%s:%s", s.userId, key)
+	redisKey := s.makeFullRedisKey(key)
 	slog.Info("REDIS key", "key", redisKey, "blobName", blobName)
 
-	err = s.redisClient.Set(ctx, redisKey, blobName, s.ttl).Err()
+	err = s.redisClient.Set(ctx, redisKey, blobName, s.ttlDuration).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set Redis key: %w", err)
 	}
 
 	return nil
+}
+
+func (s *TempUserStore) makeFullRedisKey(key string) string {
+	return tus_redisKeyPrefix + ":user:" + s.userId + ":" + key
 }
 
 // Computes the SHA256 hash of the payload bytes and returns the hash as a hex-encoded string.

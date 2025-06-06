@@ -14,7 +14,7 @@ import asyncio
 import hashlib
 import json
 from primary.services.utils.authenticated_user import AuthenticatedUser
-from primary.services.utils.user_scoped_temp_storage import get_user_scoped_temp_storage
+from primary.services.utils.temp_user_store import get_temp_user_store_for_user
 from pydantic import BaseModel
 
 from .surface_query_service import _get_object_uuids_for_surface_realizations_async
@@ -79,7 +79,7 @@ async def task_based_batch_sample_surface_in_points_async(
     params_json = json.dumps(params_for_hash, sort_keys=True, separators=(',', ':'))
     params_hash = hashlib.sha256(params_json.encode('utf-8')).hexdigest()
 
-    temp_user_store = get_user_scoped_temp_storage(authenticated_user)
+    temp_user_store = get_temp_user_store_for_user(authenticated_user)
 
     store_key = f"batch_sample_surface_in_points_async_{params_hash}"
     existing_result = await temp_user_store.get_pydantic(

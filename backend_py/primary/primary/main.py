@@ -34,6 +34,7 @@ from primary.routers.vfp.router import router as vfp_router
 from primary.routers.well.router import router as well_router
 from primary.routers.well_completions.router import router as well_completions_router
 from primary.services.utils.httpx_async_client_wrapper import HTTPX_ASYNC_CLIENT_WRAPPER
+from primary.services.utils.temp_user_store import TempUserStoreFactory
 from primary.utils.azure_monitor_setup import setup_azure_monitor_telemetry
 from primary.utils.exception_handlers import configure_service_level_exception_handlers
 from primary.utils.exception_handlers import override_default_fastapi_exception_handlers
@@ -76,6 +77,12 @@ if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     setup_azure_monitor_telemetry(app)
 else:
     LOGGER.warning("Skipping telemetry configuration, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
+
+
+# Do one time initialization of the factory for TempUserStore instances
+# The initialization will raise an exception if initialization fails
+AZURE_STORAGE_CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+TempUserStoreFactory.initialize(redis_url=config.REDIS_CACHE_URL, storage_account_conn_string=AZURE_STORAGE_CONNECTION_STRING, ttl_s=2*60)
 
 
 # Start the httpx client on startup and stop it on shutdown of the app

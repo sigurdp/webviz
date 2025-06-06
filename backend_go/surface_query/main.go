@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"log"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	_ "go.uber.org/automaxprocs"
@@ -34,23 +38,18 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info(fmt.Sprintf("RedisUrl=%v", cfg.RedisUrl))
-	logger.Info(fmt.Sprintf("AzureStorageContainerName=%v", cfg.AzureStorageContainerName))
 
 	// Can be used to force the number of CPUs that can be executing simultaneously
 	// Should not be needed as long as automaxprocs does its job
-	//runtime.GOMAXPROCS(4)
+	//runtime.GOMAXPROCS(2)
 
 	numCpus := runtime.NumCPU()
 	goMaxProcs := runtime.GOMAXPROCS(0)
 	logger.Info(fmt.Sprintf("Num logical CPUs=%v, GOMAXPROCS=%v", numCpus, goMaxProcs))
 
-	router := gin.New()
-	router.Use(utils.SlogBackedGinLogger(logger))
-	router.Use(gin.Recovery())
-
-	// ============================================================================================
-
-	tempUserStoreFactory := utils.NewTempUserStoreFactory(cfg.RedisUrl, cfg.AzureStorageConnectionString, cfg.AzureStorageContainerName, 2*time.Minute)
+	// Set up Asynq server
+	// ------------------------------------------------
+	tempUserStoreFactory := utils.NewTempUserStoreFactory(cfg.RedisUrl, cfg.AzureStorageConnectionString, 2*60)
 
 	// Parse the RedisUrl for usage with asynq
 	asynqRedisConnOpt, err := asynq.ParseRedisURI(cfg.RedisUrl)
@@ -59,33 +58,88 @@ func main() {
 		os.Exit(1)
 	}
 
+	// A good starting point for asynq concurrency is double the number of logical cores
+	wantedAsynqConcurrency := goMaxProcs * 2
 	asynqServer := asynq.NewServer(
 		asynqRedisConnOpt,
-		asynq.Config{Concurrency: 2},
+		asynq.Config{
+			Concurrency:       wantedAsynqConcurrency,
+			TaskCheckInterval: 500 * time.Millisecond,
+		},
 	)
 
 	taskDeps := tasks.NewTaskDeps(tempUserStoreFactory)
 
-	mux := asynq.NewServeMux()
-	mux.HandleFunc("dummy", taskDeps.ProcessDummyTask)
-	mux.HandleFunc("sample_in_points", taskDeps.ProcessSampleInPointsTask)
+	taskMux := asynq.NewServeMux()
+	taskMux.HandleFunc("dummy", taskDeps.ProcessDummyTask)
+	taskMux.HandleFunc("sample_in_points", taskDeps.ProcessSampleInPointsTask)
 
-	go func() {
-		if err := asynqServer.Run(mux); err != nil {
-			log.Fatalf("could not start Asynq server: %v", err)
-		}
-	}()
-	logger.Info("Asynq Worker is running...")
+	// Set up Gin router
+	// ------------------------------------------------
+	router := gin.New()
+	router.Use(utils.SlogBackedGinLogger(logger))
+	router.Use(gin.Recovery())
 
 	httpBridgeHandler := tasks.NewHttpBridgeHandlers(asynqRedisConnOpt)
 	httpBridgeHandler.MapRoutes(router)
 
-	// ============================================================================================
-
 	router.GET("/", handlers.HandleRoot)
 	router.POST("/sample_in_points", handlers.HandleSampleInPoints)
 
+	// HTTP Server
 	address := "0.0.0.0:5001"
+	httpServer := &http.Server{
+		Addr:    address,
+		Handler: router,
+	}
+
+	// Error channel to capture server errors
+	errChan := make(chan error, 2)
+
+	// Start Asynq server in goroutine
+	go func() {
+		logger.Info(fmt.Sprintf("Starting Asynq server with concurrency=%d ...", wantedAsynqConcurrency))
+		if err := asynqServer.Run(taskMux); err != nil {
+			errChan <- err
+		}
+	}()
+
+	// Start Gin HTTP server in goroutine
+	go func() {
+		logger.Info(fmt.Sprintf("Starting HTTP server on: %v ...", address))
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errChan <- err
+		}
+	}()
+
+	// Signal handling (graceful shutdown)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
 	logger.Info(fmt.Sprintf("Surface query server listening on: %v", address))
-	router.Run(address)
+
+	// The select will block until one of the channels receives something.
+	select {
+	case sig := <-signalChan:
+		logger.Info(fmt.Sprintf("Received signal: %v. Shutting down...", sig))
+	case err := <-errChan:
+		logger.Error("Server error, shutting down...", "err", err)
+	}
+
+	// Start shutdown sequence
+	shutdownTimeout := 10 * time.Second
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer shutdownCancel()
+
+	// Stop Asynq gracefully
+	logger.Info("Stopping Asynq server...")
+	asynqServer.Shutdown()
+
+	// Stop HTTP server gracefully
+	logger.Info("Stopping HTTP server...")
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("HTTP server shutdown error", "err", err)
+	}
+
+	logger.Info("Shutdown complete.")
 }
