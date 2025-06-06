@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"surface_query/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -79,10 +80,14 @@ func (h *HttpBridgeHandlers) handleEnqueueTask(c *gin.Context) {
 }
 
 func (h *HttpBridgeHandlers) handleTaskStatus(c *gin.Context) {
+	perfMetrics := utils.NewPerfMetrics()
+
 	logger := slog.Default()
 	prefix := "handleTaskStatus - "
 
 	taskId := c.Param("task_id")
+
+	perfMetrics.RecordLap("init")
 
 	taskInfo, err := h.asyncInspector.GetTaskInfo(h.queueName, taskId)
 	if err != nil {
@@ -90,6 +95,7 @@ func (h *HttpBridgeHandlers) handleTaskStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
 	}
+	perfMetrics.RecordLap("inspect")
 
 	statusString := mapTaskStateToStatusString(taskInfo.State)
 
@@ -110,9 +116,13 @@ func (h *HttpBridgeHandlers) handleTaskStatus(c *gin.Context) {
 		}
 
 		response.Result = result
+		perfMetrics.RecordLap("result")
 	}
 
 	c.JSON(http.StatusOK, response)
+	perfMetrics.RecordLap("setResponse")
+
+	logger.Debug(prefix + "done in: " + perfMetrics.ToString(true))
 }
 
 func mapTaskStateToStatusString(taskState asynq.TaskState) string {
