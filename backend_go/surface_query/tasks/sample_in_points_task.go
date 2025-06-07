@@ -7,7 +7,8 @@ import (
 	"log/slog"
 	"surface_query/operations"
 	"surface_query/utils"
-	"time"
+
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/hibiken/asynq"
@@ -29,18 +30,19 @@ type sampleInPointsTaskInput struct {
 }
 
 type realizationSampleResult struct {
-	Realization   int       `json:"realization" binding:"required"`
-	SampledValues []float32 `json:"sampledValues" binding:"required"`
+	Realization   int       `msgpack:"realization"   json:"realization"`
+	SampledValues []float32 `msgpack:"sampledValues" json:"sampledValues"`
 }
 
 type sampleInPointsTaskResult struct {
-	SampleResultArr []realizationSampleResult `json:"sampleResultArr" binding:"required"`
-	UndefLimit      float32                   `json:"undefLimit" binding:"required"`
+	SampleResultArr []realizationSampleResult `msgpack:"sampleResultArr"  json:"sampleResultArr"`
+	UndefLimit      float32                   `msgpack:"undefLimit"       json:"undefLimit"`
 }
 
 func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq.Task) error {
+	perfMetrics := utils.NewPerfMetrics()
 	logger := slog.Default()
-	prefix := "ProcessSampleInPointsTask - "
+	prefix := "ProcessSampleInPointsTask() - "
 
 	logger.Debug(prefix + "entering")
 
@@ -56,25 +58,22 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 		return err
 	}
 
-	startTime := time.Now()
-
 	perRealObjIds := make([]operations.RealObjId, len(input.ObjectIds))
 	for i := range input.ObjectIds {
 		perRealObjIds[i] = operations.RealObjId(input.ObjectIds[i])
 	}
 
 	blobFetcher := utils.NewBlobFetcher(input.SasToken, input.BlobStoreBaseUri)
+
+	perfMetrics.RecordLap("init")
+
 	perRealSamplesArr, err := operations.BulkFetchAndSampleSurfaces(blobFetcher, perRealObjIds, input.XCoords, input.YCoords)
 	if err != nil {
 		logger.Error(prefix+"error during bulk processing of surfaces:", "err", err)
 		return err
 	}
+	perfMetrics.RecordLap("fetch-and-sample")
 
-	// Construct the response body
-	//
-	// TO-DISCUSS:
-	// Must check this out in relation to the xtgeo code
-	// Undef value and limit seem to be misaligned!!!
 	retResultArr := make([]realizationSampleResult, len(perRealSamplesArr))
 	for i := range retResultArr {
 		retResultArr[i] = realizationSampleResult(perRealSamplesArr[i])
@@ -85,23 +84,32 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 		UndefLimit:      0.99e30,
 	}
 
-	resultPayload, err := json.Marshal(taskResult)
-	if err != nil {
-		logger.Error(prefix+"failed to marshal task result", "err", err)
-		return err
-	}
-
 	tempUserStore := deps.tempUserStoreFactory.ForUser(input.SpikeUserId)
-	err = tempUserStore.PutBytes(ctx, input.SpikeResultCacheKey, resultPayload, "sampleInPoints", "json")
+
+	// blobExtension := "json"
+	// bytePayload, err := json.Marshal(taskResult)
+	// if err != nil {
+	// 	logger.Error(prefix+"failed to encode task result as json", "err", err)
+	// 	return err
+	// }
+
+	blobExtension := "msgpack"
+	bytePayload, err := msgpack.Marshal(taskResult)
 	if err != nil {
-		logger.Error(prefix+"failed to put bytes in temp user store", "err", err)
+		logger.Error(prefix+"failed to encode task result as msgpack", "err", err)
 		return err
 	}
 
-	logger.Debug(prefix+"bytes written", "n", len(resultPayload))
+	err = tempUserStore.PutBytes(ctx, input.SpikeResultCacheKey, bytePayload, "sampleInPoints", blobExtension)
+	if err != nil {
+		logger.Error(prefix+"failed to write result to temp user store", "err", err)
+		return err
+	}
 
-	duration := time.Since(startTime)
-	logger.Info(prefix + fmt.Sprintf("Total time: %v", duration))
+	perfMetrics.RecordLap("store")
+
+	payloadSizeMB := float32(len(bytePayload)) / (1024 * 1024)
+	logger.Info(prefix + fmt.Sprintf("task completed in %s (resultPayload=%.2fMB)", perfMetrics.ToString(true), payloadSizeMB))
 
 	return nil
 }

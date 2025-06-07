@@ -50,7 +50,7 @@ class _TaskStatusResponse(BaseModel):
     errorMsg: str | None = None
 
 
-async def task_based_batch_sample_surface_in_points_async(
+async def task_based_sample_surface_in_points_async(
     authenticated_user: AuthenticatedUser,
     case_uuid: str,
     iteration_name: str,
@@ -81,21 +81,21 @@ async def task_based_batch_sample_surface_in_points_async(
 
     temp_user_store = get_temp_user_store_for_user(authenticated_user)
 
-    store_key = f"batch_sample_surface_in_points_async_{params_hash}"
-    existing_result = await temp_user_store.get_pydantic(
+    store_key = f"task_based_sample_surface_in_points__{params_hash}"
+    existing_result = await temp_user_store.get_pydantic_model(
         model_class=_SampleInPointsTaskResult,
         key=store_key,
-        serialized_as="json"
+        format="msgpack"
     )
     if existing_result is not None:
         LOGGER.debug(f"Found existing result key: {store_key}")
         ret_array = _transform_return_array(response_body=existing_result)
         perf_metrics.record_lap("parse-response")
-        LOGGER.debug(f"batch_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
+        LOGGER.debug(f"task_based_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
         return ret_array
 
 
-    LOGGER.debug(f"No cached result found for key: {store_key}, proceeding with new request.")
+    LOGGER.debug(f"No cached point sampling result found for key: {store_key}, proceeding with new request...")
 
     realization_object_ids = await _get_object_uuids_for_surface_realizations_async(
         sumo_access_token=sumo_access_token,
@@ -120,8 +120,7 @@ async def task_based_batch_sample_surface_in_points_async(
         yCoords=y_coords,
     )
 
-    LOGGER.info(f"Running go task point sampling for surface: {surface_name}")
-
+    LOGGER.info(f"Enqueuing go task for point sampling on surface: {surface_name}")
     response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(url=f"{config.SURFACE_QUERY_URL}/enqueue_task/sample_in_points", json=request_body.model_dump())
     task_status = _TaskStatusResponse.model_validate_json(response.content) 
     perf_metrics.record_lap("enqueue-go")
@@ -144,7 +143,7 @@ async def task_based_batch_sample_surface_in_points_async(
             waited += poll_interval
             LOGGER.debug(f"waiting for task {task_id} to complete... {waited=:.1f} {status_string=}")
 
-    perf_metrics.record_lap("status-go")
+    perf_metrics.record_lap("poll-status")
 
     if task_status.status in ["pending", "running"]:
         LOGGER.error(f"Task {task_id} did not complete within the timeout period of {timeout} seconds.")
@@ -154,24 +153,23 @@ async def task_based_batch_sample_surface_in_points_async(
         LOGGER.error(f"Task {task_id} encountered an error: {task_status.errorMsg=}")
         raise RuntimeError(f"Task {task_id} encountered an error: {task_status.errorMsg}")
 
-    new_result = await temp_user_store.get_pydantic(
+    new_result = await temp_user_store.get_pydantic_model(
         model_class=_SampleInPointsTaskResult,
         key=store_key,
-        serialized_as="json"
+        format="msgpack"
     )
+    perf_metrics.record_lap("fetch-result")
 
     if new_result is None:
-        LOGGER.error(f"Task {task_id} completed but no result found in user scoped temp storage for key: {store_key}")
-        raise RuntimeError(f"Task {task_id} completed but no result found in user scoped temp storage for key: {store_key}")
+        LOGGER.error(f"Task {task_id} completed but no result was found in temp user store for key: {store_key}")
+        raise RuntimeError(f"Task {task_id} completed but no result was found in temp user store for key: {store_key}")
 
     ret_array = _transform_return_array(response_body=new_result)
-    perf_metrics.record_lap("parse-response")
+    perf_metrics.record_lap("parse-result")
 
-    LOGGER.debug(f"batch_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
+    LOGGER.debug(f"task_based_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
 
     return ret_array
-
-
 
 
 def _transform_return_array(response_body = _SampleInPointsTaskResult) -> List[RealizationSampleResult]:

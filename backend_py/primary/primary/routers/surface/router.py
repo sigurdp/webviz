@@ -16,7 +16,7 @@ from primary.services.utils.authenticated_user import AuthenticatedUser
 from primary.auth.auth_helper import AuthHelper
 #from primary.services.surface_query_service.surface_query_service import batch_sample_surface_in_points_async
 from primary.services.surface_query_service.surface_query_service import RealizationSampleResult
-from primary.services.surface_query_service.task_based_surface_query_service import task_based_batch_sample_surface_in_points_async
+from primary.services.surface_query_service.task_based_surface_query_service import task_based_sample_surface_in_points_async
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 from primary.utils.drogon import is_drogon_identifier
 
@@ -246,7 +246,7 @@ async def post_get_sample_surface_in_points(
 
     sumo_access_token = authenticated_user.get_sumo_access_token()
 
-    result_arr: List[RealizationSampleResult] = await task_based_batch_sample_surface_in_points_async(
+    result_arr: List[RealizationSampleResult] = await task_based_sample_surface_in_points_async(
         authenticated_user=authenticated_user,
         #sumo_access_token=sumo_access_token,
         case_uuid=case_uuid,

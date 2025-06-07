@@ -89,6 +89,9 @@ func (h *HttpBridgeHandlers) handleTaskStatus(c *gin.Context) {
 
 	perfMetrics.RecordLap("init")
 
+	// During testing in radix, we're sometimes seeing quite long response times for this call
+	// Should be investigated further to determine if this is an issue with Redis/bandwidth or if we're
+	// somehow starving the gin handler in some other way
 	taskInfo, err := h.asyncInspector.GetTaskInfo(h.queueName, taskId)
 	if err != nil {
 		logger.Error(prefix+"error getting task info:", "err", err)

@@ -83,6 +83,9 @@ func (f *TempUserStoreFactory) ForUser(userId string) *TempUserStore {
 }
 
 func (s *TempUserStore) PutBytes(ctx context.Context, key string, payloadBytes []byte, blobPrefix string, blobExtension string) error {
+	perfMetrics := NewPerfMetrics()
+	prefix := "PutBytes() - "
+	logger := slog.Default()
 
 	payloadHash := computePayloadHash(payloadBytes)
 
@@ -95,20 +98,24 @@ func (s *TempUserStore) PutBytes(ctx context.Context, key string, payloadBytes [
 		blobName += "." + blobExtension
 	}
 
-	err := uploadOrUpdateMetadataForBlob(ctx, s.containerClient, blobName, payloadBytes)
+	perfMetrics.RecordLap("prepare")
+
+	// The updateStatus will be a string enum of either "uploaded" or "refreshed"
+	updateStatus, err := uploadOrRefreshBlobMetadata(ctx, s.containerClient, blobName, payloadBytes)
 	if err != nil {
 		return fmt.Errorf("failed to upload or refresh blob: %w", err)
 	}
+	perfMetrics.RecordLap("blob-" + string(updateStatus))
 
-	// For now, mimick the prefix in aiocache
-	// redo this when we switch away from aiocache, but we still probably want a prefix for the Redis keys
 	redisKey := s.makeFullRedisKey(key)
-	slog.Info("REDIS key", "key", redisKey, "blobName", blobName)
-
 	err = s.redisClient.Set(ctx, redisKey, blobName, s.ttlDuration).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set Redis key: %w", err)
 	}
+	perfMetrics.RecordLap("write-redis")
+
+	payloadSizeMB := float32(len(payloadBytes)) / (1024 * 1024)
+	logger.Debug(prefix + fmt.Sprintf("put with payload of %.2fMB (updateStatus=%s) took: %s", payloadSizeMB, string(updateStatus), perfMetrics.ToString(true)))
 
 	return nil
 }
@@ -123,7 +130,14 @@ func computePayloadHash(payload []byte) string {
 	return hex.EncodeToString(checksum[:])
 }
 
-func uploadOrUpdateMetadataForBlob(ctx context.Context, containerClient *container.Client, blobName string, payloadBytes []byte) error {
+type BlobUpdateStatus string
+
+const (
+	BlobUploaded      BlobUpdateStatus = "uploaded"
+	BlobMetaRefreshed BlobUpdateStatus = "refreshed"
+)
+
+func uploadOrRefreshBlobMetadata(ctx context.Context, containerClient *container.Client, blobName string, payloadBytes []byte) (BlobUpdateStatus, error) {
 	blobClient := containerClient.NewBlockBlobClient(blobName)
 
 	// Check if blob already exists
@@ -135,23 +149,20 @@ func uploadOrUpdateMetadataForBlob(ctx context.Context, containerClient *contain
 		timeNow := time.Now().UTC().Format(time.RFC3339)
 		metadata := map[string]*string{"refreshedAt": &timeNow}
 
-		slog.Debug("uploadOrUpdateMetadataForBlob() - blob already exists, updating metadata")
 		_, err := blobClient.SetMetadata(ctx, metadata, nil)
 		if err != nil {
-			return fmt.Errorf("updating metadata failed: %w", err)
+			return "", fmt.Errorf("updating metadata failed: %w", err)
 		}
-		return nil
+		return BlobMetaRefreshed, nil
 	}
 
 	// Blob does not exist, so upload it
-	slog.Debug("uploadOrUpdateMetadataForBlob() - uploading blob")
-
 	neverStr := "never"
 	metadata := map[string]*string{"refreshedAt": &neverStr}
 	_, err = blobClient.UploadBuffer(ctx, payloadBytes, &azblob.UploadBufferOptions{Metadata: metadata})
 	if err != nil {
-		return fmt.Errorf("blob upload failed: %w", err)
+		return "", fmt.Errorf("blob upload failed: %w", err)
 	}
 
-	return nil
+	return BlobUploaded, nil
 }

@@ -138,18 +138,18 @@ class TempUserStore:
 
         return payload_bytes
 
-    async def put_pydantic(self, key: str, pydantic_model: BaseModel, serialize_as: Literal["msgpack", "json"]) -> bool:
+    async def put_pydantic_model(self, key: str, model: BaseModel, format: Literal["msgpack", "json"]) -> bool:
         perf_metrics = PerfMetrics()
 
         blob_extension: str
-        if serialize_as == "msgpack":
-            payload: bytes = _pydantic_to_msgpack(pydantic_model)
+        if format == "msgpack":
+            payload: bytes = _pydantic_to_msgpack(model)
             blob_extension = "msgpack"
-        elif serialize_as == "json":
-            payload: bytes = pydantic_model.model_dump_json().encode("utf-8")
+        elif format == "json":
+            payload: bytes = model.model_dump_json().encode("utf-8")
             blob_extension = "json"
         else:
-            raise ValueError(f"Unsupported serialize_as value: {serialize_as}")
+            raise ValueError(f"Unsupported serialization format: {format}")
 
         perf_metrics.record_lap("serialize")
 
@@ -161,8 +161,8 @@ class TempUserStore:
 
         return ret_val
 
-    async def get_pydantic(
-        self, model_class: Type[BaseModel], key: str, serialized_as: Literal["msgpack", "json"]
+    async def get_pydantic_model(
+        self, key: str, model_class: Type[BaseModel], format: Literal["msgpack", "json"]
     ) -> BaseModel | None:
         perf_metrics = PerfMetrics()
 
@@ -173,17 +173,16 @@ class TempUserStore:
             return None
 
         try:
-            if serialized_as == "msgpack":
+            if format == "msgpack":
                 model = _msgpack_to_pydantic(model_class, payload)
-            elif serialized_as == "json":
+            elif format == "json":
                 model = model_class.model_validate_json(payload.decode("utf-8"))
             else:
-                raise ValueError(f"Unsupported serialized_as value: {serialized_as}")
-
-            perf_metrics.record_lap("deserialize")
+                raise ValueError(f"Unsupported serialization format: {format}")
         except Exception as e:
-            LOGGER.debug(f"##### get_pydantic() deserialize failed took: {perf_metrics.to_string()}  [{key=}]")
-            return None
+            raise ValueError(f"Failed to deserialize model {key=}, {format=}: {e}") from e
+
+        perf_metrics.record_lap("deserialize")
 
         size_mb = len(payload) / (1024 * 1024)
         LOGGER.debug(f"##### get_pydantic() with with payload of {size_mb:.2f}MB took: {perf_metrics.to_string()}")
