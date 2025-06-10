@@ -90,7 +90,7 @@ async def task_based_sample_surface_in_points_async(
     if existing_result is not None:
         LOGGER.debug(f"Found existing result key: {store_key}")
         ret_array = _transform_return_array(response_body=existing_result)
-        perf_metrics.record_lap("parse-response")
+        perf_metrics.record_lap("fetch-existing-result")
         LOGGER.debug(f"task_based_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
         return ret_array
 

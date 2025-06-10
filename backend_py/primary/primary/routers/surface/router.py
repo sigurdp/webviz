@@ -17,6 +17,7 @@ from primary.auth.auth_helper import AuthHelper
 #from primary.services.surface_query_service.surface_query_service import batch_sample_surface_in_points_async
 from primary.services.surface_query_service.surface_query_service import RealizationSampleResult
 from primary.services.surface_query_service.task_based_surface_query_service import task_based_sample_surface_in_points_async
+from primary.services.utils.temp_user_store import get_temp_user_store_for_user
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 from primary.utils.drogon import is_drogon_identifier
 
@@ -143,6 +144,21 @@ async def get_surface_data(
     if not isinstance(addr, RealizationSurfaceAddress | ObservedSurfaceAddress | StatisticalSurfaceAddress):
         raise HTTPException(status_code=404, detail="Endpoint only supports address types REAL, OBS and STAT")
 
+
+    temp_user_store = get_temp_user_store_for_user(authenticated_user)
+    store_key = f"surface_data__{surf_addr_str}"
+    stored_surface = await temp_user_store.get_pydantic_model(
+        model_class=schemas.SurfaceDataFloat,
+        key=store_key,
+        format="msgpack"
+    )
+    if stored_surface is not None:
+        LOGGER.debug(f"Found existing stored surface for key: {store_key}")
+        perf_metrics.record_lap("fetch-stored-surface")
+        LOGGER.info(f"Got STORED {addr.address_type} surface in: {perf_metrics.to_string()}")
+        return stored_surface
+
+
     if addr.address_type == "REAL":
         access = SurfaceAccess.from_iteration_name(access_token, addr.case_uuid, addr.ensemble_name)
         xtgeo_surf = await access.get_realization_surface_data_async(
@@ -192,6 +208,14 @@ async def get_surface_data(
         surf_data_response = converters.to_api_surface_data_png(xtgeo_surf)
 
     perf_metrics.record_lap("convert")
+
+    await temp_user_store.put_pydantic_model(
+        key=store_key,
+        model=surf_data_response,
+        blob_prefix="testCachedSurfaceData",
+        format="msgpack",
+    )
+    perf_metrics.record_lap("write-user-store")
 
     LOGGER.info(f"Got {addr.address_type} surface in: {perf_metrics.to_string()}")
 

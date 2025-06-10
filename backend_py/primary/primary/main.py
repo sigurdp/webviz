@@ -55,7 +55,7 @@ logging.getLogger("primary.services.surface_query_service").setLevel(logging.DEB
 logging.getLogger("primary.routers.grid3d").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.dev").setLevel(logging.DEBUG)
 logging.getLogger("primary.auth").setLevel(logging.DEBUG)
-logging.getLogger("primary.services.utils.user_scoped_temp_storage").setLevel(logging.DEBUG)
+logging.getLogger("primary.services.utils.temp_user_store").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
 

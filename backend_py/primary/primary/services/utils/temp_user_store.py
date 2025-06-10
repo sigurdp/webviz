@@ -6,9 +6,6 @@ import msgpack
 from typing import Type, Literal
 
 import redis.asyncio as redis
-from aiocache import BaseCache, RedisCache
-from aiocache.serializers import MsgPackSerializer, PickleSerializer, StringSerializer
-from redis.asyncio.connection import ConnectKwargs, parse_url
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 from azure.storage.blob.aio import BlobServiceClient, ContainerClient, StorageStreamDownloader, BlobClient
 from azure.storage.blob import ContentSettings
@@ -29,12 +26,13 @@ LOGGER = logging.getLogger(__name__)
 class TempUserStoreFactory:
     _instance = None
 
-    def __init__(self, aio_cache: BaseCache, container_client: ContainerClient):
-        self._aio_cache = aio_cache
-        self._container_client = container_client
+    def __init__(self, redis_client: redis.Redis, container_client: ContainerClient, ttl_s: int):
+        self._redis_client: redis.Redis = redis_client
+        self._container_client: ContainerClient = container_client
+        self._ttl_s: int = ttl_s
 
     @classmethod
-    def initialize(cls, redis_url: str, storage_account_conn_string: str, ttl_s: float):
+    def initialize(cls, redis_url: str, storage_account_conn_string: str, ttl_s: int):
         if cls._instance is not None:
             raise RuntimeError("TempUserStoreFactory is already initialized")
 
@@ -44,19 +42,12 @@ class TempUserStoreFactory:
         if not _check_if_blob_container_exists(storage_account_conn_string, _BLOB_CONTAINER_NAME):
             raise RuntimeError(f"Blob container specified for TempUserStore does not exist: {_BLOB_CONTAINER_NAME}")
 
-        redis_url_options: ConnectKwargs = parse_url(redis_url)
-        aio_cache = RedisCache(
-            endpoint=redis_url_options["host"],
-            port=redis_url_options["port"],
-            serializer=StringSerializer(),
-            namespace=_REDIS_KEY_PREFIX,
-            ttl=ttl_s,
-        )
+        redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
 
         blob_service_client = BlobServiceClient.from_connection_string(storage_account_conn_string)
         container_client = blob_service_client.get_container_client(_BLOB_CONTAINER_NAME)
 
-        cls._instance = cls(aio_cache, container_client)
+        cls._instance = cls(redis_client, container_client, ttl_s)
 
     @classmethod
     def get_instance(cls):
@@ -68,7 +59,7 @@ class TempUserStoreFactory:
         if not authenticated_user:
             raise ValueError("An authenticated_user must be specified")
 
-        return TempUserStore(self._aio_cache, self._container_client, authenticated_user)
+        return TempUserStore(self._redis_client, self._container_client, self._ttl_s, authenticated_user)
 
 
 class TempUserStore:
@@ -90,23 +81,24 @@ class TempUserStore:
     deletes blobs older than a day or two would be appropriate.
     """
 
-    def __init__(self, aio_cache: BaseCache, container_client: ContainerClient, authenticated_user: AuthenticatedUser):
-        self._cache = aio_cache
-        self._container_client = container_client
+    def __init__(self, redis_client: redis.Redis, container_client: ContainerClient, ttl_s: int, authenticated_user: AuthenticatedUser):
+        self._redis_client: redis.Redis = redis_client
+        self._container_client: ContainerClient = container_client
+        self._ttl_s: int = ttl_s
         self._user_id = authenticated_user.get_user_id()
 
-    async def put_bytes(self, key: str, payload: bytes, blob_extension: str) -> bool:
+    async def put_bytes(self, key: str, payload: bytes, blob_prefix: str | None, blob_extension: str) -> bool:
         perf_metrics = PerfMetrics()
 
-        # blob_name = self._make_full_blob_name_from_payload(payload, blob_extension)
-        blob_name = self._make_full_blob_name(key, blob_extension)
+        blob_name = self._make_full_blob_name_from_payload(payload, blob_prefix, blob_extension)
         perf_metrics.record_lap("make-blob-name")
 
-        await _upload_or_refresh_blob(self._container_client, blob_name, payload)
+        await _upload_or_refresh_blob_metadata(self._container_client, blob_name, payload)
         perf_metrics.record_lap("upload-blob")
 
         redis_key = self._make_full_redis_key(key)
-        await self._cache.set(redis_key, blob_name)
+        await self._redis_client.setex(redis_key, self._ttl_s, blob_name)
+
         perf_metrics.record_lap("write-redis")
 
         size_mb = len(payload) / (1024 * 1024)
@@ -120,7 +112,7 @@ class TempUserStore:
         redis_key = self._make_full_redis_key(key)
         LOGGER.debug(f"##### get_bytes() {redis_key=}")
 
-        blob_name = await self._cache.get(redis_key)
+        blob_name = await self._redis_client.get(redis_key)
         perf_metrics.record_lap("read-redis")
 
         if not blob_name:
@@ -138,7 +130,7 @@ class TempUserStore:
 
         return payload_bytes
 
-    async def put_pydantic_model(self, key: str, model: BaseModel, format: Literal["msgpack", "json"]) -> bool:
+    async def put_pydantic_model(self, key: str, model: BaseModel, format: Literal["msgpack", "json"], blob_prefix: str | None) -> bool:
         perf_metrics = PerfMetrics()
 
         blob_extension: str
@@ -153,7 +145,7 @@ class TempUserStore:
 
         perf_metrics.record_lap("serialize")
 
-        ret_val = await self.put_bytes(key, payload, blob_extension=blob_extension)
+        ret_val = await self.put_bytes(key, payload, blob_prefix=blob_prefix, blob_extension=blob_extension)
         perf_metrics.record_lap("put-bytes")
 
         size_mb = len(payload) / (1024 * 1024)
@@ -190,14 +182,14 @@ class TempUserStore:
         return model
 
     def _make_full_redis_key(self, key: str) -> str:
-        return f"user:{self._user_id}:{key}"
+        return f"{_REDIS_KEY_PREFIX}:user:{self._user_id}:{key}"
 
-    def _make_full_blob_name(self, key: str, extension: str) -> str:
-        return f"user__{self._user_id}/key__{key}.{extension}"
-
-    def _make_full_blob_name_from_payload(self, payload: bytes, extension: str) -> str:
-        # We could remove the user id from the blob name to save space which will de-dupe the blob payloads
-        return f"user__{self._user_id}/payload__{_compute_payload_hash(payload)}.{extension}"
+    def _make_full_blob_name_from_payload(self, payload: bytes, blob_prefix: str | None, extension: str) -> str:
+        payload_hash = _compute_payload_hash(payload)
+        if blob_prefix:
+            return f"user__{self._user_id}/{blob_prefix}---sha__{payload_hash}.{extension}"
+        else:
+            return f"user__{self._user_id}/sha__{payload_hash}.{extension}"
 
 
 def _pydantic_to_msgpack(model: BaseModel) -> bytes:
@@ -212,30 +204,33 @@ def _compute_payload_hash(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-async def _upload_or_refresh_blob(container_client: ContainerClient, blob_key: str, payload: bytes) -> str:
+async def _upload_or_refresh_blob_metadata(container_client: ContainerClient, blob_key: str, payload: bytes) -> str:
     blob_client: BlobClient = container_client.get_blob_client(blob_key)
 
     try:
+        # Note that even if we're specifying `overwrite=False`, we might actually end up uploading the entire blob
+        # payload here before that condition is detected. We should probably just check for the blob's existence first,
+        # which is probably much more lightweight, even if it costs us an extra round trip.
         ret_dict = await blob_client.upload_blob(
             payload,
             overwrite=False,
             metadata={"refreshedAt": "never"},
             content_settings=ContentSettings(content_type="application/octet-stream"),
         )
-        LOGGER.debug(f"##### _upload_or_refresh_blob() OK {ret_dict=}")
+        LOGGER.debug(f"##### _upload_or_refresh_blob_metadata() OK")
     except ResourceExistsError as e:
         # To stop the blob from being deleted by our lifecycle policy, we want to update the blob's modified time,
         # so we will set the a dummy metadata field to "refresh" and update the modified time stamp
 
         # Need to get existing metadata if we don't want to overwrite it
-        # LOGGER.debug(f"##### _upload_or_refresh_blob() ResourceExistsError {e=}")
+        # LOGGER.debug(f"##### _upload_or_refresh_blob_metadata() ResourceExistsError {e=}")
         # existing_blob_properties = await blob_client.get_blob_properties()
         # metadata = existing_blob_properties.metadata
         # metadata["refreshedAt"] = datetime.utcnow().isoformat())
 
         metadata = {"refreshedAt": datetime.datetime.utcnow().isoformat()}
         await blob_client.set_blob_metadata(metadata)
-        LOGGER.debug(f"##### _upload_or_refresh_blob() REFRESHED {metadata=}")
+        LOGGER.debug(f"##### _upload_or_refresh_blob_metadata() REFRESHED")
 
     return blob_client.url
 

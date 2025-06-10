@@ -23,10 +23,10 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     const statusWriter = useViewStatusWriter(props.viewContext);
 
     //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "png", null, true);
-    //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, true);
-    const surfDataQuery = useCeleryPollingSurfaceDataQueryByAddress(surfaceAddress, true);
-
-    console.log(`ProgressMsg: ${surfDataQuery.progressMsg}`);
+    const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, true);
+    
+    //const surfDataQuery = useCeleryPollingSurfaceDataQueryByAddress(surfaceAddress, true);
+    //console.log(`ProgressMsg: ${surfDataQuery.progressMsg}`);
 
     const isLoading = surfDataQuery.isFetching;
     statusWriter.setLoading(isLoading);
@@ -34,7 +34,8 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     const hasError = surfDataQuery.isError;
     usePropagateApiErrorToStatusWriter(surfDataQuery, statusWriter);
 
-    const surfData = surfDataQuery.data && "valuesFloat32Arr" in surfDataQuery.data ? surfDataQuery.data : null;
+    const surfData = surfDataQuery.data;
+    //const surfData = surfDataQuery.data && "valuesFloat32Arr" in surfDataQuery.data ? surfDataQuery.data : null;
 
     return (
         <div className="relative w-full h-full flex flex-col">

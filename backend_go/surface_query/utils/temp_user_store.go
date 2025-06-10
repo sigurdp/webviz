@@ -87,17 +87,7 @@ func (s *TempUserStore) PutBytes(ctx context.Context, key string, payloadBytes [
 	prefix := "PutBytes() - "
 	logger := slog.Default()
 
-	payloadHash := computePayloadHash(payloadBytes)
-
-	blobName := "user__" + s.userId + "/"
-	if blobPrefix != "" {
-		blobName += blobPrefix + "---"
-	}
-	blobName += "sha__" + payloadHash
-	if blobExtension != "" {
-		blobName += "." + blobExtension
-	}
-
+	blobName := s.makeFullBlobNameFromPayload(payloadBytes, blobPrefix, blobExtension)
 	perfMetrics.RecordLap("prepare")
 
 	// The updateStatus will be a string enum of either "uploaded" or "refreshed"
@@ -122,6 +112,24 @@ func (s *TempUserStore) PutBytes(ctx context.Context, key string, payloadBytes [
 
 func (s *TempUserStore) makeFullRedisKey(key string) string {
 	return tus_redisKeyPrefix + ":user:" + s.userId + ":" + key
+}
+
+func (s *TempUserStore) makeFullBlobNameFromPayload(payload []byte, blobPrefix string, blobExtension string) string {
+	payloadHash := computePayloadHash(payload)
+
+	blobName := "user__" + s.userId + "/"
+
+	if blobPrefix != "" {
+		blobName += blobPrefix + "---"
+	}
+
+	blobName += "sha__" + payloadHash
+
+	if blobExtension != "" {
+		blobName += "." + blobExtension
+	}
+
+	return blobName
 }
 
 // Computes the SHA256 hash of the payload bytes and returns the hash as a hex-encoded string.

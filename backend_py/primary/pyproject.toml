@@ -35,7 +35,6 @@ server_schemas = {path = "../libs/server_schemas", develop = true}
 polars = "^1.6.0"
 celery = "^5.5.2"
 aiohttp = "3.11.18"
-aiocache = {version = "^0.12.3", extras = ["redis", "msgpack"]}
 azure-storage-blob = "^12.25.1"
 msgpack = "^1.1.0"
 
