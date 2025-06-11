@@ -3,6 +3,7 @@ package operations
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"runtime"
 	"surface_query/utils"
 	"surface_query/xtgeo"
@@ -34,11 +35,11 @@ func FetchAndSampleSurfacesInPointSets(fetcher *utils.BlobFetcher, realSurfObjAr
 	prefix := "FetchAndSampleSurfacesInPointSets() - "
 
 	numCpusToUse := runtime.GOMAXPROCS(0)
-	const decodeToComputeRatio = 10
+	const computeToDecodeRatio float64 = 0.1
 
-	numDownloadWorkers := max(20, 4*numCpusToUse)
-	numSampleWorkers := max(1, numCpusToUse/(1+decodeToComputeRatio))
-	numDecodeWorkers := max(1, numCpusToUse-numSampleWorkers)
+	numDownloadWorkers := max(10, 4*numCpusToUse)
+	numDecodeWorkers := max(1, int(math.Round(float64(numCpusToUse)*(1.0-computeToDecodeRatio))))
+	numSampleWorkers := max(1, numCpusToUse-numDecodeWorkers)
 
 	numSurfObjects := len(realSurfObjArr)
 
