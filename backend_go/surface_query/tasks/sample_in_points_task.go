@@ -58,25 +58,52 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 		return err
 	}
 
-	perRealObjIds := make([]operations.RealObjId, len(input.ObjectIds))
+	/*
+		perRealObjIds := make([]operations.RealObjId, len(input.ObjectIds))
+		for i := range input.ObjectIds {
+			perRealObjIds[i] = operations.RealObjId(input.ObjectIds[i])
+		}
+
+		blobFetcher := utils.NewBlobFetcher(input.SasToken, input.BlobStoreBaseUri)
+
+		perfMetrics.RecordLap("init")
+
+		perRealSamplesArr, err := operations.BulkFetchAndSampleSurfaces(blobFetcher, perRealObjIds, input.XCoords, input.YCoords)
+		if err != nil {
+			logger.Error(prefix+"error during bulk processing of surfaces:", "err", err)
+			return err
+		}
+		perfMetrics.RecordLap("fetch-and-sample")
+
+		retResultArr := make([]realizationSampleResult, len(perRealSamplesArr))
+		for i := range retResultArr {
+			retResultArr[i] = realizationSampleResult(perRealSamplesArr[i])
+		}
+	*/
+
+	perRealObjIds := make([]operations.RealSurfObjId, len(input.ObjectIds))
 	for i := range input.ObjectIds {
-		perRealObjIds[i] = operations.RealObjId(input.ObjectIds[i])
+		perRealObjIds[i] = operations.RealSurfObjId(input.ObjectIds[i])
 	}
 
 	blobFetcher := utils.NewBlobFetcher(input.SasToken, input.BlobStoreBaseUri)
 
 	perfMetrics.RecordLap("init")
-
-	perRealSamplesArr, err := operations.BulkFetchAndSampleSurfaces(blobFetcher, perRealObjIds, input.XCoords, input.YCoords)
+	pointSet := operations.PointSet{
+		XCoords: input.XCoords,
+		YCoords: input.YCoords,
+	}
+	pointSetSamples, err := operations.FetchAndSampleSurfacesInPointSets(blobFetcher, perRealObjIds, pointSet)
 	if err != nil {
 		logger.Error(prefix+"error during bulk processing of surfaces:", "err", err)
 		return err
 	}
 	perfMetrics.RecordLap("fetch-and-sample")
 
-	retResultArr := make([]realizationSampleResult, len(perRealSamplesArr))
+	logger.Debug(prefix+"fetched and sampled surfaces", "numSamples", len(pointSetSamples.RealSampleRes))
+	retResultArr := make([]realizationSampleResult, len(pointSetSamples.RealSampleRes))
 	for i := range retResultArr {
-		retResultArr[i] = realizationSampleResult(perRealSamplesArr[i])
+		retResultArr[i] = realizationSampleResult(pointSetSamples.RealSampleRes[i])
 	}
 
 	taskResult := sampleInPointsTaskResult{

@@ -87,12 +87,12 @@ async def task_based_sample_surface_in_points_async(
         key=store_key,
         format="msgpack"
     )
-    if existing_result is not None:
-        LOGGER.debug(f"Found existing result key: {store_key}")
-        ret_array = _transform_return_array(response_body=existing_result)
-        perf_metrics.record_lap("fetch-existing-result")
-        LOGGER.debug(f"task_based_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
-        return ret_array
+    # if existing_result is not None:
+    #     LOGGER.debug(f"Found existing result key: {store_key}")
+    #     ret_array = _transform_return_array(response_body=existing_result)
+    #     perf_metrics.record_lap("fetch-existing-result")
+    #     LOGGER.debug(f"task_based_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
+    #     return ret_array
 
 
     LOGGER.debug(f"No cached point sampling result found for key: {store_key}, proceeding with new request...")
