@@ -2,10 +2,9 @@ package utils
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"surface_query/xtgeo"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 )
 
@@ -80,35 +79,35 @@ func fetchBlobBytesUsingAzblob(containerClient *container.Client, objectUuid str
 
 	blobClient := containerClient.NewBlockBlobClient(objectUuid)
 
+	resp, err := blobClient.DownloadStream(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	byteArr, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return byteArr, nil
+
 	/*
-		resp, err := blobClient.DownloadStream(ctx, nil)
+		props, err := blobClient.GetProperties(ctx, nil)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get blob properties: %w", err)
 		}
 
-		byteArr, err := io.ReadAll(resp.Body)
+		size := *props.ContentLength
+		if size == 0 {
+			return []byte{}, nil
+		}
+
+		byteArr := make([]byte, size)
+		_, err = blobClient.DownloadBuffer(ctx, byteArr, &blob.DownloadBufferOptions{Concurrency: 1})
 		if err != nil {
 			return nil, err
 		}
 
 		return byteArr, nil
 	*/
-
-	props, err := blobClient.GetProperties(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get blob properties: %w", err)
-	}
-
-	size := *props.ContentLength
-	if size == 0 {
-		return []byte{}, nil
-	}
-
-	byteArr := make([]byte, size)
-	_, err = blobClient.DownloadBuffer(ctx, byteArr, &blob.DownloadBufferOptions{Concurrency: 1})
-	if err != nil {
-		return nil, err
-	}
-
-	return byteArr, nil
 }
