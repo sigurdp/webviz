@@ -85,7 +85,7 @@ func FetchAndSampleSurfacesInPointSets(fetcher *utils.BlobFetcher, realSurfObjAr
 	}
 
 	totDuration := time.Since(startTime)
-	logger.Info(prefix + fmt.Sprintf("Processed %d realizations in %s (total download size: %.2fMB, %.2fM/s)", len(realSamplesArr), totDuration, totDownloadSizeMb, totDownloadSizeMb/(float32(totDuration.Milliseconds())/1000)))
+	logger.Info(prefix + fmt.Sprintf("Processed %d realizations in %s (download totals: %.2fMB, %.2fMB/s)", len(realSamplesArr), totDuration, totDownloadSizeMb, totDownloadSizeMb/(float32(totDuration.Milliseconds())/1000)))
 
 	return PointSetSamples{RealSampleRes: realSamplesArr}, nil
 }
