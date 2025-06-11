@@ -36,7 +36,7 @@ func FetchAndSampleSurfacesInPointSets(fetcher *utils.BlobFetcher, realSurfObjAr
 	numCpusToUse := runtime.GOMAXPROCS(0)
 	const decodeToComputeRatio = 10
 
-	numDownloadWorkers := min(20, 2*numCpusToUse)
+	numDownloadWorkers := max(20, 4*numCpusToUse)
 	numSampleWorkers := max(1, numCpusToUse/(1+decodeToComputeRatio))
 	numDecodeWorkers := max(1, numCpusToUse-numSampleWorkers)
 
@@ -58,14 +58,14 @@ func FetchAndSampleSurfacesInPointSets(fetcher *utils.BlobFetcher, realSurfObjAr
 	totDownloadSizeMb := float32(0)
 	realSamplesArr := make([]RealSamples, 0)
 	for res := range resultCh {
-		logger.Debug(prefix + fmt.Sprintf("realization %d done in %dms, %.2fMB, %.2fMB/s (download=%dms, decode=%dms, sample=%dms)",
+		logger.Debug(prefix + fmt.Sprintf("realization %d done in %dms, %.2fMB, %.2fMB/s (download=%dms(q=%dms), decode=%dms(q=%dms), sample=%dms(q=%dms))",
 			res.realization,
 			res.totalDur.Milliseconds(),
 			res.downloadSizeMb,
 			res.downloadSizeMb/float32(res.totalDur.Seconds()),
-			res.downloadDur.Milliseconds(),
-			res.decodeDur.Milliseconds(),
-			res.sampleDur.Milliseconds(),
+			res.downloadDur.Milliseconds(), res.queueDurDownload.Milliseconds(),
+			res.decodeDur.Milliseconds(), res.queueDurDecode.Milliseconds(),
+			res.sampleDur.Milliseconds(), res.queueDurSample.Milliseconds(),
 		))
 
 		totDownloadSizeMb += res.downloadSizeMb
@@ -94,28 +94,35 @@ type Result struct {
 	sampledValues []float32
 	err           error
 	// Performance metrics
-	startTime      time.Time
-	totalDur       time.Duration
-	downloadDur    time.Duration
-	decodeDur      time.Duration
-	sampleDur      time.Duration
-	downloadSizeMb float32
+	downloadDur       time.Duration
+	decodeDur         time.Duration
+	sampleDur         time.Duration
+	queueDurDownload  time.Duration
+	queueDurDecode    time.Duration
+	queueDurSample    time.Duration
+	downloadStartTime time.Time
+	totalDur          time.Duration // Total duration from from start of download to end of sampling
+	downloadSizeMb    float32
 }
 
 type Downloaded struct {
 	realization int
 	rawByteData []byte
 	res         *Result
+	enqueuedAt  time.Time
 }
 
 type Decoded struct {
 	realization int
 	surface     *xtgeo.Surface
 	res         *Result
+	enqueuedAt  time.Time
 }
 
 func runDownloadStage(outCh chan<- *Downloaded, resultCh chan<- *Result, fetcher *utils.BlobFetcher, realSurfObjArr []RealSurfObjId, workers int) {
 	var wg sync.WaitGroup
+
+	stageStartTime := time.Now()
 
 	numSurfObjects := len(realSurfObjArr)
 	tasks := make(chan RealSurfObjId, numSurfObjects)
@@ -125,19 +132,22 @@ func runDownloadStage(outCh chan<- *Downloaded, resultCh chan<- *Result, fetcher
 	}
 	close(tasks)
 
-	startTime := time.Now()
-
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
 			for realSurfObj := range tasks {
-				res := &Result{realization: realSurfObj.Realization, startTime: startTime}
+				downloadStartTime := time.Now()
 
-				start := time.Now()
+				res := &Result{
+					realization:       realSurfObj.Realization,
+					downloadStartTime: downloadStartTime,
+					queueDurDownload:  time.Since(stageStartTime),
+				}
+
 				byteArr, err := fetcher.FetchAsBytes(realSurfObj.ObjectUuid)
-				res.downloadDur = time.Since(start)
+				res.downloadDur = time.Since(downloadStartTime)
 				res.downloadSizeMb = float32(len(byteArr)) / (1024 * 1024)
 
 				if err != nil {
@@ -150,6 +160,7 @@ func runDownloadStage(outCh chan<- *Downloaded, resultCh chan<- *Result, fetcher
 					realization: realSurfObj.Realization,
 					rawByteData: byteArr,
 					res:         res,
+					enqueuedAt:  time.Now(),
 				}
 			}
 		}()
@@ -174,6 +185,8 @@ func runDecodeStage(inCh <-chan *Downloaded, outCh chan<- *Decoded, resultCh cha
 				res := downloaded.res
 
 				start := time.Now()
+				res.queueDurDecode = start.Sub(downloaded.enqueuedAt)
+
 				surface, err := xtgeo.DeserializeBlobToSurface(downloaded.rawByteData)
 				res.decodeDur = time.Since(start)
 
@@ -187,6 +200,7 @@ func runDecodeStage(inCh <-chan *Downloaded, outCh chan<- *Decoded, resultCh cha
 					realization: downloaded.realization,
 					surface:     surface,
 					res:         res,
+					enqueuedAt:  time.Now(),
 				}
 			}
 		}()
@@ -212,6 +226,7 @@ func runSampleStage(inCh <-chan *Decoded, resultCh chan<- *Result, pointSet Poin
 				surface := decoded.surface
 
 				start := time.Now()
+				res.queueDurSample = start.Sub(decoded.enqueuedAt)
 
 				// Sample the surface
 				zValueArr, err := xtgeo.SurfaceZArrFromXYPairs(
@@ -231,7 +246,7 @@ func runSampleStage(inCh <-chan *Decoded, resultCh chan<- *Result, pointSet Poin
 					continue
 				}
 
-				res.totalDur = time.Since(res.startTime)
+				res.totalDur = time.Since(res.downloadStartTime)
 				res.sampledValues = zValueArr
 				resultCh <- res
 			}
