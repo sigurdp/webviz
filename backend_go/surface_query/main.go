@@ -62,7 +62,7 @@ func main() {
 	//wantedAsynqConcurrency := goMaxProcs * 2
 	// Then again that can easily blow up the memory consumption, so limit ourselves as an experiment for now
 	// Try with a hard limit of 2, may even want just a single task!!
-	wantedAsynqConcurrency := 2
+	wantedAsynqConcurrency := 1
 	asynqServer := asynq.NewServer(
 		asynqRedisConnOpt,
 		asynq.Config{
