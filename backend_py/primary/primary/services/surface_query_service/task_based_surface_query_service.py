@@ -28,14 +28,22 @@ class RealizationSampleResult(BaseModel):
     sampledValues: list[float]
 
 
-class _SampleInPointsTaskInput(BaseModel):
-    spike_userId: str
-    spike_resultCacheKey: str
-    sasToken: str
-    blobStoreBaseUri: str
-    objectIds: List[_RealizationObjectId]
+# class _RealizationSurfaceObject(_RealizationObjectId):
+#     realization: int
+#     objectUuid: str
+
+class _PointSet(BaseModel):
+    name: str
     xCoords: List[float]
     yCoords: List[float]
+    targetStoreKey: str
+
+class _SampleInPointsTaskInput(BaseModel):
+    userId: str
+    sasToken: str
+    blobStoreBaseUri: str
+    realizationSurfaceObjects: List[_RealizationObjectId]
+    pointSets: List[_PointSet]
 
 
 class _SampleInPointsTaskResult(BaseModel):
@@ -110,14 +118,18 @@ async def task_based_sample_surface_in_points_async(
     sas_token, blob_store_base_uri = await get_sas_token_and_blob_base_uri_for_case_async(sumo_access_token, case_uuid)
     perf_metrics.record_lap("sas-token")
 
+    pointSets=[]
+    pointSets.append(_PointSet(name="DummyName", xCoords=x_coords, yCoords=y_coords, targetStoreKey=store_key))
+
+    # for i in range(100):
+    #     pointSets.append(_PointSet(name=f"DummyName{i}", xCoords=x_coords, yCoords=y_coords, targetStoreKey=store_key+ f"_{i}"))
+
     request_body = _SampleInPointsTaskInput(
-        spike_userId=user_id,
-        spike_resultCacheKey=store_key,
+        userId=user_id,
         sasToken=sas_token,
         blobStoreBaseUri=blob_store_base_uri,
-        objectIds=realization_object_ids,
-        xCoords=x_coords,
-        yCoords=y_coords,
+        realizationSurfaceObjects=realization_object_ids,
+        pointSets=pointSets,
     )
 
     LOGGER.info(f"Enqueuing go task for point sampling on surface: {surface_name}")

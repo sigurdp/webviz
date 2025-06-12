@@ -14,19 +14,24 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-type realizationObjectId struct {
+type realizationSurfaceObject struct {
 	Realization int    `json:"realization" binding:"required"`
 	ObjectUuid  string `json:"objectUuid" binding:"required"`
 }
 
+type pointSet struct {
+	Name           string    `json:"name" validate:"required"`
+	XCoords        []float64 `json:"xCoords" validate:"required"`
+	YCoords        []float64 `json:"yCoords" validate:"required"`
+	TargetStoreKey string    `json:"targetStoreKey" validate:"required"`
+}
+
 type sampleInPointsTaskInput struct {
-	SpikeUserId         string                `json:"spike_userId" validate:"required"`
-	SpikeResultCacheKey string                `json:"spike_resultCacheKey" validate:"required"`
-	SasToken            string                `json:"sasToken" validate:"required"`
-	BlobStoreBaseUri    string                `json:"blobStoreBaseUri" validate:"required"`
-	ObjectIds           []realizationObjectId `json:"objectIds" validate:"required"`
-	XCoords             []float64             `json:"xCoords" validate:"required"`
-	YCoords             []float64             `json:"yCoords" validate:"required"`
+	UserId                    string                     `json:"userId" validate:"required"`
+	SasToken                  string                     `json:"sasToken" validate:"required"`
+	BlobStoreBaseUri          string                     `json:"blobStoreBaseUri" validate:"required"`
+	RealizationSurfaceObjects []realizationSurfaceObject `json:"realizationSurfaceObjects" validate:"required"`
+	PointSets                 []pointSet                 `json:"pointSets" validate:"required"`
 }
 
 type realizationSampleResult struct {
@@ -81,29 +86,37 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 		}
 	*/
 
-	perRealObjIds := make([]operations.RealSurfObjId, len(input.ObjectIds))
-	for i := range input.ObjectIds {
-		perRealObjIds[i] = operations.RealSurfObjId(input.ObjectIds[i])
+	perRealObjIds := make([]operations.RealSurfObj, len(input.RealizationSurfaceObjects))
+	for i := range input.RealizationSurfaceObjects {
+		perRealObjIds[i] = operations.RealSurfObj(input.RealizationSurfaceObjects[i])
 	}
 
 	blobFetcher := utils.NewBlobFetcher(input.SasToken, input.BlobStoreBaseUri)
 
-	perfMetrics.RecordLap("init")
-	pointSet := operations.PointSet{
-		XCoords: input.XCoords,
-		YCoords: input.YCoords,
+	numPointSets := len(input.PointSets)
+	pointSetArr := make([]operations.PointSet, numPointSets)
+	for i := range input.PointSets {
+		pointSetArr[i] = operations.PointSet{
+			Name:    input.PointSets[i].Name,
+			XCoords: input.PointSets[i].XCoords,
+			YCoords: input.PointSets[i].YCoords,
+		}
 	}
-	pointSetSamples, err := operations.FetchAndSampleSurfacesInPointSets(blobFetcher, perRealObjIds, pointSet)
+
+	perfMetrics.RecordLap("init")
+
+	pointSetResultArr, err := operations.FetchAndSampleSurfacesInPointSets(blobFetcher, perRealObjIds, pointSetArr)
 	if err != nil {
 		logger.Error(prefix+"error during bulk processing of surfaces:", "err", err)
 		return err
 	}
 	perfMetrics.RecordLap("fetch-and-sample")
 
-	logger.Debug(prefix+"fetched and sampled surfaces", "numSamples", len(pointSetSamples.RealSampleRes))
-	retResultArr := make([]realizationSampleResult, len(pointSetSamples.RealSampleRes))
+	singlePointSetResult := pointSetResultArr[0]
+	logger.Debug(prefix+"fetched and sampled surfaces", "numSamples", len(singlePointSetResult.PerRealSamples))
+	retResultArr := make([]realizationSampleResult, len(singlePointSetResult.PerRealSamples))
 	for i := range retResultArr {
-		retResultArr[i] = realizationSampleResult(pointSetSamples.RealSampleRes[i])
+		retResultArr[i] = realizationSampleResult(singlePointSetResult.PerRealSamples[i])
 	}
 
 	taskResult := sampleInPointsTaskResult{
@@ -111,7 +124,7 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 		UndefLimit:      0.99e30,
 	}
 
-	tempUserStore := deps.tempUserStoreFactory.ForUser(input.SpikeUserId)
+	tempUserStore := deps.tempUserStoreFactory.ForUser(input.UserId)
 
 	// blobExtension := "json"
 	// bytePayload, err := json.Marshal(taskResult)
@@ -127,7 +140,7 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 		return err
 	}
 
-	err = tempUserStore.PutBytes(ctx, input.SpikeResultCacheKey, bytePayload, "sampleInPoints", blobExtension)
+	err = tempUserStore.PutBytes(ctx, input.PointSets[0].TargetStoreKey, bytePayload, "sampleInPoints", blobExtension)
 	if err != nil {
 		logger.Error(prefix+"failed to write result to temp user store", "err", err)
 		return err
