@@ -59,7 +59,10 @@ func main() {
 	}
 
 	// A good starting point for asynq concurrency is double the number of logical cores
-	wantedAsynqConcurrency := goMaxProcs * 2
+	//wantedAsynqConcurrency := goMaxProcs * 2
+	// Then again that can easily blow up the memory consumption, so limit ourselves as an experiment for now
+	// Try with a hard limit of 2, may even want just a single task!!
+	wantedAsynqConcurrency := 2
 	asynqServer := asynq.NewServer(
 		asynqRedisConnOpt,
 		asynq.Config{
