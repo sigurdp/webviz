@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"surface_query/xtgeo"
 
@@ -32,14 +33,17 @@ func NewBlobFetcher(sasToken string, blobStoreBaseUri string) *BlobFetcher {
 
 // Download blob as bytes
 func (bf BlobFetcher) FetchAsBytes(objectUuid string) ([]byte, error) {
-	//byteArr, statusCode, err := fetchBlobBytes(bf.sasToken, bf.blobStoreBaseUri, objectUuid)
-	byteArr, err := fetchBlobBytesUsingAzblob(bf.testWithContainerClient, objectUuid)
-
+	byteArr, statusCode, err := fetchBlobBytes(bf.sasToken, bf.blobStoreBaseUri, objectUuid)
 	if err != nil {
 		return nil, err
 	}
-	// if statusCode != 200 {
-	// 	return nil, fmt.Errorf("blob fetch returned http error: %v", statusCode)
+	if statusCode != 200 {
+		return nil, fmt.Errorf("blob fetch returned http error: %v", statusCode)
+	}
+
+	// byteArr, err := fetchBlobBytesUsingAzblob(bf.testWithContainerClient, objectUuid)
+	// if err != nil {
+	// 	return nil, err
 	// }
 
 	return byteArr, nil
