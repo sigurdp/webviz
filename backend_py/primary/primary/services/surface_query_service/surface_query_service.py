@@ -39,7 +39,7 @@ class _PointSamplingResponseBody(BaseModel):
 
 
 # URL of the Go server endpoint
-SERVICE_ENDPOINT = f"{config.SURFACE_QUERY_URL}/sample_in_points"
+SERVICE_ENDPOINT = f"{config.LEGACY_SURFACE_QUERY_URL}/sample_in_points"
 
 
 async def batch_sample_surface_in_points_async(

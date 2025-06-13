@@ -134,6 +134,7 @@ async def task_based_sample_surface_in_points_async(
 
     LOGGER.info(f"Enqueuing go task for point sampling on surface: {surface_name}")
     response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(url=f"{config.SURFACE_QUERY_URL}/enqueue_task/sample_in_points", json=request_body.model_dump())
+    response.raise_for_status()
     task_status = _TaskStatusResponse.model_validate_json(response.content) 
     perf_metrics.record_lap("enqueue-go")
 
@@ -145,6 +146,7 @@ async def task_based_sample_surface_in_points_async(
 
     while not done and waited < timeout:
         response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(url=f"{config.SURFACE_QUERY_URL}/task_status/{task_id}")
+        response.raise_for_status()
         task_status = _TaskStatusResponse.model_validate_json(response.content) 
 
         status_string = task_status.status

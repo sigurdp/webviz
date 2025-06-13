@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
-
-	"log/slog"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/hibiken/asynq"

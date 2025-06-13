@@ -5,10 +5,11 @@ import (
 	"log/slog"
 	"math"
 	"runtime"
-	"surface_query/utils"
-	"surface_query/xtgeo"
 	"sync"
 	"time"
+
+	"surface_query/utils"
+	"surface_query/xtgeo"
 )
 
 type RealSurfObj struct {

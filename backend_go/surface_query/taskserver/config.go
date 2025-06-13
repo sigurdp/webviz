@@ -1,4 +1,4 @@
-package config
+package taskserver
 
 import (
 	"github.com/kelseyhightower/envconfig"
@@ -9,7 +9,7 @@ type Config struct {
 	AzureStorageConnectionString string `envconfig:"AZURE_STORAGE_CONNECTION_STRING" required:"true"`
 }
 
-func Load(cfg *Config) error {
+func LoadConfig(cfg *Config) error {
 	err := envconfig.Process("", cfg)
 	//slog.Debug("Config:", "cfg", cfg)
 	return err

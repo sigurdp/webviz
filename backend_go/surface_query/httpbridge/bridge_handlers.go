@@ -1,12 +1,14 @@
-package tasks
+package httpbridge
 
 import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"surface_query/utils"
 	"time"
+
+	"surface_query/taskserver/tasks"
+	"surface_query/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
@@ -19,17 +21,17 @@ type TaskStatusResponse struct {
 	ErrorMsg string      `json:"errorMsg,omitempty"`        // If the task failed, this field will contain the error message
 }
 
-type HttpBridgeHandlers struct {
+type BridgeHandlers struct {
 	asynqClient    *asynq.Client
 	asyncInspector *asynq.Inspector
 	queueName      string
 }
 
-func NewHttpBridgeHandlers(redisConnOpt asynq.RedisConnOpt) *HttpBridgeHandlers {
+func NewBridgeHandlers(redisConnOpt asynq.RedisConnOpt) *BridgeHandlers {
 	client := asynq.NewClient(redisConnOpt)
 	inspector := asynq.NewInspector(redisConnOpt)
 
-	return &HttpBridgeHandlers{
+	return &BridgeHandlers{
 		asynqClient:    client,
 		asyncInspector: inspector,
 		queueName:      "default",
@@ -37,16 +39,26 @@ func NewHttpBridgeHandlers(redisConnOpt asynq.RedisConnOpt) *HttpBridgeHandlers 
 }
 
 // Sets up the bridge routes
-func (h *HttpBridgeHandlers) MapRoutes(router *gin.Engine) {
-	router.POST("/enqueue_task/:task_type_name", h.handleEnqueueTask)
+func (h *BridgeHandlers) MapRoutes(router *gin.Engine) {
+	router.GET("", h.handleRoot)
+	router.POST("/enqueue_task/:task_type", h.handleEnqueueTask)
 	router.GET("/task_status/:task_id", h.handleTaskStatus)
 }
 
-func (h *HttpBridgeHandlers) handleEnqueueTask(c *gin.Context) {
+func (h *BridgeHandlers) handleRoot(c *gin.Context) {
+	c.String(http.StatusOK, fmt.Sprintf("Surface query http bridge is alive at %v", time.Now().Format(time.RFC3339)))
+}
+
+func (h *BridgeHandlers) handleEnqueueTask(c *gin.Context) {
 	logger := slog.Default()
 	prefix := "handleEnqueueTask - "
 
-	taskTypeName := c.Param("task_type_name")
+	taskTypeString := c.Param("task_type")
+	if !tasks.IsValidTaskType(taskTypeString) {
+		logger.Error(prefix+"illegal task type specified", "taskTypeString", taskTypeString)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "illegal task type specified"})
+		return
+	}
 
 	// We're going to pass the payload directly to the task
 	payload, err := c.GetRawData()
@@ -56,7 +68,7 @@ func (h *HttpBridgeHandlers) handleEnqueueTask(c *gin.Context) {
 		return
 	}
 
-	task := asynq.NewTask(taskTypeName, payload)
+	task := asynq.NewTask(taskTypeString, payload)
 
 	taskInfo, err := h.asynqClient.Enqueue(
 		task,
@@ -79,7 +91,7 @@ func (h *HttpBridgeHandlers) handleEnqueueTask(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *HttpBridgeHandlers) handleTaskStatus(c *gin.Context) {
+func (h *BridgeHandlers) handleTaskStatus(c *gin.Context) {
 	perfMetrics := utils.NewPerfMetrics()
 
 	logger := slog.Default()

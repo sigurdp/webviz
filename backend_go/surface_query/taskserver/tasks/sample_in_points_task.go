@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+
 	"surface_query/operations"
 	"surface_query/utils"
 
-	"github.com/vmihailenco/msgpack/v5"
-
 	"github.com/go-playground/validator/v10"
 	"github.com/hibiken/asynq"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type realizationSurfaceObject struct {
