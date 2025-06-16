@@ -1217,6 +1217,7 @@ export type WellborePick_api = {
     depthReferencePoint: string;
     mdUnit: string;
     interpreter: string | null;
+    obsNo: number;
 };
 
 export type WellboreTrajectory_api = {
