@@ -26,7 +26,7 @@ func Run() {
 	}
 	logger.Info(fmt.Sprintf("RedisUrl=%v", cfg.RedisUrl))
 
-	tempUserStoreFactory := utils.NewTempUserStoreFactory(cfg.RedisUrl, cfg.AzureStorageConnectionString, 2*60)
+	tempUserStoreFactory := utils.NewTempUserStoreFactory(cfg.RedisUrl, cfg.AzureStorageConnectionString, 60*60)
 
 	asynqRedisConnOpt, err := asynq.ParseRedisURI(cfg.RedisUrl)
 	if err != nil {
