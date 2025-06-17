@@ -41,6 +41,7 @@ const surfacesPerRealizationValuesSettings = [
     Setting.SAMPLE_RESOLUTION_IN_METERS,
     Setting.COLOR_SET,
     Setting.SURF_UNC_COMPUTE_ALL_WELLS,
+    Setting.SURF_UNC_SHOULD_COMPUTE_ALL_WELLS,
     Setting.SMDA_WELLBORE_HEADERS,
 ] as const;
 export type SurfacesPerRealizationValuesSettings = typeof surfacesPerRealizationValuesSettings;
@@ -89,7 +90,8 @@ export class SurfacesPerRealizationValuesProvider
             !isEqual(prevSettings.surfaceNames, newSettings.surfaceNames) ||
             !isEqual(prevSettings.sampleResolutionInMeters, newSettings.sampleResolutionInMeters) ||
             !isEqual(prevSettings.surfUncComputeAllWells, newSettings.surfUncComputeAllWells) ||
-            !isEqual(prevSettings.smdaWellboreHeaders, newSettings.smdaWellboreHeaders)
+            !isEqual(prevSettings.smdaWellboreHeaders, newSettings.smdaWellboreHeaders) ||
+            !isEqual(prevSettings.surfUncShouldComputeAllWells, newSettings.surfUncShouldComputeAllWells)
         );
     }
 
@@ -278,7 +280,6 @@ export class SurfacesPerRealizationValuesProvider
         getGlobalSetting,
         getWorkbenchSession,
         registerQueryKey,
-
         queryClient,
     }: FetchDataParams<
         SurfacesPerRealizationValuesSettings,
@@ -296,8 +297,8 @@ export class SurfacesPerRealizationValuesProvider
 
         // LONG RUNNING EXPERIMENT
         const computeAllWellsCounter = getSetting(Setting.SURF_UNC_COMPUTE_ALL_WELLS);
-
-        if (computeAllWellsCounter) {
+        const shouldComputeAllWells = getSetting(Setting.SURF_UNC_SHOULD_COMPUTE_ALL_WELLS);
+        if (computeAllWellsCounter && shouldComputeAllWells) {
             // Get all realizations
             const ensemble = getWorkbenchSession().getEnsembleSet().findEnsemble(ensembleIdent);
             if (!ensemble) {
@@ -363,7 +364,7 @@ export class SurfacesPerRealizationValuesProvider
                             ensemble_name: ensembleIdent.getEnsembleName(),
                             surface_name: surfaceName,
                             surface_attribute: attribute,
-                            realization_nums: allRealizations ?? [],
+                            realization_nums: realizations ?? [],
                             counter: computeAllWellsCounter,
                         },
                         body: {
@@ -376,7 +377,7 @@ export class SurfacesPerRealizationValuesProvider
                     });
 
                     // DO NOT await. This triggers the fetch and immediately continues.
-                    queryClient.fetchQuery(queryOptions);
+                    queryClient.fetchQuery({ ...queryOptions, gcTime: 100000000, staleTime: 100000000 });
                 });
             });
         }

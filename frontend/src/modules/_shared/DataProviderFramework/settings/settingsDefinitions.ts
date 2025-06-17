@@ -52,6 +52,7 @@ export enum Setting {
     WELLBORE_PICKS = "wellborePicks",
     WELLBORE_PICK_IDENTIFIER = "wellborePickIdentifier",
     SURF_UNC_COMPUTE_ALL_WELLS = "surfUncComputeAllWells",
+    SURF_UNC_SHOULD_COMPUTE_ALL_WELLS = "surfUncShouldComputeAllWells",
 }
 
 export const settingCategories = {
@@ -86,6 +87,7 @@ export const settingCategories = {
     [Setting.WELLBORE_PICKS]: SettingCategory.MULTI_SELECT,
     [Setting.WELLBORE_PICK_IDENTIFIER]: SettingCategory.SINGLE_SELECT,
     [Setting.SURF_UNC_COMPUTE_ALL_WELLS]: SettingCategory.NUMBER,
+    [Setting.SURF_UNC_SHOULD_COMPUTE_ALL_WELLS]: SettingCategory.BOOLEAN,
 } as const;
 
 export type SettingCategories = typeof settingCategories;
@@ -122,6 +124,7 @@ export type SettingTypes = {
     [Setting.WELLBORE_PICKS]: WellborePick_api[] | null;
     [Setting.WELLBORE_PICK_IDENTIFIER]: string | null;
     [Setting.SURF_UNC_COMPUTE_ALL_WELLS]: number;
+    [Setting.SURF_UNC_SHOULD_COMPUTE_ALL_WELLS]: boolean;
 };
 
 export type PossibleSettingsForCategory<TCategory extends SettingCategory> = {

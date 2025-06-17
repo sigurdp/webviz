@@ -1,3 +1,4 @@
+import { B } from "@tanstack/query-core/build/legacy/hydration-DpBMnFDT";
 import { BooleanSetting } from "../implementations/BooleanSetting";
 import { ButtonCounterIncrSetting } from "../implementations/ButtonCounterIncrSetting";
 import { ColorScaleSetting } from "../implementations/ColorScaleSetting";
@@ -80,3 +81,4 @@ SettingRegistry.registerSetting(Setting.WELLBORE_PICKS, "Wellbore Picks", Drille
 SettingRegistry.registerSetting(Setting.SURF_UNC_COMPUTE_ALL_WELLS, "Compute all wells", ButtonCounterIncrSetting, {
     customConstructorParameters: ["Click me"],
 });
+SettingRegistry.registerSetting(Setting.SURF_UNC_SHOULD_COMPUTE_ALL_WELLS, "Compute selected wells", BooleanSetting);

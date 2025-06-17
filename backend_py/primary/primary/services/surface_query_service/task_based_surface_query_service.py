@@ -32,11 +32,13 @@ LOGGER = logging.getLogger(__name__)
 #     realization: int
 #     objectUuid: str
 
+
 class _PointSet(BaseModel):
     name: str
     xCoords: List[float]
     yCoords: List[float]
     targetStoreKey: str
+
 
 class _SampleInPointsTaskInput(BaseModel):
     userId: str
@@ -82,20 +84,17 @@ async def task_based_sample_surface_in_points_async(
         surface_attribute=surface_attribute,
         realizations=realizations,
         x_coords=x_coords,
-        y_coords=y_coords
+        y_coords=y_coords,
     )
     existing_result = await temp_user_store.get_pydantic_model(
-        model_class=_SampleInPointsTaskResult,
-        key=store_key,
-        format="msgpack"
+        model_class=_SampleInPointsTaskResult, key=store_key, format="msgpack"
     )
-    # if existing_result is not None:
-    #     LOGGER.debug(f"Found existing result key: {store_key}")
-    #     ret_array = _transform_return_array(response_body=existing_result)
-    #     perf_metrics.record_lap("fetch-existing-result")
-    #     LOGGER.debug(f"task_based_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
-    #     return ret_array
-
+    if existing_result is not None:
+        LOGGER.debug(f"Found existing result key: {store_key}")
+        ret_array = _transform_return_array(response_body=existing_result)
+        perf_metrics.record_lap("fetch-existing-result")
+        LOGGER.debug(f"task_based_sample_surface_in_points_async() took: {perf_metrics.to_string()}")
+        return ret_array
 
     LOGGER.debug(f"No cached point sampling result found for key: {store_key}, proceeding with new request...")
 
@@ -112,7 +111,7 @@ async def task_based_sample_surface_in_points_async(
     sas_token, blob_store_base_uri = await get_sas_token_and_blob_base_uri_for_case_async(sumo_access_token, case_uuid)
     perf_metrics.record_lap("sas-token")
 
-    pointSets=[]
+    pointSets = []
     pointSets.append(_PointSet(name="DummyName", xCoords=x_coords, yCoords=y_coords, targetStoreKey=store_key))
 
     # for i in range(100):
@@ -127,9 +126,11 @@ async def task_based_sample_surface_in_points_async(
     )
 
     LOGGER.info(f"Enqueuing go task for point sampling on surface: {surface_name}")
-    response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(url=f"{config.SURFACE_QUERY_URL}/enqueue_task/sample_in_points", json=request_body.model_dump())
+    response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(
+        url=f"{config.SURFACE_QUERY_URL}/enqueue_task/sample_in_points", json=request_body.model_dump()
+    )
     response.raise_for_status()
-    task_status = _TaskStatusResponse.model_validate_json(response.content) 
+    task_status = _TaskStatusResponse.model_validate_json(response.content)
     perf_metrics.record_lap("enqueue-go")
 
     task_id = task_status.taskId
@@ -141,7 +142,7 @@ async def task_based_sample_surface_in_points_async(
     while not done and waited < timeout:
         response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(url=f"{config.SURFACE_QUERY_URL}/task_status/{task_id}")
         response.raise_for_status()
-        task_status = _TaskStatusResponse.model_validate_json(response.content) 
+        task_status = _TaskStatusResponse.model_validate_json(response.content)
 
         status_string = task_status.status
         if status_string in ["succeeded", "failed"]:
@@ -162,9 +163,7 @@ async def task_based_sample_surface_in_points_async(
         raise RuntimeError(f"Task {task_id} encountered an error: {task_status.errorMsg}")
 
     new_result = await temp_user_store.get_pydantic_model(
-        model_class=_SampleInPointsTaskResult,
-        key=store_key,
-        format="msgpack"
+        model_class=_SampleInPointsTaskResult, key=store_key, format="msgpack"
     )
     perf_metrics.record_lap("fetch-result")
 
@@ -187,7 +186,8 @@ def _build_key_for_temp_user_store(
     surface_attribute: str,
     realizations: List[int] | None,
     x_coords: list[float],
-    y_coords: list[float]) -> str:
+    y_coords: list[float],
+) -> str:
 
     params_for_hash = {
         "case_uuid": case_uuid,
@@ -195,18 +195,14 @@ def _build_key_for_temp_user_store(
         "surface_name": surface_name,
         "surface_attribute": surface_attribute,
         "realizations": sorted(realizations) if realizations else None,  # Sort for consistent hashing
-        "sample_points": {
-            "x_points": x_coords,
-            "y_points": y_coords
-        }
+        "sample_points": {"x_points": x_coords, "y_points": y_coords},
     }
-    params_json = json.dumps(params_for_hash, sort_keys=True, separators=(',', ':'))
-    params_hash = hashlib.sha256(params_json.encode('utf-8')).hexdigest()
+    params_json = json.dumps(params_for_hash, sort_keys=True, separators=(",", ":"))
+    params_hash = hashlib.sha256(params_json.encode("utf-8")).hexdigest()
 
     store_key = f"task_based_sample_surface_in_points__{params_hash}"
 
     return store_key
-
 
 
 def _transform_return_array(response_body: _SampleInPointsTaskResult) -> List[RealizationSampleResult]:
@@ -216,7 +212,6 @@ def _transform_return_array(response_body: _SampleInPointsTaskResult) -> List[Re
         res.sampledValues = np.where((values_np < response_body.undefLimit), values_np, np.nan).tolist()
 
     return response_body.sampleResultArr
-
 
 
 class NamedPointSet(BaseModel):
@@ -269,30 +264,28 @@ async def start_precompute_sample_surface_in_point_sets_async(
             surface_attribute=surface_attribute,
             realizations=realizations,
             x_coords=ps.x_coords,
-            y_coords=ps.y_coords
+            y_coords=ps.y_coords,
         )
 
         task_input.pointSets.append(
-            _PointSet(
-                name=ps.name,
-                xCoords=ps.x_coords,
-                yCoords=ps.y_coords,
-                targetStoreKey=store_key
-            )
+            _PointSet(name=ps.name, xCoords=ps.x_coords, yCoords=ps.y_coords, targetStoreKey=store_key)
         )
 
     perf_metrics.record_lap("build-task-input")
 
-    LOGGER.info(f"Enqueuing go task for PRECOMPUTE point sampling on surface: {surface_name}, num point sets: {len(task_input.pointSets)}")
-    response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(url=f"{config.SURFACE_QUERY_URL}/enqueue_task/sample_in_points", json=task_input.model_dump())
+    LOGGER.info(
+        f"Enqueuing go task for PRECOMPUTE point sampling on surface: {surface_name}, num point sets: {len(task_input.pointSets)}"
+    )
+    response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.post(
+        url=f"{config.SURFACE_QUERY_URL}/enqueue_task/sample_in_points", json=task_input.model_dump()
+    )
     response.raise_for_status()
-    task_status = _TaskStatusResponse.model_validate_json(response.content) 
+    task_status = _TaskStatusResponse.model_validate_json(response.content)
     perf_metrics.record_lap("enqueue-go")
 
     LOGGER.debug(f"start_precompute_sample_surface_in_point_sets_async() took: {perf_metrics.to_string()}")
 
     return task_status.taskId
-
 
 
 class TaskStatus(BaseModel):
@@ -301,7 +294,9 @@ class TaskStatus(BaseModel):
 
 
 async def get_status_of_precompute_sample_surface_in_point_sets_async(task_id: str) -> TaskStatus:
-    response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(url=f"{config.SURFACE_QUERY_URL}/task_status/{task_id}")
+    response: httpx.Response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(
+        url=f"{config.SURFACE_QUERY_URL}/task_status/{task_id}"
+    )
     response.raise_for_status()
     task_status_response = _TaskStatusResponse.model_validate_json(response.content)
 
@@ -311,5 +306,5 @@ async def get_status_of_precompute_sample_surface_in_point_sets_async(task_id: s
         return TaskStatus(status="error", errorMsg=task_status_response.errorMsg)
     elif task_status_response.status == "succeeded":
         return TaskStatus(status="success")
-    
+
     raise ValueError(f"Unexpected task status: {task_status_response.status}")
