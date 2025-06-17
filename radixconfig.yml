@@ -234,12 +234,12 @@ spec:
           cpu: 2000m
       horizontalScaling:
         minReplicas: 1
-        maxReplicas: 4
+        maxReplicas: 10
         resources:
           memory:
-            averageUtilization: 50
+            averageUtilization: 40
           cpu:
-            averageUtilization: 50
+            averageUtilization: 40
 
     - name: surface-query-highend-taskserver
       dockerFileName: ./backend_go/surface-query-prod.Dockerfile
