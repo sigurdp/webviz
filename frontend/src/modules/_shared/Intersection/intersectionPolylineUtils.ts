@@ -64,6 +64,8 @@ export function makeIntersectionPolylineWithSectionLengthsPromise(
                     wellbore_uuids: [wellboreUuid],
                 },
             }),
+            gcTime: 100000000,
+            staleTime: 100000000,
         })
         .then((wellTrajectoryData) => {
             const wellTrajectoryPath: number[][] = [];

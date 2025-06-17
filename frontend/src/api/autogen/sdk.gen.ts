@@ -68,9 +68,12 @@ import type {
     PostGetSampleSurfaceInPointsData_api,
     PostGetSampleSurfaceInPointsResponse_api,
     PostGetSampleSurfaceInPointsError_api,
-    PostGetSampleSurfaceInPointSetsData_api,
-    PostGetSampleSurfaceInPointSetsResponse_api,
-    PostGetSampleSurfaceInPointSetsError_api,
+    PostPrecomputeSampleSurfaceInPointSetsData_api,
+    PostPrecomputeSampleSurfaceInPointSetsResponse_api,
+    PostPrecomputeSampleSurfaceInPointSetsError_api,
+    GetPrecomputeSampleSurfaceInPointSetsStatusData_api,
+    GetPrecomputeSampleSurfaceInPointSetsStatusResponse_api,
+    GetPrecomputeSampleSurfaceInPointSetsStatusError_api,
     GetDeltaSurfaceDataData_api,
     GetDeltaSurfaceDataResponse_api,
     GetDeltaSurfaceDataError_api,
@@ -612,14 +615,14 @@ export const postGetSampleSurfaceInPoints = <ThrowOnError extends boolean = fals
 };
 
 /**
- * Post Get Sample Surface In Point Sets
+ * Post Precompute Sample Surface In Point Sets
  */
-export const postGetSampleSurfaceInPointSets = <ThrowOnError extends boolean = false>(
-    options: Options<PostGetSampleSurfaceInPointSetsData_api, ThrowOnError>,
+export const postPrecomputeSampleSurfaceInPointSets = <ThrowOnError extends boolean = false>(
+    options: Options<PostPrecomputeSampleSurfaceInPointSetsData_api, ThrowOnError>,
 ) => {
     return (options?.client ?? client).post<
-        PostGetSampleSurfaceInPointSetsResponse_api,
-        PostGetSampleSurfaceInPointSetsError_api,
+        PostPrecomputeSampleSurfaceInPointSetsResponse_api,
+        PostPrecomputeSampleSurfaceInPointSetsError_api,
         ThrowOnError
     >({
         ...options,
@@ -627,7 +630,23 @@ export const postGetSampleSurfaceInPointSets = <ThrowOnError extends boolean = f
             "Content-Type": "application/json",
             ...options?.headers,
         },
-        url: "/surface/get_sample_surface_in_point_sets",
+        url: "/surface/precompute_sample_surface_in_point_sets",
+    });
+};
+
+/**
+ * Get Precompute Sample Surface In Point Sets Status
+ */
+export const getPrecomputeSampleSurfaceInPointSetsStatus = <ThrowOnError extends boolean = false>(
+    options: Options<GetPrecomputeSampleSurfaceInPointSetsStatusData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<
+        GetPrecomputeSampleSurfaceInPointSetsStatusResponse_api,
+        GetPrecomputeSampleSurfaceInPointSetsStatusError_api,
+        ThrowOnError
+    >({
+        ...options,
+        url: "/surface/precompute_sample_surface_in_point_sets_status/{operation_id}",
     });
 };
 

@@ -167,7 +167,7 @@ class PointSetXY(BaseModel):
 
 
 class NamedPointSetXY(BaseModel):
-    uuid: str
+    name: str
     x_points: list[float]
     y_points: list[float]
 

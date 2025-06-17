@@ -3,7 +3,7 @@ import logging
 import datetime
 import hashlib
 import msgpack
-from typing import Type, Literal
+from typing import TypeVar, Literal
 
 import redis.asyncio as redis
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
@@ -22,6 +22,8 @@ _BLOB_CONTAINER_NAME = "test-user-scoped-temp-storage"
 
 LOGGER = logging.getLogger(__name__)
 
+PydanticModelType = TypeVar("PydanticModelType", bound=BaseModel)
+
 
 class TempUserStoreFactory:
     _instance = None
@@ -32,7 +34,7 @@ class TempUserStoreFactory:
         self._ttl_s: int = ttl_s
 
     @classmethod
-    def initialize(cls, redis_url: str, storage_account_conn_string: str, ttl_s: int):
+    def initialize(cls, redis_url: str, storage_account_conn_string: str, ttl_s: int) -> None:
         if cls._instance is not None:
             raise RuntimeError("TempUserStoreFactory is already initialized")
 
@@ -50,7 +52,7 @@ class TempUserStoreFactory:
         cls._instance = cls(redis_client, container_client, ttl_s)
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls) -> "TempUserStoreFactory":
         if cls._instance is None:
             raise RuntimeError("TempUserStoreFactory is not initialized, call initialize() first")
         return cls._instance
@@ -133,12 +135,13 @@ class TempUserStore:
     async def put_pydantic_model(self, key: str, model: BaseModel, format: Literal["msgpack", "json"], blob_prefix: str | None) -> bool:
         perf_metrics = PerfMetrics()
 
+        payload: bytes
         blob_extension: str
         if format == "msgpack":
-            payload: bytes = _pydantic_to_msgpack(model)
+            payload = _pydantic_to_msgpack(model)
             blob_extension = "msgpack"
         elif format == "json":
-            payload: bytes = model.model_dump_json().encode("utf-8")
+            payload = model.model_dump_json().encode("utf-8")
             blob_extension = "json"
         else:
             raise ValueError(f"Unsupported serialization format: {format}")
@@ -154,8 +157,8 @@ class TempUserStore:
         return ret_val
 
     async def get_pydantic_model(
-        self, key: str, model_class: Type[BaseModel], format: Literal["msgpack", "json"]
-    ) -> BaseModel | None:
+        self, key: str, model_class: type[PydanticModelType], format: Literal["msgpack", "json"]
+    ) -> PydanticModelType | None:
         perf_metrics = PerfMetrics()
 
         payload = await self.get_bytes(key)
@@ -196,7 +199,7 @@ def _pydantic_to_msgpack(model: BaseModel) -> bytes:
     return msgpack.packb(model.model_dump(), use_bin_type=True)
 
 
-def _msgpack_to_pydantic(model_class: type[BaseModel], data: bytes) -> BaseModel:
+def _msgpack_to_pydantic(model_class: type[PydanticModelType], data: bytes) -> PydanticModelType:
     return model_class(**msgpack.unpackb(data, raw=False))
 
 

@@ -20,9 +20,19 @@ from primary.services.surface_query_service.surface_query_service import Realiza
 from primary.services.surface_query_service.task_based_surface_query_service import (
     task_based_sample_surface_in_points_async,
 )
+from primary.services.surface_query_service.task_based_surface_query_service import (
+    start_precompute_sample_surface_in_point_sets_async,
+    NamedPointSet,
+)
+from primary.services.surface_query_service.task_based_surface_query_service import (
+    get_status_of_precompute_sample_surface_in_point_sets_async,
+    TaskStatus,
+)
 from primary.services.utils.temp_user_store import get_temp_user_store_for_user
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 from primary.utils.drogon import is_drogon_identifier
+
+from .._shared.long_running_operations import LroInProgressResp, LroErrorResp, LroSuccessResp, LroErrorInfo
 
 from . import converters
 from . import schemas
@@ -291,6 +301,68 @@ async def post_get_sample_surface_in_points(
         )
 
     return intersections
+
+
+@router.post("/precompute_sample_surface_in_point_sets")
+async def post_precompute_sample_surface_in_point_sets(
+    case_uuid: str = Query(description="Sumo case uuid"),
+    ensemble_name: str = Query(description="Ensemble name"),
+    surface_name: str = Query(description="Surface name"),
+    surface_attribute: str = Query(description="Surface attribute"),
+    realization_nums: List[int] = Query(description="Realization numbers"),
+    counter: int = Query(description="Counter for caching, not used in this endpoint"),
+    point_sets: List[schemas.NamedPointSetXY] = Body(embed=True),
+    authenticated_user: AuthenticatedUser = Depends(AuthHelper.get_authenticated_user),
+) -> LroInProgressResp:
+
+    task_id: str = await start_precompute_sample_surface_in_point_sets_async(
+        authenticated_user=authenticated_user,
+        case_uuid=case_uuid,
+        iteration_name=ensemble_name,
+        surface_name=surface_name,
+        surface_attribute=surface_attribute,
+        realizations=realization_nums,
+        point_sets=[NamedPointSet(name=ps.name, x_coords=ps.x_points, y_coords=ps.y_points) for ps in point_sets],
+    )
+
+    # If we're unable to enqueue the task, we just return a HTTP error
+    if not task_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to enqueue task")
+
+    return LroInProgressResp(
+        status="in_progress",
+        operation_id=task_id,
+        poll_url=f"surface/precompute_sample_surface_in_point_sets_status/{task_id}",
+        progress=None,
+    )
+
+
+@router.get("/precompute_sample_surface_in_point_sets_status/{operation_id}")
+async def get_precompute_sample_surface_in_point_sets_status(
+    operation_id: str,
+) -> LroInProgressResp | LroSuccessResp[None] | LroErrorResp:
+
+    task_status: TaskStatus = await get_status_of_precompute_sample_surface_in_point_sets_async(task_id=operation_id)
+
+    if task_status.status == "in_progress":
+        return LroInProgressResp(
+            status="in_progress",
+            operation_id=operation_id,
+            poll_url=f"surface/precompute_sample_surface_in_point_sets_status/{operation_id}",
+            progress=None,
+        )
+    elif task_status.status == "success":
+        return LroSuccessResp(
+            status="success",
+            data=None,
+        )
+    elif task_status.status == "failure":
+        return LroErrorResp(
+            status="failure",
+            error=LroErrorInfo(message=task_status.error_msg if task_status.error_msg else "Unknown error occurred"),
+        )
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown error while querying task status")
 
 
 @router.get("/delta_surface_data")

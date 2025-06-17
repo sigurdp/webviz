@@ -27,7 +27,8 @@ import {
     getSurfaceData,
     postGetSurfaceIntersection,
     postGetSampleSurfaceInPoints,
-    postGetSampleSurfaceInPointSets,
+    postPrecomputeSampleSurfaceInPointSets,
+    getPrecomputeSampleSurfaceInPointSetsStatus,
     getDeltaSurfaceData,
     getMisfitSurfaceData,
     deprecatedGetStratigraphicUnits,
@@ -110,9 +111,10 @@ import type {
     PostGetSampleSurfaceInPointsData_api,
     PostGetSampleSurfaceInPointsError_api,
     PostGetSampleSurfaceInPointsResponse_api,
-    PostGetSampleSurfaceInPointSetsData_api,
-    PostGetSampleSurfaceInPointSetsError_api,
-    PostGetSampleSurfaceInPointSetsResponse_api,
+    PostPrecomputeSampleSurfaceInPointSetsData_api,
+    PostPrecomputeSampleSurfaceInPointSetsError_api,
+    PostPrecomputeSampleSurfaceInPointSetsResponse_api,
+    GetPrecomputeSampleSurfaceInPointSetsStatusData_api,
     GetDeltaSurfaceDataData_api,
     GetMisfitSurfaceDataData_api,
     DeprecatedGetStratigraphicUnitsData_api,
@@ -701,14 +703,16 @@ export const postGetSampleSurfaceInPointsMutation = (options?: Partial<Options<P
     return mutationOptions;
 };
 
-export const postGetSampleSurfaceInPointSetsQueryKey = (options: Options<PostGetSampleSurfaceInPointSetsData_api>) => [
-    createQueryKey("postGetSampleSurfaceInPointSets", options),
-];
+export const postPrecomputeSampleSurfaceInPointSetsQueryKey = (
+    options: Options<PostPrecomputeSampleSurfaceInPointSetsData_api>,
+) => [createQueryKey("postPrecomputeSampleSurfaceInPointSets", options)];
 
-export const postGetSampleSurfaceInPointSetsOptions = (options: Options<PostGetSampleSurfaceInPointSetsData_api>) => {
+export const postPrecomputeSampleSurfaceInPointSetsOptions = (
+    options: Options<PostPrecomputeSampleSurfaceInPointSetsData_api>,
+) => {
     return queryOptions({
         queryFn: async ({ queryKey, signal }) => {
-            const { data } = await postGetSampleSurfaceInPointSets({
+            const { data } = await postPrecomputeSampleSurfaceInPointSets({
                 ...options,
                 ...queryKey[0],
                 signal,
@@ -716,20 +720,20 @@ export const postGetSampleSurfaceInPointSetsOptions = (options: Options<PostGetS
             });
             return data;
         },
-        queryKey: postGetSampleSurfaceInPointSetsQueryKey(options),
+        queryKey: postPrecomputeSampleSurfaceInPointSetsQueryKey(options),
     });
 };
 
-export const postGetSampleSurfaceInPointSetsMutation = (
-    options?: Partial<Options<PostGetSampleSurfaceInPointSetsData_api>>,
+export const postPrecomputeSampleSurfaceInPointSetsMutation = (
+    options?: Partial<Options<PostPrecomputeSampleSurfaceInPointSetsData_api>>,
 ) => {
     const mutationOptions: UseMutationOptions<
-        PostGetSampleSurfaceInPointSetsResponse_api,
-        AxiosError<PostGetSampleSurfaceInPointSetsError_api>,
-        Options<PostGetSampleSurfaceInPointSetsData_api>
+        PostPrecomputeSampleSurfaceInPointSetsResponse_api,
+        AxiosError<PostPrecomputeSampleSurfaceInPointSetsError_api>,
+        Options<PostPrecomputeSampleSurfaceInPointSetsData_api>
     > = {
         mutationFn: async (localOptions) => {
-            const { data } = await postGetSampleSurfaceInPointSets({
+            const { data } = await postPrecomputeSampleSurfaceInPointSets({
                 ...options,
                 ...localOptions,
                 throwOnError: true,
@@ -738,6 +742,27 @@ export const postGetSampleSurfaceInPointSetsMutation = (
         },
     };
     return mutationOptions;
+};
+
+export const getPrecomputeSampleSurfaceInPointSetsStatusQueryKey = (
+    options: Options<GetPrecomputeSampleSurfaceInPointSetsStatusData_api>,
+) => [createQueryKey("getPrecomputeSampleSurfaceInPointSetsStatus", options)];
+
+export const getPrecomputeSampleSurfaceInPointSetsStatusOptions = (
+    options: Options<GetPrecomputeSampleSurfaceInPointSetsStatusData_api>,
+) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getPrecomputeSampleSurfaceInPointSetsStatus({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getPrecomputeSampleSurfaceInPointSetsStatusQueryKey(options),
+    });
 };
 
 export const getDeltaSurfaceDataQueryKey = (options: Options<GetDeltaSurfaceDataData_api>) => [

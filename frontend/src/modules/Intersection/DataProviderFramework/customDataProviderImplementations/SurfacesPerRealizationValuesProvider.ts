@@ -3,11 +3,9 @@ import { isEqual } from "lodash";
 import type { SurfaceRealizationSampleValues_api } from "@api";
 import {
     SurfaceAttributeType_api,
-    getDrilledWellboreHeadersOptions,
     getRealizationSurfacesMetadataOptions,
-    postGetSampleSurfaceInPointSets,
-    postGetSampleSurfaceInPointSetsOptions,
     postGetSampleSurfaceInPointsOptions,
+    postPrecomputeSampleSurfaceInPointSetsOptions,
 } from "@api";
 import { IntersectionType } from "@framework/types/intersection";
 import { assertNonNull } from "@lib/utils/assertNonNull";
@@ -300,6 +298,12 @@ export class SurfacesPerRealizationValuesProvider
         const computeAllWellsCounter = getSetting(Setting.SURF_UNC_COMPUTE_ALL_WELLS);
 
         if (computeAllWellsCounter) {
+            // Get all realizations
+            const ensemble = getWorkbenchSession().getEnsembleSet().findEnsemble(ensembleIdent);
+            if (!ensemble) {
+                throw new Error(`Ensemble ${ensembleIdent.getEnsembleName()} not found`);
+            }
+            const allRealizations = ensemble.getRealizations().map((realization) => realization);
             const wellboreHeaders = getSetting(Setting.SMDA_WELLBORE_HEADERS) ?? [];
             const fieldIdentifier = getGlobalSetting("fieldId");
 
@@ -335,7 +339,7 @@ export class SurfacesPerRealizationValuesProvider
                     );
 
                     return {
-                        uuid: wellbore.uniqueWellboreIdentifier,
+                        name: wellbore.uniqueWellboreIdentifier,
                         x_points: resampled.xPoints,
                         y_points: resampled.yPoints,
                     };
@@ -353,17 +357,18 @@ export class SurfacesPerRealizationValuesProvider
 
                 // For each surface, trigger one fetch with all wellbore data
                 surfaceNames.forEach((surfaceName) => {
-                    const queryOptions = postGetSampleSurfaceInPointSetsOptions({
+                    const queryOptions = postPrecomputeSampleSurfaceInPointSetsOptions({
                         query: {
                             case_uuid: ensembleIdent.getCaseUuid(),
                             ensemble_name: ensembleIdent.getEnsembleName(),
                             surface_name: surfaceName,
                             surface_attribute: attribute,
+                            realization_nums: allRealizations ?? [],
                             counter: computeAllWellsCounter,
                         },
                         body: {
-                            sample_point_sets: validWellboreData.filter((data) => data !== null) as {
-                                uuid: string;
+                            point_sets: validWellboreData.filter((data) => data !== null) as {
+                                name: string;
                                 x_points: number[];
                                 y_points: number[];
                             }[],

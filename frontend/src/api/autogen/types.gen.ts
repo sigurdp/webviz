@@ -40,10 +40,6 @@ export type BodyPostGetPolylineIntersection_api = {
     polyline_utm_xy: Array<number>;
 };
 
-export type BodyPostGetSampleSurfaceInPointSets_api = {
-    sample_point_sets: Array<NamedPointSetXy_api>;
-};
-
 export type BodyPostGetSampleSurfaceInPoints_api = {
     sample_points: PointSetXy_api;
 };
@@ -54,6 +50,10 @@ export type BodyPostGetSeismicFence_api = {
 
 export type BodyPostGetSurfaceIntersection_api = {
     cumulative_length_polyline: SurfaceIntersectionCumulativeLengthPolyline_api;
+};
+
+export type BodyPostPrecomputeSampleSurfaceInPointSets_api = {
+    point_sets: Array<NamedPointSetXy_api>;
 };
 
 export type BoundingBox2D_api = {
@@ -421,6 +421,31 @@ export type InplaceVolumetricsTableDefinition_api = {
     identifiersWithValues: Array<InplaceVolumetricsIdentifierWithValues_api>;
 };
 
+export type LroErrorInfo_api = {
+    message: string;
+};
+
+export type LroErrorResp_api = {
+    status: "failure";
+    error: LroErrorInfo_api;
+};
+
+export type LroInProgressResp_api = {
+    status: "in_progress";
+    operation_id: string;
+    poll_url?: string | null;
+    progress?: LroProgressInfo_api | null;
+};
+
+export type LroProgressInfo_api = {
+    progress_message: string;
+};
+
+export type LroSuccessRespNoneType_api = {
+    status: "success";
+    data: null;
+};
+
 export type MyAscResult_api = {
     format: "asc";
     the_string: string;
@@ -433,7 +458,7 @@ export type MyBinResult_api = {
 };
 
 export type NamedPointSetXy_api = {
-    uuid: string;
+    name: string;
     x_points: Array<number>;
     y_points: Array<number>;
 };
@@ -2183,8 +2208,8 @@ export type PostGetSampleSurfaceInPointsResponses_api = {
 export type PostGetSampleSurfaceInPointsResponse_api =
     PostGetSampleSurfaceInPointsResponses_api[keyof PostGetSampleSurfaceInPointsResponses_api];
 
-export type PostGetSampleSurfaceInPointSetsData_api = {
-    body: BodyPostGetSampleSurfaceInPointSets_api;
+export type PostPrecomputeSampleSurfaceInPointSetsData_api = {
+    body: BodyPostPrecomputeSampleSurfaceInPointSets_api;
     path?: never;
     query: {
         /**
@@ -2204,32 +2229,65 @@ export type PostGetSampleSurfaceInPointSetsData_api = {
          */
         surface_attribute: string;
         /**
-         * trigger counter
+         * Realization numbers
          */
-        counter?: number;
+        realization_nums: Array<number>;
+        /**
+         * Counter for caching, not used in this endpoint
+         */
+        counter: number;
     };
-    url: "/surface/get_sample_surface_in_point_sets";
+    url: "/surface/precompute_sample_surface_in_point_sets";
 };
 
-export type PostGetSampleSurfaceInPointSetsErrors_api = {
+export type PostPrecomputeSampleSurfaceInPointSetsErrors_api = {
     /**
      * Validation Error
      */
     422: HttpValidationError_api;
 };
 
-export type PostGetSampleSurfaceInPointSetsError_api =
-    PostGetSampleSurfaceInPointSetsErrors_api[keyof PostGetSampleSurfaceInPointSetsErrors_api];
+export type PostPrecomputeSampleSurfaceInPointSetsError_api =
+    PostPrecomputeSampleSurfaceInPointSetsErrors_api[keyof PostPrecomputeSampleSurfaceInPointSetsErrors_api];
 
-export type PostGetSampleSurfaceInPointSetsResponses_api = {
+export type PostPrecomputeSampleSurfaceInPointSetsResponses_api = {
     /**
      * Successful Response
      */
-    200: Array<SurfaceRealizationSampleValues_api>;
+    200: LroInProgressResp_api;
 };
 
-export type PostGetSampleSurfaceInPointSetsResponse_api =
-    PostGetSampleSurfaceInPointSetsResponses_api[keyof PostGetSampleSurfaceInPointSetsResponses_api];
+export type PostPrecomputeSampleSurfaceInPointSetsResponse_api =
+    PostPrecomputeSampleSurfaceInPointSetsResponses_api[keyof PostPrecomputeSampleSurfaceInPointSetsResponses_api];
+
+export type GetPrecomputeSampleSurfaceInPointSetsStatusData_api = {
+    body?: never;
+    path: {
+        operation_id: string;
+    };
+    query?: never;
+    url: "/surface/precompute_sample_surface_in_point_sets_status/{operation_id}";
+};
+
+export type GetPrecomputeSampleSurfaceInPointSetsStatusErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type GetPrecomputeSampleSurfaceInPointSetsStatusError_api =
+    GetPrecomputeSampleSurfaceInPointSetsStatusErrors_api[keyof GetPrecomputeSampleSurfaceInPointSetsStatusErrors_api];
+
+export type GetPrecomputeSampleSurfaceInPointSetsStatusResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api | LroSuccessRespNoneType_api | LroErrorResp_api;
+};
+
+export type GetPrecomputeSampleSurfaceInPointSetsStatusResponse_api =
+    GetPrecomputeSampleSurfaceInPointSetsStatusResponses_api[keyof GetPrecomputeSampleSurfaceInPointSetsStatusResponses_api];
 
 export type GetDeltaSurfaceDataData_api = {
     body?: never;
