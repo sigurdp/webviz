@@ -95,61 +95,79 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 
 	numPointSets := len(input.PointSets)
 	pointSetArr := make([]operations.PointSet, numPointSets)
-	for i := range input.PointSets {
-		pointSetArr[i] = operations.PointSet{
-			Name:    input.PointSets[i].Name,
-			XCoords: input.PointSets[i].XCoords,
-			YCoords: input.PointSets[i].YCoords,
+	for ips := range input.PointSets {
+		pointSetArr[ips] = operations.PointSet{
+			Name:    input.PointSets[ips].Name,
+			XCoords: input.PointSets[ips].XCoords,
+			YCoords: input.PointSets[ips].YCoords,
 		}
 	}
 
 	perfMetrics.RecordLap("init")
 
-	pointSetResultArr, err := operations.FetchAndSampleSurfacesInPointSets(blobFetcher, perRealObjIds, pointSetArr)
+	logger.Debug(prefix+"starting fetch and sample", "numRealizations", len(perRealObjIds), "numPointSets", numPointSets)
+
+	perPointSetResults, err := operations.FetchAndSampleSurfacesInPointSets(blobFetcher, perRealObjIds, pointSetArr)
 	if err != nil {
 		logger.Error(prefix+"error during bulk processing of surfaces:", "err", err)
 		return err
 	}
 	perfMetrics.RecordLap("fetch-and-sample")
 
-	singlePointSetResult := pointSetResultArr[0]
-	logger.Debug(prefix+"fetched and sampled surfaces", "numSamples", len(singlePointSetResult.PerRealSamples))
-	retResultArr := make([]realizationSampleResult, len(singlePointSetResult.PerRealSamples))
-	for i := range retResultArr {
-		retResultArr[i] = realizationSampleResult(singlePointSetResult.PerRealSamples[i])
-	}
-
-	taskResult := sampleInPointsTaskResult{
-		SampleResultArr: retResultArr,
-		UndefLimit:      0.99e30,
-	}
+	numPointSetsWithResults := len(perPointSetResults)
+	logger.Debug(prefix+"fetch and sample done", "numPointSetResults", numPointSetsWithResults)
 
 	tempUserStore := deps.tempUserStoreFactory.ForUser(input.UserId)
 
-	// blobExtension := "json"
-	// bytePayload, err := json.Marshal(taskResult)
-	// if err != nil {
-	// 	logger.Error(prefix+"failed to encode task result as json", "err", err)
-	// 	return err
-	// }
+	accumulatedPayloadMB := float32(0)
 
-	blobExtension := "msgpack"
-	bytePayload, err := msgpack.Marshal(taskResult)
-	if err != nil {
-		logger.Error(prefix+"failed to encode task result as msgpack", "err", err)
-		return err
-	}
+	for ips := range input.PointSets {
+		pointSetName := input.PointSets[ips].Name
+		pointSetTargetStoreKey := input.PointSets[ips].TargetStoreKey
 
-	err = tempUserStore.PutBytes(ctx, input.PointSets[0].TargetStoreKey, bytePayload, "sampleInPoints", blobExtension)
-	if err != nil {
-		logger.Error(prefix+"failed to write result to temp user store", "err", err)
-		return err
+		resultsForThisPointSet := perPointSetResults[ips]
+		numRealizationsSampled := len(resultsForThisPointSet.PerRealSamples)
+
+		taskResult := sampleInPointsTaskResult{
+			SampleResultArr: make([]realizationSampleResult, numRealizationsSampled),
+			UndefLimit:      0.99e30,
+		}
+
+		for ir := 0; ir < numRealizationsSampled; ir++ {
+			taskResult.SampleResultArr[ir] = realizationSampleResult{
+				Realization:   resultsForThisPointSet.PerRealSamples[ir].Realization,
+				SampledValues: resultsForThisPointSet.PerRealSamples[ir].SampledValues,
+			}
+		}
+
+		// blobExtension := "json"
+		// bytePayload, err := json.Marshal(taskResult)
+		// if err != nil {
+		// 	logger.Error(prefix+"failed to encode task result as json", "err", err)
+		// 	return err
+		// }
+
+		blobExtension := "msgpack"
+		bytePayload, err := msgpack.Marshal(taskResult)
+		if err != nil {
+			logger.Error(prefix+"failed to encode task result as msgpack", "err", err)
+			return err
+		}
+
+		err = tempUserStore.PutBytes(ctx, pointSetTargetStoreKey, bytePayload, "sampleInPoints", blobExtension)
+		if err != nil {
+			logger.Error(prefix+"failed to write result to temp user store", "err", err)
+			return err
+		}
+
+		payloadSizeMB := float32(len(bytePayload)) / (1024 * 1024)
+		accumulatedPayloadMB += payloadSizeMB
+		logger.Debug(prefix + fmt.Sprintf("result payload for point set '%s' stored (resultPayload=%.2fMB)", pointSetName, payloadSizeMB))
 	}
 
 	perfMetrics.RecordLap("store")
 
-	payloadSizeMB := float32(len(bytePayload)) / (1024 * 1024)
-	logger.Info(prefix + fmt.Sprintf("task completed in %s (resultPayload=%.2fMB)", perfMetrics.ToString(true), payloadSizeMB))
+	logger.Info(prefix + fmt.Sprintf("task completed in %s (numPointSets=%d, accumulatedPayloadMB=%.2fMB)", perfMetrics.ToString(true), numPointSets, accumulatedPayloadMB))
 
 	return nil
 }
