@@ -27,6 +27,7 @@ import {
     getSurfaceData,
     postGetSurfaceIntersection,
     postGetSampleSurfaceInPoints,
+    postGetSampleSurfaceInPointSets,
     getDeltaSurfaceData,
     getMisfitSurfaceData,
     deprecatedGetStratigraphicUnits,
@@ -109,6 +110,9 @@ import type {
     PostGetSampleSurfaceInPointsData_api,
     PostGetSampleSurfaceInPointsError_api,
     PostGetSampleSurfaceInPointsResponse_api,
+    PostGetSampleSurfaceInPointSetsData_api,
+    PostGetSampleSurfaceInPointSetsError_api,
+    PostGetSampleSurfaceInPointSetsResponse_api,
     GetDeltaSurfaceDataData_api,
     GetMisfitSurfaceDataData_api,
     DeprecatedGetStratigraphicUnitsData_api,
@@ -687,6 +691,45 @@ export const postGetSampleSurfaceInPointsMutation = (options?: Partial<Options<P
     > = {
         mutationFn: async (localOptions) => {
             const { data } = await postGetSampleSurfaceInPoints({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const postGetSampleSurfaceInPointSetsQueryKey = (options: Options<PostGetSampleSurfaceInPointSetsData_api>) => [
+    createQueryKey("postGetSampleSurfaceInPointSets", options),
+];
+
+export const postGetSampleSurfaceInPointSetsOptions = (options: Options<PostGetSampleSurfaceInPointSetsData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postGetSampleSurfaceInPointSets({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postGetSampleSurfaceInPointSetsQueryKey(options),
+    });
+};
+
+export const postGetSampleSurfaceInPointSetsMutation = (
+    options?: Partial<Options<PostGetSampleSurfaceInPointSetsData_api>>,
+) => {
+    const mutationOptions: UseMutationOptions<
+        PostGetSampleSurfaceInPointSetsResponse_api,
+        AxiosError<PostGetSampleSurfaceInPointSetsError_api>,
+        Options<PostGetSampleSurfaceInPointSetsData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postGetSampleSurfaceInPointSets({
                 ...options,
                 ...localOptions,
                 throwOnError: true,

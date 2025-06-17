@@ -14,9 +14,12 @@ from primary.services.utils.statistic_function import StatisticFunction
 from primary.services.utils.surface_intersect_with_polyline import intersect_surface_with_polyline
 from primary.services.utils.authenticated_user import AuthenticatedUser
 from primary.auth.auth_helper import AuthHelper
-#from primary.services.surface_query_service.surface_query_service import batch_sample_surface_in_points_async
+
+# from primary.services.surface_query_service.surface_query_service import batch_sample_surface_in_points_async
 from primary.services.surface_query_service.surface_query_service import RealizationSampleResult
-from primary.services.surface_query_service.task_based_surface_query_service import task_based_sample_surface_in_points_async
+from primary.services.surface_query_service.task_based_surface_query_service import (
+    task_based_sample_surface_in_points_async,
+)
 from primary.services.utils.temp_user_store import get_temp_user_store_for_user
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 from primary.utils.drogon import is_drogon_identifier
@@ -144,20 +147,16 @@ async def get_surface_data(
     if not isinstance(addr, RealizationSurfaceAddress | ObservedSurfaceAddress | StatisticalSurfaceAddress):
         raise HTTPException(status_code=404, detail="Endpoint only supports address types REAL, OBS and STAT")
 
-
     temp_user_store = get_temp_user_store_for_user(authenticated_user)
     store_key = f"surface_data__{surf_addr_str}"
     stored_surface = await temp_user_store.get_pydantic_model(
-        model_class=schemas.SurfaceDataFloat,
-        key=store_key,
-        format="msgpack"
+        model_class=schemas.SurfaceDataFloat, key=store_key, format="msgpack"
     )
     if stored_surface is not None:
         LOGGER.debug(f"Found existing stored surface for key: {store_key}")
         perf_metrics.record_lap("fetch-stored-surface")
         LOGGER.info(f"Got STORED {addr.address_type} surface in: {perf_metrics.to_string()}")
         return stored_surface
-
 
     if addr.address_type == "REAL":
         access = SurfaceAccess.from_iteration_name(access_token, addr.case_uuid, addr.ensemble_name)
@@ -272,7 +271,7 @@ async def post_get_sample_surface_in_points(
 
     result_arr: List[RealizationSampleResult] = await task_based_sample_surface_in_points_async(
         authenticated_user=authenticated_user,
-        #sumo_access_token=sumo_access_token,
+        # sumo_access_token=sumo_access_token,
         case_uuid=case_uuid,
         iteration_name=ensemble_name,
         surface_name=surface_name,

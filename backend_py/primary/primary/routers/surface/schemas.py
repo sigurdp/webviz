@@ -166,6 +166,12 @@ class PointSetXY(BaseModel):
     y_points: list[float]
 
 
+class NamedPointSetXY(BaseModel):
+    uuid: str
+    x_points: list[float]
+    y_points: list[float]
+
+
 class StratigraphicUnit(BaseModel):
     """
     Stratigraphic unit from SMDA

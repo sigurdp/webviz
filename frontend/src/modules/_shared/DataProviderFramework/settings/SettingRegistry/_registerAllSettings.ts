@@ -1,4 +1,5 @@
 import { BooleanSetting } from "../implementations/BooleanSetting";
+import { ButtonCounterIncrSetting } from "../implementations/ButtonCounterIncrSetting";
 import { ColorScaleSetting } from "../implementations/ColorScaleSetting";
 import { ColorSetSetting } from "../implementations/ColorSetSetting";
 import { DrilledWellborePicksSetting } from "../implementations/DrilledWellborePicksSetting";
@@ -76,3 +77,6 @@ SettingRegistry.registerSetting(Setting.WELLBORE_EXTENSION_LENGTH, "Wellbore Ext
 });
 SettingRegistry.registerSetting(Setting.WELLBORE_PICK_IDENTIFIER, "Wellbore Pick Identifier", DropdownStringSetting);
 SettingRegistry.registerSetting(Setting.WELLBORE_PICKS, "Wellbore Picks", DrilledWellborePicksSetting);
+SettingRegistry.registerSetting(Setting.SURF_UNC_COMPUTE_ALL_WELLS, "Compute all wells", ButtonCounterIncrSetting, {
+    customConstructorParameters: ["Click me"],
+});

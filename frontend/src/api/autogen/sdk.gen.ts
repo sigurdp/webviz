@@ -68,6 +68,9 @@ import type {
     PostGetSampleSurfaceInPointsData_api,
     PostGetSampleSurfaceInPointsResponse_api,
     PostGetSampleSurfaceInPointsError_api,
+    PostGetSampleSurfaceInPointSetsData_api,
+    PostGetSampleSurfaceInPointSetsResponse_api,
+    PostGetSampleSurfaceInPointSetsError_api,
     GetDeltaSurfaceDataData_api,
     GetDeltaSurfaceDataResponse_api,
     GetDeltaSurfaceDataError_api,
@@ -605,6 +608,26 @@ export const postGetSampleSurfaceInPoints = <ThrowOnError extends boolean = fals
             ...options?.headers,
         },
         url: "/surface/get_sample_surface_in_points",
+    });
+};
+
+/**
+ * Post Get Sample Surface In Point Sets
+ */
+export const postGetSampleSurfaceInPointSets = <ThrowOnError extends boolean = false>(
+    options: Options<PostGetSampleSurfaceInPointSetsData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<
+        PostGetSampleSurfaceInPointSetsResponse_api,
+        PostGetSampleSurfaceInPointSetsError_api,
+        ThrowOnError
+    >({
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...options?.headers,
+        },
+        url: "/surface/get_sample_surface_in_point_sets",
     });
 };
 

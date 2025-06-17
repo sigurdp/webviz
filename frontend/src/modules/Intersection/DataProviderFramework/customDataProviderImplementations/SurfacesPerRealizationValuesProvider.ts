@@ -3,7 +3,10 @@ import { isEqual } from "lodash";
 import type { SurfaceRealizationSampleValues_api } from "@api";
 import {
     SurfaceAttributeType_api,
+    getDrilledWellboreHeadersOptions,
     getRealizationSurfacesMetadataOptions,
+    postGetSampleSurfaceInPointSets,
+    postGetSampleSurfaceInPointSetsOptions,
     postGetSampleSurfaceInPointsOptions,
 } from "@api";
 import { IntersectionType } from "@framework/types/intersection";
@@ -39,6 +42,8 @@ const surfacesPerRealizationValuesSettings = [
     Setting.SURFACE_NAMES,
     Setting.SAMPLE_RESOLUTION_IN_METERS,
     Setting.COLOR_SET,
+    Setting.SURF_UNC_COMPUTE_ALL_WELLS,
+    Setting.SMDA_WELLBORE_HEADERS,
 ] as const;
 export type SurfacesPerRealizationValuesSettings = typeof surfacesPerRealizationValuesSettings;
 type SettingsWithTypes = MakeSettingTypesMap<SurfacesPerRealizationValuesSettings>;
@@ -84,7 +89,9 @@ export class SurfacesPerRealizationValuesProvider
             !isEqual(prevSettings.realizations, newSettings.realizations) ||
             !isEqual(prevSettings.attribute, newSettings.attribute) ||
             !isEqual(prevSettings.surfaceNames, newSettings.surfaceNames) ||
-            !isEqual(prevSettings.sampleResolutionInMeters, newSettings.sampleResolutionInMeters)
+            !isEqual(prevSettings.sampleResolutionInMeters, newSettings.sampleResolutionInMeters) ||
+            !isEqual(prevSettings.surfUncComputeAllWells, newSettings.surfUncComputeAllWells) ||
+            !isEqual(prevSettings.smdaWellboreHeaders, newSettings.smdaWellboreHeaders)
         );
     }
 
@@ -125,7 +132,9 @@ export class SurfacesPerRealizationValuesProvider
             const isEnabled = intersection?.type === IntersectionType.WELLBORE;
             return { enabled: isEnabled };
         });
-
+        settingAttributesUpdater(Setting.SURF_UNC_COMPUTE_ALL_WELLS, () => {
+            return { enabled: true, defaultValue: 0 };
+        });
         availableSettingsUpdater(Setting.ENSEMBLE, ({ getGlobalSetting }) => {
             const fieldIdentifier = getGlobalSetting("fieldId");
             const ensembles = getGlobalSetting("ensembles");
@@ -254,12 +263,24 @@ export class SurfacesPerRealizationValuesProvider
                     resampledPolylineWithCumulatedLengths.cumulatedHorizontalPolylineLengthArr,
             };
         });
+        availableSettingsUpdater(Setting.SMDA_WELLBORE_HEADERS, ({ getHelperDependency }) => {
+            const wellboreHeaders = getHelperDependency(wellboreHeadersDep);
+
+            if (!wellboreHeaders) {
+                return [];
+            }
+
+            return wellboreHeaders;
+        });
     }
 
     fetchData({
         getSetting,
         getStoredData,
+        getGlobalSetting,
+        getWorkbenchSession,
         registerQueryKey,
+
         queryClient,
     }: FetchDataParams<
         SurfacesPerRealizationValuesSettings,
@@ -275,11 +296,86 @@ export class SurfacesPerRealizationValuesProvider
             "No polyline and cumulated lengths found in stored data",
         );
 
-        if (requestedPolylineWithCumulatedLengths.xUtmPoints.length < 2) {
-            throw new Error(
-                "Invalid polyline in stored data. Must contain at least two (x,y)-points, and cumulated length per polyline section",
+        // LONG RUNNING EXPERIMENT
+        const computeAllWellsCounter = getSetting(Setting.SURF_UNC_COMPUTE_ALL_WELLS);
+
+        if (computeAllWellsCounter) {
+            const wellboreHeaders = getSetting(Setting.SMDA_WELLBORE_HEADERS) ?? [];
+            const fieldIdentifier = getGlobalSetting("fieldId");
+
+            // async generale polylines for all wellbores
+            const wellboreDataPromise = Promise.all(
+                wellboreHeaders.map(async (wellbore) => {
+                    const wellboreIntersection = {
+                        type: IntersectionType.WELLBORE,
+                        name: wellbore.uniqueWellboreIdentifier,
+                        uuid: wellbore.wellboreUuid,
+                    };
+                    const extensionLength = createValidExtensionLength(
+                        wellboreIntersection,
+                        getSetting(Setting.WELLBORE_EXTENSION_LENGTH),
+                    );
+                    const polyline = await createIntersectionPolylineWithSectionLengthsForField(
+                        fieldIdentifier,
+                        wellboreIntersection,
+                        extensionLength,
+                        getWorkbenchSession(),
+                        queryClient,
+                    );
+
+                    if (!polyline || polyline.polylineUtmXy.length === 0) {
+                        return null;
+                    }
+
+                    const resampled = createResampledPolylinePointsAndCumulatedLengthArray(
+                        polyline.polylineUtmXy,
+                        polyline.actualSectionLengths,
+                        -extensionLength,
+                        getSetting(Setting.SAMPLE_RESOLUTION_IN_METERS) ?? 1,
+                    );
+
+                    return {
+                        uuid: wellbore.uniqueWellboreIdentifier,
+                        x_points: resampled.xPoints,
+                        y_points: resampled.yPoints,
+                    };
+                }),
             );
+
+            // Once polyline data is ready, trigger the fetches for each surface
+            wellboreDataPromise.then((wellboreData) => {
+                const validWellboreData = wellboreData.filter(Boolean); // Remove nulls
+                if (validWellboreData.length === 0) return;
+
+                console.log(
+                    `Triggering background fetch for ${validWellboreData.length} wellbores across ${surfaceNames.length} surfaces.`,
+                );
+
+                // For each surface, trigger one fetch with all wellbore data
+                surfaceNames.forEach((surfaceName) => {
+                    const queryOptions = postGetSampleSurfaceInPointSetsOptions({
+                        query: {
+                            case_uuid: ensembleIdent.getCaseUuid(),
+                            ensemble_name: ensembleIdent.getEnsembleName(),
+                            surface_name: surfaceName,
+                            surface_attribute: attribute,
+                            counter: computeAllWellsCounter,
+                        },
+                        body: {
+                            sample_point_sets: validWellboreData.filter((data) => data !== null) as {
+                                uuid: string;
+                                x_points: number[];
+                                y_points: number[];
+                            }[],
+                        },
+                    });
+
+                    // DO NOT await. This triggers the fetch and immediately continues.
+                    queryClient.fetchQuery(queryOptions);
+                });
+            });
         }
+        // DONE
 
         // Create list of surface name and its fetch promise
         const surfaceNameAndFetchList = surfaceNames.map((surfaceName) => {

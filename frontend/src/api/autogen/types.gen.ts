@@ -40,6 +40,10 @@ export type BodyPostGetPolylineIntersection_api = {
     polyline_utm_xy: Array<number>;
 };
 
+export type BodyPostGetSampleSurfaceInPointSets_api = {
+    sample_point_sets: Array<NamedPointSetXy_api>;
+};
+
 export type BodyPostGetSampleSurfaceInPoints_api = {
     sample_points: PointSetXy_api;
 };
@@ -426,6 +430,12 @@ export type MyAscResult_api = {
 export type MyBinResult_api = {
     format: "bin";
     base64_str: string;
+};
+
+export type NamedPointSetXy_api = {
+    uuid: string;
+    x_points: Array<number>;
+    y_points: Array<number>;
 };
 
 export type NetworkNode_api = {
@@ -2172,6 +2182,54 @@ export type PostGetSampleSurfaceInPointsResponses_api = {
 
 export type PostGetSampleSurfaceInPointsResponse_api =
     PostGetSampleSurfaceInPointsResponses_api[keyof PostGetSampleSurfaceInPointsResponses_api];
+
+export type PostGetSampleSurfaceInPointSetsData_api = {
+    body: BodyPostGetSampleSurfaceInPointSets_api;
+    path?: never;
+    query: {
+        /**
+         * Sumo case uuid
+         */
+        case_uuid: string;
+        /**
+         * Ensemble name
+         */
+        ensemble_name: string;
+        /**
+         * Surface name
+         */
+        surface_name: string;
+        /**
+         * Surface attribute
+         */
+        surface_attribute: string;
+        /**
+         * trigger counter
+         */
+        counter?: number;
+    };
+    url: "/surface/get_sample_surface_in_point_sets";
+};
+
+export type PostGetSampleSurfaceInPointSetsErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type PostGetSampleSurfaceInPointSetsError_api =
+    PostGetSampleSurfaceInPointSetsErrors_api[keyof PostGetSampleSurfaceInPointSetsErrors_api];
+
+export type PostGetSampleSurfaceInPointSetsResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: Array<SurfaceRealizationSampleValues_api>;
+};
+
+export type PostGetSampleSurfaceInPointSetsResponse_api =
+    PostGetSampleSurfaceInPointSetsResponses_api[keyof PostGetSampleSurfaceInPointSetsResponses_api];
 
 export type GetDeltaSurfaceDataData_api = {
     body?: never;
