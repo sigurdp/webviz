@@ -26,6 +26,9 @@ spec:
         ingress:
           public:
             proxyReadTimeout: 120
+            # Configured to match our experimental nginx settings
+            proxyBodySize: 200m
+            proxyBufferSize: 10m
 
     - name: backend-primary
       dockerFileName: ./backend_py/primary/Dockerfile
