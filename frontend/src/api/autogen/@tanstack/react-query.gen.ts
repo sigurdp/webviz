@@ -27,6 +27,9 @@ import {
     getSurfaceData,
     postGetSurfaceIntersection,
     postGetSampleSurfaceInPoints,
+    postGetTbSampleSurfInPoints,
+    postTbSampleSurfInPointsSubmit,
+    getTbSampleSurfInPointsStatus,
     postPrecomputeSampleSurfaceInPointSets,
     getPrecomputeSampleSurfaceInPointSetsStatus,
     getDeltaSurfaceData,
@@ -111,6 +114,13 @@ import type {
     PostGetSampleSurfaceInPointsData_api,
     PostGetSampleSurfaceInPointsError_api,
     PostGetSampleSurfaceInPointsResponse_api,
+    PostGetTbSampleSurfInPointsData_api,
+    PostGetTbSampleSurfInPointsError_api,
+    PostGetTbSampleSurfInPointsResponse_api,
+    PostTbSampleSurfInPointsSubmitData_api,
+    PostTbSampleSurfInPointsSubmitError_api,
+    PostTbSampleSurfInPointsSubmitResponse_api,
+    GetTbSampleSurfInPointsStatusData_api,
     PostPrecomputeSampleSurfaceInPointSetsData_api,
     PostPrecomputeSampleSurfaceInPointSetsError_api,
     PostPrecomputeSampleSurfaceInPointSetsResponse_api,
@@ -701,6 +711,101 @@ export const postGetSampleSurfaceInPointsMutation = (options?: Partial<Options<P
         },
     };
     return mutationOptions;
+};
+
+export const postGetTbSampleSurfInPointsQueryKey = (options: Options<PostGetTbSampleSurfInPointsData_api>) => [
+    createQueryKey("postGetTbSampleSurfInPoints", options),
+];
+
+export const postGetTbSampleSurfInPointsOptions = (options: Options<PostGetTbSampleSurfInPointsData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postGetTbSampleSurfInPoints({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postGetTbSampleSurfInPointsQueryKey(options),
+    });
+};
+
+export const postGetTbSampleSurfInPointsMutation = (options?: Partial<Options<PostGetTbSampleSurfInPointsData_api>>) => {
+    const mutationOptions: UseMutationOptions<
+        PostGetTbSampleSurfInPointsResponse_api,
+        AxiosError<PostGetTbSampleSurfInPointsError_api>,
+        Options<PostGetTbSampleSurfInPointsData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postGetTbSampleSurfInPoints({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const postTbSampleSurfInPointsSubmitQueryKey = (options: Options<PostTbSampleSurfInPointsSubmitData_api>) => [
+    createQueryKey("postTbSampleSurfInPointsSubmit", options),
+];
+
+export const postTbSampleSurfInPointsSubmitOptions = (options: Options<PostTbSampleSurfInPointsSubmitData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postTbSampleSurfInPointsSubmit({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postTbSampleSurfInPointsSubmitQueryKey(options),
+    });
+};
+
+export const postTbSampleSurfInPointsSubmitMutation = (
+    options?: Partial<Options<PostTbSampleSurfInPointsSubmitData_api>>,
+) => {
+    const mutationOptions: UseMutationOptions<
+        PostTbSampleSurfInPointsSubmitResponse_api,
+        AxiosError<PostTbSampleSurfInPointsSubmitError_api>,
+        Options<PostTbSampleSurfInPointsSubmitData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postTbSampleSurfInPointsSubmit({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const getTbSampleSurfInPointsStatusQueryKey = (options: Options<GetTbSampleSurfInPointsStatusData_api>) => [
+    createQueryKey("getTbSampleSurfInPointsStatus", options),
+];
+
+export const getTbSampleSurfInPointsStatusOptions = (options: Options<GetTbSampleSurfInPointsStatusData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getTbSampleSurfInPointsStatus({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getTbSampleSurfInPointsStatusQueryKey(options),
+    });
 };
 
 export const postPrecomputeSampleSurfaceInPointSetsQueryKey = (

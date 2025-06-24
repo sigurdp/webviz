@@ -16,7 +16,7 @@ import (
 
 type TaskStatusResponse struct {
 	TaskId   string      `json:"taskId" binding:"required"`
-	Status   string      `json:"status" binding:"required"` // "pending", "running", "succeeded", "failed"
+	Status   string      `json:"status" binding:"required"` // "pending", "running", "success", "failure"
 	Result   interface{} `json:"result,omitempty"`          // Optional result field
 	ErrorMsg string      `json:"errorMsg,omitempty"`        // If the task failed, this field will contain the error message
 }
@@ -118,11 +118,11 @@ func (h *BridgeHandlers) handleTaskStatus(c *gin.Context) {
 
 	response := TaskStatusResponse{TaskId: taskInfo.ID, Status: statusString}
 
-	if statusString == "failed" {
+	if statusString == "failure" {
 		response.ErrorMsg = taskInfo.LastErr
 	}
 
-	if statusString == "succeeded" && taskInfo.Result != nil {
+	if statusString == "success" && taskInfo.Result != nil {
 		var result interface{}
 		if err := json.Unmarshal(taskInfo.Result, &result); err != nil {
 			logger.Error(prefix+"error unmarshalling task result:", "err", err)
@@ -147,9 +147,9 @@ func mapTaskStateToStatusString(taskState asynq.TaskState) string {
 	case asynq.TaskStateActive:
 		return "running"
 	case asynq.TaskStateCompleted:
-		return "succeeded"
+		return "success"
 	case asynq.TaskStateArchived:
-		return "failed"
+		return "failure"
 	}
 
 	panic(fmt.Sprintf("unknown task state: %v", taskState))

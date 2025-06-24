@@ -1,12 +1,14 @@
 package tasks
 
 const (
-	TaskType_SampleInPoints = "sample_in_points"
-	TaskType_Dummy          = "dummy"
+	TaskType_SampleInPoints       = "sample_in_points"
+	TaskType_BatchSamplePointSets = "batch_sample_point_sets"
+	TaskType_Dummy                = "dummy"
 )
 
 var AllTaskTypeStrings = []string{
 	TaskType_SampleInPoints,
+	TaskType_BatchSamplePointSets,
 	TaskType_Dummy,
 }
 

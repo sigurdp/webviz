@@ -52,8 +52,16 @@ export type BodyPostGetSurfaceIntersection_api = {
     cumulative_length_polyline: SurfaceIntersectionCumulativeLengthPolyline_api;
 };
 
+export type BodyPostGetTbSampleSurfInPoints_api = {
+    sample_points: PointSetXy_api;
+};
+
 export type BodyPostPrecomputeSampleSurfaceInPointSets_api = {
     point_sets: Array<NamedPointSetXy_api>;
+};
+
+export type BodyPostTbSampleSurfInPointsSubmit_api = {
+    sample_points: PointSetXy_api;
 };
 
 export type BoundingBox2D_api = {
@@ -439,6 +447,11 @@ export type LroInProgressResp_api = {
 
 export type LroProgressInfo_api = {
     progress_message: string;
+};
+
+export type LroSuccessRespListSurfaceRealizationSampleValues_api = {
+    status: "success";
+    data: Array<SurfaceRealizationSampleValues_api>;
 };
 
 export type LroSuccessRespNoneType_api = {
@@ -2207,6 +2220,103 @@ export type PostGetSampleSurfaceInPointsResponses_api = {
 
 export type PostGetSampleSurfaceInPointsResponse_api =
     PostGetSampleSurfaceInPointsResponses_api[keyof PostGetSampleSurfaceInPointsResponses_api];
+
+export type PostGetTbSampleSurfInPointsData_api = {
+    body: BodyPostGetTbSampleSurfInPoints_api;
+    path?: never;
+    query: {
+        case_uuid: string;
+        ensemble_name: string;
+        surface_name: string;
+        surface_attribute: string;
+        realization_nums: Array<number>;
+        cache_busting?: string | null;
+    };
+    url: "/surface/get_tb_sample_surf_in_points";
+};
+
+export type PostGetTbSampleSurfInPointsErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type PostGetTbSampleSurfInPointsError_api =
+    PostGetTbSampleSurfInPointsErrors_api[keyof PostGetTbSampleSurfInPointsErrors_api];
+
+export type PostGetTbSampleSurfInPointsResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api | LroErrorResp_api | LroSuccessRespListSurfaceRealizationSampleValues_api;
+};
+
+export type PostGetTbSampleSurfInPointsResponse_api =
+    PostGetTbSampleSurfInPointsResponses_api[keyof PostGetTbSampleSurfInPointsResponses_api];
+
+export type PostTbSampleSurfInPointsSubmitData_api = {
+    body: BodyPostTbSampleSurfInPointsSubmit_api;
+    path?: never;
+    query: {
+        case_uuid: string;
+        ensemble_name: string;
+        surface_name: string;
+        surface_attribute: string;
+        realization_nums: Array<number>;
+        cache_busting?: string | null;
+    };
+    url: "/surface/tb_sample_surf_in_points/submit";
+};
+
+export type PostTbSampleSurfInPointsSubmitErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type PostTbSampleSurfInPointsSubmitError_api =
+    PostTbSampleSurfInPointsSubmitErrors_api[keyof PostTbSampleSurfInPointsSubmitErrors_api];
+
+export type PostTbSampleSurfInPointsSubmitResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api | LroErrorResp_api | LroSuccessRespListSurfaceRealizationSampleValues_api;
+};
+
+export type PostTbSampleSurfInPointsSubmitResponse_api =
+    PostTbSampleSurfInPointsSubmitResponses_api[keyof PostTbSampleSurfInPointsSubmitResponses_api];
+
+export type GetTbSampleSurfInPointsStatusData_api = {
+    body?: never;
+    path: {
+        operation_id: string;
+    };
+    query?: never;
+    url: "/surface/tb_sample_surf_in_points/status/{operation_id}";
+};
+
+export type GetTbSampleSurfInPointsStatusErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type GetTbSampleSurfInPointsStatusError_api =
+    GetTbSampleSurfInPointsStatusErrors_api[keyof GetTbSampleSurfInPointsStatusErrors_api];
+
+export type GetTbSampleSurfInPointsStatusResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroInProgressResp_api | LroErrorResp_api | LroSuccessRespListSurfaceRealizationSampleValues_api;
+};
+
+export type GetTbSampleSurfInPointsStatusResponse_api =
+    GetTbSampleSurfInPointsStatusResponses_api[keyof GetTbSampleSurfInPointsStatusResponses_api];
 
 export type PostPrecomputeSampleSurfaceInPointSetsData_api = {
     body: BodyPostPrecomputeSampleSurfaceInPointSets_api;

@@ -17,22 +17,20 @@ from primary.auth.auth_helper import AuthHelper
 
 # from primary.services.surface_query_service.surface_query_service import batch_sample_surface_in_points_async
 from primary.services.surface_query_service.surface_query_service import RealizationSampleResult
-from primary.services.surface_query_service.task_based_surface_query_service import (
-    task_based_sample_surface_in_points_async,
-)
-from primary.services.surface_query_service.task_based_surface_query_service import (
-    start_precompute_sample_surface_in_point_sets_async,
-    NamedPointSet,
-)
-from primary.services.surface_query_service.task_based_surface_query_service import (
-    get_status_of_precompute_sample_surface_in_point_sets_async,
-    TaskStatus,
-)
+from primary.services.surface_query_service.task_based_surface_query_service import tb_start_and_poll_sample_in_points_async
+from primary.services.surface_query_service.task_based_surface_query_service import tb_hybrid_sample_in_points_async
+from primary.services.surface_query_service.task_based_surface_query_service import tb_start_sample_in_points_async
+from primary.services.surface_query_service.task_based_surface_query_service import tb_poll_sample_in_points_async
+from primary.services.surface_query_service.task_based_surface_query_service import start_precompute_sample_surface_in_point_sets_async
+from primary.services.surface_query_service.task_based_surface_query_service import NamedPointSet
+from primary.services.surface_query_service.task_based_surface_query_service import get_status_of_precompute_sample_surface_in_point_sets_async
+from primary.services.surface_query_service.task_based_surface_query_service import TaskStatus
 from primary.services.utils.temp_user_store import get_temp_user_store_for_user
+from primary.services.utils.task_meta_tracker import get_task_meta_tracker_for_user
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 from primary.utils.drogon import is_drogon_identifier
 
-from .._shared.long_running_operations import LroInProgressResp, LroErrorResp, LroSuccessResp, LroErrorInfo
+from .._shared.long_running_operations import LroInProgressResp, LroErrorResp, LroSuccessResp, LroErrorInfo, LroProgressInfo
 
 from . import converters
 from . import schemas
@@ -279,7 +277,7 @@ async def post_get_sample_surface_in_points(
 
     sumo_access_token = authenticated_user.get_sumo_access_token()
 
-    result_arr: List[RealizationSampleResult] = await task_based_sample_surface_in_points_async(
+    result_arr: List[RealizationSampleResult] = await tb_start_and_poll_sample_in_points_async(
         authenticated_user=authenticated_user,
         # sumo_access_token=sumo_access_token,
         case_uuid=case_uuid,
@@ -291,6 +289,7 @@ async def post_get_sample_surface_in_points(
         y_coords=sample_points.y_points,
     )
 
+
     intersections: List[schemas.SurfaceRealizationSampleValues] = []
     for res in result_arr:
         intersections.append(
@@ -301,6 +300,142 @@ async def post_get_sample_surface_in_points(
         )
 
     return intersections
+
+
+
+# Hybrid!!!!
+# ----------------------------------------------------------------------------
+@router.post("/get_tb_sample_surf_in_points")
+async def post_get_tb_sample_surf_in_points(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query()],
+    ensemble_name: Annotated[str, Query()],
+    surface_name: Annotated[str, Query()],
+    surface_attribute: Annotated[str, Query()],
+    realization_nums: Annotated[list[int], Query()],
+    sample_points: Annotated[schemas.PointSetXY, Body(embed=True)],
+    cache_busting: Annotated[str | None, Query()] = None,
+) -> LroInProgressResp | LroErrorResp | LroSuccessResp[List[schemas.SurfaceRealizationSampleValues]]:
+
+    result_or_status = await tb_hybrid_sample_in_points_async(
+        authenticated_user=authenticated_user,
+        case_uuid=case_uuid,
+        iteration_name=ensemble_name,
+        surface_name=surface_name,
+        surface_attribute=surface_attribute,
+        realizations=realization_nums,
+        x_coords=sample_points.x_points,
+        y_coords=sample_points.y_points
+    )
+
+    if isinstance(result_or_status, TaskStatus):
+        if result_or_status.status == "in_progress":
+            return LroInProgressResp(
+                status="in_progress",
+                operation_id=result_or_status.task_id,
+                progress=LroProgressInfo(progress_message=result_or_status.progress_msg) if result_or_status.progress_msg else None,
+                poll_url=None,
+            )
+        elif result_or_status.status == "failure":
+            return LroErrorResp(
+                status="failure",
+                error=LroErrorInfo(message=result_or_status.error_msg if result_or_status.error_msg else "Unknown error occurred"),
+            )
+        else:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown error while querying task status")
+
+    intersections: List[schemas.SurfaceRealizationSampleValues] = []
+    for res in result_or_status:
+        intersections.append(
+            schemas.SurfaceRealizationSampleValues(
+                realization=res.realization,
+                sampled_values=res.sampledValues,
+            )
+        )
+
+    return LroSuccessResp(
+        status="success",
+        data=intersections,
+    )
+
+
+# Pure submit for task-based sampling in points
+# Will just submit the job, but does not return any result
+# ----------------------------------------------------------------------------
+@router.post("/tb_sample_surf_in_points/submit")
+async def post_tb_sample_surf_in_points_submit(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query()],
+    ensemble_name: Annotated[str, Query()],
+    surface_name: Annotated[str, Query()],
+    surface_attribute: Annotated[str, Query()],
+    realization_nums: Annotated[list[int], Query()],
+    sample_points: Annotated[schemas.PointSetXY, Body(embed=True)],
+    cache_busting: Annotated[str | None, Query()] = None,
+) -> LroInProgressResp | LroErrorResp | LroSuccessResp[List[schemas.SurfaceRealizationSampleValues]]:
+
+    task_id = await tb_start_sample_in_points_async(
+        authenticated_user=authenticated_user,
+        case_uuid=case_uuid,
+        iteration_name=ensemble_name,
+        surface_name=surface_name,
+        surface_attribute=surface_attribute,
+        realizations=realization_nums,
+        x_coords=sample_points.x_points,
+        y_coords=sample_points.y_points,
+    )
+
+    return LroInProgressResp(
+        status="in_progress",
+        operation_id=task_id,
+        poll_url=f"surface/tb_sample_surf_in_points/status/{task_id}",
+        progress=None,
+    )
+
+
+# Pure polling for status on already submitted job
+# ----------------------------------------------------------------------------
+@router.get("/tb_sample_surf_in_points/status/{operation_id}")
+async def get_tb_sample_surf_in_points_status(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    operation_id: str,
+) -> LroInProgressResp | LroErrorResp | LroSuccessResp[List[schemas.SurfaceRealizationSampleValues]]:
+
+    result_or_status = await tb_poll_sample_in_points_async(authenticated_user=authenticated_user, task_id=operation_id)
+
+    if isinstance(result_or_status, TaskStatus):
+        if result_or_status.status == "in_progress":
+            return LroInProgressResp(
+                status="in_progress",
+                operation_id=operation_id,
+                poll_url=f"surface/tb_sample_surf_in_points/status/{operation_id}",
+                progress=LroProgressInfo(progress_message=result_or_status.progress_msg) if result_or_status.progress_msg else None,
+            )
+        elif result_or_status.status == "failure":
+            return LroErrorResp(
+                status="failure",
+                error=LroErrorInfo(message=result_or_status.error_msg if result_or_status.error_msg else "Unknown error occurred"),
+            )
+        else:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown error while querying task status")
+
+    intersections: List[schemas.SurfaceRealizationSampleValues] = []
+    for res in result_or_status:
+        intersections.append(
+            schemas.SurfaceRealizationSampleValues(
+                realization=res.realization,
+                sampled_values=res.sampledValues,
+            )
+        )
+
+    return LroSuccessResp(
+        status="success",
+        data=intersections,
+    )
+
+
+
+
 
 
 @router.post("/precompute_sample_surface_in_point_sets")

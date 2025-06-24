@@ -26,6 +26,8 @@ class LroInProgressResp(BaseModel):
     progress: LroProgressInfo | None = None
 
 
+# Rename to LroFailureResp??
+#
 class LroErrorResp(BaseModel):
     status: Literal["failure"]
     error: LroErrorInfo

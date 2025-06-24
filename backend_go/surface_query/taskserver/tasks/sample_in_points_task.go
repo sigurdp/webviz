@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"surface_query/operations"
+	"surface_query/taskserver/logic/sample_in_points"
 	"surface_query/utils"
 
 	"github.com/go-playground/validator/v10"
@@ -14,36 +14,20 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-type realizationSurfaceObject struct {
-	Realization int    `json:"realization" binding:"required"`
-	ObjectUuid  string `json:"objectUuid" binding:"required"`
-}
-
-type pointSet struct {
-	Name           string    `json:"name" validate:"required"`
-	XCoords        []float64 `json:"xCoords" validate:"required"`
-	YCoords        []float64 `json:"yCoords" validate:"required"`
-	TargetStoreKey string    `json:"targetStoreKey" validate:"required"`
-}
-
-type sampleInPointsTaskInput struct {
+type SampleInPointsTaskInput struct {
 	UserId                    string                     `json:"userId" validate:"required"`
+	TargetStoreKey            string                     `json:"targetStoreKey" validate:"required"`
 	SasToken                  string                     `json:"sasToken" validate:"required"`
 	BlobStoreBaseUri          string                     `json:"blobStoreBaseUri" validate:"required"`
-	RealizationSurfaceObjects []realizationSurfaceObject `json:"realizationSurfaceObjects" validate:"required"`
-	PointSets                 []pointSet                 `json:"pointSets" validate:"required"`
+	RealizationSurfaceObjects []RealizationSurfaceObject `json:"realizationSurfaceObjects" validate:"required"`
+	XCoords                   []float64                  `json:"xCoords" validate:"required"`
+	YCoords                   []float64                  `json:"yCoords" validate:"required"`
 }
 
-type realizationSampleResult struct {
-	Realization   int       `msgpack:"realization"   json:"realization"`
-	SampledValues []float32 `msgpack:"sampledValues" json:"sampledValues"`
-}
-
-type sampleInPointsTaskResult struct {
-	SampleResultArr []realizationSampleResult `msgpack:"sampleResultArr"  json:"sampleResultArr"`
-	UndefLimit      float32                   `msgpack:"undefLimit"       json:"undefLimit"`
-}
-
+// Task that samples realization surfaces in a set of XY points
+//
+// Input payload struct: SampleInPointsTaskInput
+// Task result struct written to tempUserStore: sampleInPointsTaskResult
 func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq.Task) error {
 	perfMetrics := utils.NewPerfMetrics()
 	logger := slog.Default()
@@ -51,7 +35,7 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 
 	logger.Debug(prefix + "entering")
 
-	var input sampleInPointsTaskInput
+	var input SampleInPointsTaskInput
 	if err := json.Unmarshal(task.Payload(), &input); err != nil {
 		logger.Error(prefix+"failed to unmarshal task input", "err", err)
 		return err
@@ -59,115 +43,76 @@ func (deps *TaskDeps) ProcessSampleInPointsTask(ctx context.Context, task *asynq
 
 	validate := validator.New()
 	if err := validate.Struct(input); err != nil {
-		logger.Error(prefix+"validation error:", "err", err)
+		logger.Error(prefix+"input validation error:", "err", err)
 		return err
 	}
 
-	/*
-		perRealObjIds := make([]operations.RealObjId, len(input.ObjectIds))
-		for i := range input.ObjectIds {
-			perRealObjIds[i] = operations.RealObjId(input.ObjectIds[i])
-		}
+	numRealizations := len(input.RealizationSurfaceObjects)
+	perRealSurfObjs := make([]sample_in_points.RealSurfObj, numRealizations)
+	for i := 0; i < numRealizations; i++ {
+		perRealSurfObjs[i] = sample_in_points.RealSurfObj(input.RealizationSurfaceObjects[i])
+	}
 
-		blobFetcher := utils.NewBlobFetcher(input.SasToken, input.BlobStoreBaseUri)
-
-		perfMetrics.RecordLap("init")
-
-		perRealSamplesArr, err := operations.BulkFetchAndSampleSurfaces(blobFetcher, perRealObjIds, input.XCoords, input.YCoords)
-		if err != nil {
-			logger.Error(prefix+"error during bulk processing of surfaces:", "err", err)
-			return err
-		}
-		perfMetrics.RecordLap("fetch-and-sample")
-
-		retResultArr := make([]realizationSampleResult, len(perRealSamplesArr))
-		for i := range retResultArr {
-			retResultArr[i] = realizationSampleResult(perRealSamplesArr[i])
-		}
-	*/
-
-	perRealObjIds := make([]operations.RealSurfObj, len(input.RealizationSurfaceObjects))
-	for i := range input.RealizationSurfaceObjects {
-		perRealObjIds[i] = operations.RealSurfObj(input.RealizationSurfaceObjects[i])
+	pointSet := sample_in_points.PointSet{
+		XCoords: input.XCoords,
+		YCoords: input.YCoords,
 	}
 
 	blobFetcher := utils.NewBlobFetcher(input.SasToken, input.BlobStoreBaseUri)
 
-	numPointSets := len(input.PointSets)
-	pointSetArr := make([]operations.PointSet, numPointSets)
-	for ips := range input.PointSets {
-		pointSetArr[ips] = operations.PointSet{
-			Name:    input.PointSets[ips].Name,
-			XCoords: input.PointSets[ips].XCoords,
-			YCoords: input.PointSets[ips].YCoords,
-		}
-	}
-
 	perfMetrics.RecordLap("init")
 
-	logger.Debug(prefix+"starting fetch and sample", "numRealizations", len(perRealObjIds), "numPointSets", numPointSets)
-
-	perPointSetResults, err := operations.FetchAndSampleSurfacesInPointSets(blobFetcher, perRealObjIds, pointSetArr)
+	perRealSamples, err := sample_in_points.FetchAndSampleInPoints(blobFetcher, perRealSurfObjs, pointSet)
 	if err != nil {
-		logger.Error(prefix+"error during bulk processing of surfaces:", "err", err)
+		logger.Error(prefix+"error during fetching and sampling of surfaces:", "err", err)
 		return err
 	}
 	perfMetrics.RecordLap("fetch-and-sample")
 
-	numPointSetsWithResults := len(perPointSetResults)
-	logger.Debug(prefix+"fetch and sample done", "numPointSetResults", numPointSetsWithResults)
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	if len(pointSet.XCoords)%2 != 0 {
+		err := fmt.Errorf("INTENTIONAL FAILURE ON ODD NUMBER OF COORDS")
+		logger.Error(prefix+"INTENTIONAL FAILURE", "err", err)
+		return err
+	}
 
 	tempUserStore := deps.tempUserStoreFactory.ForUser(input.UserId)
 
-	accumulatedPayloadMB := float32(0)
+	taskResult := SampleInPointsTaskResult{
+		RealizationSamples: make([]RealizationValues, len(perRealSamples)),
+		UndefLimit:         0.99e30,
+	}
+	for i := range perRealSamples {
+		taskResult.RealizationSamples[i] = RealizationValues(perRealSamples[i])
+	}
 
-	for ips := range input.PointSets {
-		pointSetName := input.PointSets[ips].Name
-		pointSetTargetStoreKey := input.PointSets[ips].TargetStoreKey
+	// blobExtension := "json"
+	// bytePayload, err := json.Marshal(taskResult)
+	// if err != nil {
+	// 	logger.Error(prefix+"failed to encode task result as json", "err", err)
+	// 	return err
+	// }
 
-		resultsForThisPointSet := perPointSetResults[ips]
-		numRealizationsSampled := len(resultsForThisPointSet.PerRealSamples)
+	blobExtension := "msgpack"
+	bytePayload, err := msgpack.Marshal(taskResult)
+	if err != nil {
+		logger.Error(prefix+"failed to encode task result as msgpack", "err", err)
+		return err
+	}
 
-		taskResult := sampleInPointsTaskResult{
-			SampleResultArr: make([]realizationSampleResult, numRealizationsSampled),
-			UndefLimit:      0.99e30,
-		}
-
-		for ir := 0; ir < numRealizationsSampled; ir++ {
-			taskResult.SampleResultArr[ir] = realizationSampleResult{
-				Realization:   resultsForThisPointSet.PerRealSamples[ir].Realization,
-				SampledValues: resultsForThisPointSet.PerRealSamples[ir].SampledValues,
-			}
-		}
-
-		// blobExtension := "json"
-		// bytePayload, err := json.Marshal(taskResult)
-		// if err != nil {
-		// 	logger.Error(prefix+"failed to encode task result as json", "err", err)
-		// 	return err
-		// }
-
-		blobExtension := "msgpack"
-		bytePayload, err := msgpack.Marshal(taskResult)
-		if err != nil {
-			logger.Error(prefix+"failed to encode task result as msgpack", "err", err)
-			return err
-		}
-
-		err = tempUserStore.PutBytes(ctx, pointSetTargetStoreKey, bytePayload, "sampleInPoints", blobExtension)
-		if err != nil {
-			logger.Error(prefix+"failed to write result to temp user store", "err", err)
-			return err
-		}
-
-		payloadSizeMB := float32(len(bytePayload)) / (1024 * 1024)
-		accumulatedPayloadMB += payloadSizeMB
-		logger.Debug(prefix + fmt.Sprintf("result payload for point set '%s' stored (resultPayload=%.2fMB)", pointSetName, payloadSizeMB))
+	err = tempUserStore.PutBytes(ctx, input.TargetStoreKey, bytePayload, "surfacesSampledInPoints", blobExtension)
+	if err != nil {
+		logger.Error(prefix+"failed to write result to temp user store", "err", err)
+		return err
 	}
 
 	perfMetrics.RecordLap("store")
 
-	logger.Info(prefix + fmt.Sprintf("task completed in %s (numPointSets=%d, accumulatedPayloadMB=%.2fMB)", perfMetrics.ToString(true), numPointSets, accumulatedPayloadMB))
+	payloadSizeMB := float32(len(bytePayload)) / (1024 * 1024)
+	logger.Info(prefix + fmt.Sprintf("task completed in %s (numRealizations=%d, resultPayloadMB=%.2fMB)", perfMetrics.ToString(true), numRealizations, payloadSizeMB))
 
 	return nil
 }

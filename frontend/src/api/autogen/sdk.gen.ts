@@ -68,6 +68,15 @@ import type {
     PostGetSampleSurfaceInPointsData_api,
     PostGetSampleSurfaceInPointsResponse_api,
     PostGetSampleSurfaceInPointsError_api,
+    PostGetTbSampleSurfInPointsData_api,
+    PostGetTbSampleSurfInPointsResponse_api,
+    PostGetTbSampleSurfInPointsError_api,
+    PostTbSampleSurfInPointsSubmitData_api,
+    PostTbSampleSurfInPointsSubmitResponse_api,
+    PostTbSampleSurfInPointsSubmitError_api,
+    GetTbSampleSurfInPointsStatusData_api,
+    GetTbSampleSurfInPointsStatusResponse_api,
+    GetTbSampleSurfInPointsStatusError_api,
     PostPrecomputeSampleSurfaceInPointSetsData_api,
     PostPrecomputeSampleSurfaceInPointSetsResponse_api,
     PostPrecomputeSampleSurfaceInPointSetsError_api,
@@ -611,6 +620,62 @@ export const postGetSampleSurfaceInPoints = <ThrowOnError extends boolean = fals
             ...options?.headers,
         },
         url: "/surface/get_sample_surface_in_points",
+    });
+};
+
+/**
+ * Post Get Tb Sample Surf In Points
+ */
+export const postGetTbSampleSurfInPoints = <ThrowOnError extends boolean = false>(
+    options: Options<PostGetTbSampleSurfInPointsData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<
+        PostGetTbSampleSurfInPointsResponse_api,
+        PostGetTbSampleSurfInPointsError_api,
+        ThrowOnError
+    >({
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...options?.headers,
+        },
+        url: "/surface/get_tb_sample_surf_in_points",
+    });
+};
+
+/**
+ * Post Tb Sample Surf In Points Submit
+ */
+export const postTbSampleSurfInPointsSubmit = <ThrowOnError extends boolean = false>(
+    options: Options<PostTbSampleSurfInPointsSubmitData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<
+        PostTbSampleSurfInPointsSubmitResponse_api,
+        PostTbSampleSurfInPointsSubmitError_api,
+        ThrowOnError
+    >({
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...options?.headers,
+        },
+        url: "/surface/tb_sample_surf_in_points/submit",
+    });
+};
+
+/**
+ * Get Tb Sample Surf In Points Status
+ */
+export const getTbSampleSurfInPointsStatus = <ThrowOnError extends boolean = false>(
+    options: Options<GetTbSampleSurfInPointsStatusData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<
+        GetTbSampleSurfInPointsStatusResponse_api,
+        GetTbSampleSurfInPointsStatusError_api,
+        ThrowOnError
+    >({
+        ...options,
+        url: "/surface/tb_sample_surf_in_points/status/{operation_id}",
     });
 };
 

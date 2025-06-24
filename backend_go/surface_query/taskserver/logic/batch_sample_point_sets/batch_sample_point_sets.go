@@ -1,9 +1,8 @@
-package operations
+package batch_sample_point_sets
 
 import (
 	"fmt"
 	"log/slog"
-	"math"
 	"runtime"
 	"sync"
 	"time"
@@ -33,16 +32,18 @@ type PointSetResult struct {
 	PerRealSamples []SamplesForReal
 }
 
-func FetchAndSampleSurfacesInPointSets(fetcher *utils.BlobFetcher, realSurfObjArr []RealSurfObj, pointSetArr []PointSet) ([]PointSetResult, error) {
+func FetchAndBatchSampleInPointSets(fetcher *utils.BlobFetcher, realSurfObjArr []RealSurfObj, pointSetArr []PointSet) ([]*PointSetResult, error) {
 	logger := slog.Default()
-	prefix := "FetchAndSampleSurfacesInPointSets() - "
+	prefix := "batch_sample_point_sets - "
 
-	numCpusToUse := runtime.GOMAXPROCS(0)
-	const computeToDecodeRatio float64 = 0.1
+	numLogicalCpusAvailable := runtime.GOMAXPROCS(0)
+	//const computeToDecodeRatio float64 = 0.1
 
-	numDownloadWorkers := max(10, 4*numCpusToUse)
-	numDecodeWorkers := max(1, int(math.Round(float64(numCpusToUse)*(1.0-computeToDecodeRatio))))
-	numSampleWorkers := max(1, numCpusToUse-numDecodeWorkers)
+	numDownloadWorkers := max(10, 4*numLogicalCpusAvailable)
+	numDecodeWorkers := numLogicalCpusAvailable
+	numSampleWorkers := numLogicalCpusAvailable
+	// numDecodeWorkers := max(1, int(math.Round(float64(numCpusToUse)*(1.0-computeToDecodeRatio))))
+	// numSampleWorkers := max(1, numCpusToUse-numDecodeWorkers)
 
 	numSurfObjects := len(realSurfObjArr)
 
@@ -51,12 +52,13 @@ func FetchAndSampleSurfacesInPointSets(fetcher *utils.BlobFetcher, realSurfObjAr
 	startTime := time.Now()
 
 	downloadedCh := make(chan *downloadedSurf, numSurfObjects)
-	decodedCh := make(chan *decodedSurf, numSurfObjects)
+	//decodedCh := make(chan *decodedSurf, numSurfObjects)
 	resultCh := make(chan *pipelineResult, numSurfObjects)
 
-	runDownloadStage(downloadedCh, resultCh, fetcher, realSurfObjArr, numDownloadWorkers)
-	runDecodeStage(downloadedCh, decodedCh, resultCh, numDecodeWorkers)
-	runSampleStage(decodedCh, resultCh, pointSetArr, numSampleWorkers)
+	runDownloadStage(fetcher, realSurfObjArr, numDownloadWorkers, downloadedCh, resultCh)
+	// runDecodeStage(numDecodeWorkers, downloadedCh, decodedCh, resultCh)
+	// runSampleStage(pointSetArr, numSampleWorkers, decodedCh, resultCh)
+	runProcessStage(pointSetArr, numSampleWorkers, downloadedCh, resultCh)
 
 	// Compose the return array
 	// We need to transform the pipeline results since the output of the pipeline is per realization surface
@@ -64,9 +66,11 @@ func FetchAndSampleSurfacesInPointSets(fetcher *utils.BlobFetcher, realSurfObjAr
 	totDownloadSizeMb := float32(0)
 
 	numPointSets := len(pointSetArr)
-	pointSetResultArr := make([]PointSetResult, numPointSets)
+	pointSetResultArr := make([]*PointSetResult, numPointSets)
 	for ips := 0; ips < numPointSets; ips++ {
-		pointSetResultArr[ips].PointSetName = pointSetArr[ips].Name
+		pointSetResultArr[ips] = &PointSetResult{
+			PointSetName: pointSetArr[ips].Name,
+		}
 	}
 
 	for pRes := range resultCh {
@@ -142,7 +146,7 @@ type decodedSurf struct {
 	enqueuedAt  time.Time
 }
 
-func runDownloadStage(outCh chan<- *downloadedSurf, resultCh chan<- *pipelineResult, fetcher *utils.BlobFetcher, realSurfObjArr []RealSurfObj, workers int) {
+func runDownloadStage(fetcher *utils.BlobFetcher, realSurfObjArr []RealSurfObj, workers int, outCh chan<- *downloadedSurf, resultCh chan<- *pipelineResult) {
 	var wg sync.WaitGroup
 
 	stageStartTime := time.Now()
@@ -195,7 +199,7 @@ func runDownloadStage(outCh chan<- *downloadedSurf, resultCh chan<- *pipelineRes
 	}()
 }
 
-func runDecodeStage(inCh <-chan *downloadedSurf, outCh chan<- *decodedSurf, resultCh chan<- *pipelineResult, workers int) {
+func runDecodeStage(workers int, inCh <-chan *downloadedSurf, outCh chan<- *decodedSurf, resultCh chan<- *pipelineResult) {
 	var wg sync.WaitGroup
 
 	for i := 0; i < workers; i++ {
@@ -235,7 +239,7 @@ func runDecodeStage(inCh <-chan *downloadedSurf, outCh chan<- *decodedSurf, resu
 	}()
 }
 
-func runSampleStage(inCh <-chan *decodedSurf, resultCh chan<- *pipelineResult, pointSetArr []PointSet, workers int) {
+func runSampleStage(pointSetArr []PointSet, workers int, inCh <-chan *decodedSurf, resultCh chan<- *pipelineResult) {
 	numPointSets := len(pointSetArr)
 
 	var wg sync.WaitGroup
@@ -272,6 +276,67 @@ func runSampleStage(inCh <-chan *decodedSurf, resultCh chan<- *pipelineResult, p
 					res.perPointSetSamples[i].sampledValues = valueArr
 				}
 				res.sampleDur = time.Since(start)
+
+				res.totalDur = time.Since(res.downloadStartTime)
+				resultCh <- res
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+}
+
+func runProcessStage(pointSetArr []PointSet, workers int, inCh <-chan *downloadedSurf, resultCh chan<- *pipelineResult) {
+	numPointSets := len(pointSetArr)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for downloaded := range inCh {
+				res := downloaded.res
+
+				startDecode := time.Now()
+				res.queueDurDecode = 0
+				res.queueDurSample = startDecode.Sub(downloaded.enqueuedAt)
+
+				surface, err := xtgeo.DeserializeBlobToSurface(downloaded.rawByteData)
+				res.decodeDur = time.Since(startDecode)
+
+				if err != nil {
+					res.err = fmt.Errorf("failed to decode surface for realization %d: %w", downloaded.realization, err)
+					resultCh <- res
+					continue
+				}
+
+				startSample := time.Now()
+
+				// Loop over all the point sets and sample the surface
+				res.perPointSetSamples = make([]singleRealPointSetSamples, numPointSets)
+
+				for i := 0; i < numPointSets; i++ {
+					pointSet := pointSetArr[i]
+					valueArr, _ := xtgeo.SurfaceZArrFromXYPairs(
+						pointSet.XCoords, pointSet.YCoords,
+						int(surface.Nx), int(surface.Ny),
+						surface.Xori, surface.Yori,
+						surface.Xinc, surface.Yinc,
+						1, surface.Rot,
+						surface.DataSlice,
+						xtgeo.Bilinear,
+					)
+
+					res.perPointSetSamples[i].pointSetName = pointSet.Name
+					res.perPointSetSamples[i].sampledValues = valueArr
+				}
+				res.sampleDur = time.Since(startSample)
 
 				res.totalDur = time.Since(res.downloadStartTime)
 				resultCh <- res

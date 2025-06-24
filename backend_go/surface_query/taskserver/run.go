@@ -53,6 +53,7 @@ func Run() {
 	taskMux := asynq.NewServeMux()
 	taskMux.HandleFunc(tasks.TaskType_Dummy, taskDeps.ProcessDummyTask)
 	taskMux.HandleFunc(tasks.TaskType_SampleInPoints, taskDeps.ProcessSampleInPointsTask)
+	taskMux.HandleFunc(tasks.TaskType_BatchSamplePointSets, taskDeps.ProcessBatchSamplePointSetsTask)
 
 	// Start Asynq server in goroutine
 	go func() {

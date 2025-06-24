@@ -35,6 +35,7 @@ from primary.routers.well.router import router as well_router
 from primary.routers.well_completions.router import router as well_completions_router
 from primary.services.utils.httpx_async_client_wrapper import HTTPX_ASYNC_CLIENT_WRAPPER
 from primary.services.utils.temp_user_store import TempUserStoreFactory
+from primary.services.utils.task_meta_tracker import TaskMetaTrackerFactory
 from primary.utils.azure_monitor_setup import setup_azure_monitor_telemetry
 from primary.utils.exception_handlers import configure_service_level_exception_handlers
 from primary.utils.exception_handlers import override_default_fastapi_exception_handlers
@@ -54,8 +55,8 @@ logging.getLogger("primary.services.user_grid3d_service").setLevel(logging.DEBUG
 logging.getLogger("primary.services.surface_query_service").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.grid3d").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.dev").setLevel(logging.DEBUG)
-logging.getLogger("primary.auth").setLevel(logging.DEBUG)
-logging.getLogger("primary.services.utils.temp_user_store").setLevel(logging.DEBUG)
+# logging.getLogger("primary.auth").setLevel(logging.DEBUG)
+# logging.getLogger("primary.services.utils.temp_user_store").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
 
@@ -83,6 +84,8 @@ else:
 # The initialization will raise an exception if initialization fails
 AZURE_STORAGE_CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
 TempUserStoreFactory.initialize(redis_url=config.REDIS_CACHE_URL, storage_account_conn_string=AZURE_STORAGE_CONNECTION_STRING, ttl_s=2*60)
+
+TaskMetaTrackerFactory.initialize(redis_url=config.REDIS_CACHE_URL, ttl_s=2*60)
 
 
 # Start the httpx client on startup and stop it on shutdown of the app
