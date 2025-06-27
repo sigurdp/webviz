@@ -41,6 +41,7 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     function handleProgress(progress: LroProgressInfo_api | undefined) {
         if (progress) {
             console.log(`PROGRESS: ${progress.progress_message}`);
+            statusWriter.setDebugMessage(`PROGRESS: ${progress.progress_message}`);
         }
     }
 

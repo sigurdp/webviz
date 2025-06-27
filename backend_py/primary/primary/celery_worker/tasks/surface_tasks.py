@@ -36,7 +36,7 @@ async def do_surface_from_addr_async(
 ) -> str | None:
     logger = logging.getLogger(__name__)
     #logger = get_task_logger(__name__)
-    logger.info(f"surface_from_addr() --- : {surf_addr_str=}")
+    logger.debug(f"do_surface_from_addr_async() --- : {surf_addr_str=}")
 
     perf_metrics = PerfMetrics()
     _set_task_progress_msg(task, f"Starting async portion of task")
@@ -54,8 +54,7 @@ async def do_surface_from_addr_async(
             attribute=addr.attribute,
             time_or_interval_str=addr.iso_time_or_interval,
         )
-        perf_metrics.record_lap("get-xtgeo")
-        logger.info(f"xtgeo_surf: {xtgeo_surf=}")
+    perf_metrics.record_lap("get-xtgeo")
 
     if xtgeo_surf is None:
         logger.error(f"Failed to get xtgeo surface for {surf_addr_str=}")
@@ -72,7 +71,7 @@ async def do_surface_from_addr_async(
         _set_task_progress_msg(task, "Storing result")
         surf_data_response = to_api_surface_data_float(xtgeo_surf)
         await temp_user_store.put_pydantic_model(target_store_key, surf_data_response, "msgpack", "surf-data-from-celery")
-        perf_metrics.record_lap("store-result")
+    perf_metrics.record_lap("store-result")
 
     _set_task_progress_msg(task, f"Finished async portion of task")
 
@@ -84,7 +83,9 @@ async def do_surface_from_addr_async(
 @celery_app.task(bind=True)
 def surface_from_addr(self: Task, user_id: str, sumo_access_token: str, surf_addr_str: str, target_store_key: str) -> str | None:
     logger = logging.getLogger(__name__)
-    logger.info(f"surface_from_addr --- : {surf_addr_str=}")
+    logger.debug(f"surface_from_addr() --- : {surf_addr_str=}")
+
+    perf_metrics = PerfMetrics()
 
     coro = do_surface_from_addr_async(
         self,
@@ -96,6 +97,6 @@ def surface_from_addr(self: Task, user_id: str, sumo_access_token: str, surf_add
 
     store_key = asyncio.run(coro)
 
-    logger.info(f"surface_from_addr done, {store_key=}")
+    logger.debug(f"surface_from_addr() done in: {perf_metrics.to_string()}")
 
     return store_key
