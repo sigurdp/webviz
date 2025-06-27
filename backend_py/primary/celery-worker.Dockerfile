@@ -24,6 +24,12 @@ COPY --chown=appuser ./backend_py/libs    /home/appuser/backend_py/libs
 COPY --chown=appuser ./backend_py/primary /home/appuser/backend_py/primary
 RUN poetry install --only main
 
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Add optional dev utilities (evaluated at image build time)
+ARG INSTALL_DEV_UTILS=false
+RUN if [ "$INSTALL_DEV_UTILS" = "true" ]; then pip install watchdog; fi
+
 # Note concurrency is set to 1
-CMD ["celery", "--app", "primary.celery_worker.celery_main.celery_app", "worker", "--loglevel=info", "--concurrency=1"]
+ENV CELERY_WORKER_CONCURRENCY=1
+ENV CELERY_WORKER_LOGLEVEL=info
+
+CMD ["celery", "--app", "primary.celery_worker.celery_app.celery_app", "worker"]

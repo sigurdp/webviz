@@ -12,6 +12,9 @@ from azure.storage.blob import ContentSettings
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob import ContainerClient as SyncContainerClient
 from pydantic import BaseModel
+from collections.abc import AsyncIterator
+
+from contextlib import asynccontextmanager
 
 from .authenticated_user import AuthenticatedUser
 
@@ -28,28 +31,50 @@ PydanticModelType = TypeVar("PydanticModelType", bound=BaseModel)
 class TempUserStoreFactory:
     _instance = None
 
-    def __init__(self, redis_client: redis.Redis, container_client: ContainerClient, ttl_s: int):
-        self._redis_client: redis.Redis = redis_client
-        self._container_client: ContainerClient = container_client
+    def __init__(
+        self,
+        redis_url: str,
+        storage_account_conn_str: str,
+        ttl_s: int,
+        shared_redis_client: redis.Redis | None,
+        shared_container_client: ContainerClient | None,
+    ):
+        self._redis_url: str = redis_url
+        self._storage_account_conn_str: str = storage_account_conn_str
         self._ttl_s: int = ttl_s
+        self._shared_redis_client: redis.Redis | None = shared_redis_client
+        self._shared_container_client: ContainerClient | None = shared_container_client
 
     @classmethod
-    def initialize(cls, redis_url: str, storage_account_conn_string: str, ttl_s: int) -> None:
+    def initialize(cls, use_shared_clients: bool, redis_url: str, storage_account_conn_str: str, ttl_s: int) -> None:
         if cls._instance is not None:
             raise RuntimeError("TempUserStoreFactory is already initialized")
 
         # Do a hard fail if the storage container does not exist
-        # We don't create the container automatically since currently, the container will require manual
+        # We don't create the container automatically since the container will require manual
         # setup anyways in order to configure lifecycle policies.
-        if not _check_if_blob_container_exists(storage_account_conn_string, _BLOB_CONTAINER_NAME):
+        if not _check_if_blob_container_exists(storage_account_conn_str, _BLOB_CONTAINER_NAME):
             raise RuntimeError(f"Blob container specified for TempUserStore does not exist: {_BLOB_CONTAINER_NAME}")
 
-        redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
+        shared_redis_client: redis.Redis | None = None
+        shared_container_client: ContainerClient | None = None
 
-        blob_service_client = BlobServiceClient.from_connection_string(storage_account_conn_string)
-        container_client = blob_service_client.get_container_client(_BLOB_CONTAINER_NAME)
+        if use_shared_clients:
+            # Use shared Redis and Blob Storage clients
+            # This is the most optimal configuration, particularly for Redis, but it will not work in all our
+            # scenarios, particularly when wrapping asynchronous code and in Celery using asyncio.run()
+            shared_redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
+            shared_container_client = ContainerClient.from_connection_string(
+                storage_account_conn_str, _BLOB_CONTAINER_NAME
+            )
 
-        cls._instance = cls(redis_client, container_client, ttl_s)
+        cls._instance = cls(
+            redis_url=redis_url,
+            storage_account_conn_str=storage_account_conn_str,
+            ttl_s=ttl_s,
+            shared_redis_client=shared_redis_client,
+            shared_container_client=shared_container_client,
+        )
 
     @classmethod
     def get_instance(cls) -> "TempUserStoreFactory":
@@ -57,11 +82,18 @@ class TempUserStoreFactory:
             raise RuntimeError("TempUserStoreFactory is not initialized, call initialize() first")
         return cls._instance
 
-    def get_store_for_user(self, authenticated_user: AuthenticatedUser) -> "TempUserStore":
-        if not authenticated_user:
-            raise ValueError("An authenticated_user must be specified")
+    def get_store_for_user_id(self, user_id: str) -> "TempUserStore":
+        if not user_id:
+            raise ValueError("A user_id must be specified")
 
-        return TempUserStore(self._redis_client, self._container_client, self._ttl_s, authenticated_user)
+        return TempUserStore(
+            user_id=user_id,
+            redis_url=self._redis_url,
+            storage_account_conn_str=self._storage_account_conn_str,
+            ttl_s=self._ttl_s,
+            shared_redis_client=self._shared_redis_client,
+            shared_container_client=self._shared_container_client,
+        )
 
 
 class TempUserStore:
@@ -83,11 +115,24 @@ class TempUserStore:
     deletes blobs older than a day or two would be appropriate.
     """
 
-    def __init__(self, redis_client: redis.Redis, container_client: ContainerClient, ttl_s: int, authenticated_user: AuthenticatedUser):
-        self._redis_client: redis.Redis = redis_client
-        self._container_client: ContainerClient = container_client
+    def __init__(
+        self,
+        user_id: str,
+        redis_url: str,
+        storage_account_conn_str: str,
+        ttl_s: int,
+        shared_redis_client: redis.Redis | None,
+        shared_container_client: ContainerClient | None,
+    ):
+        if not user_id:
+            raise ValueError("A user_id must be specified")
+
+        self._user_id = user_id
+        self._redis_url: str = redis_url
+        self._storage_account_conn_str: str = storage_account_conn_str
         self._ttl_s: int = ttl_s
-        self._user_id = authenticated_user.get_user_id()
+        self._shared_redis_client: redis.Redis | None = shared_redis_client
+        self._shared_container_client: ContainerClient | None = shared_container_client
 
     async def put_bytes(self, key: str, payload: bytes, blob_prefix: str | None, blob_extension: str) -> bool:
         perf_metrics = PerfMetrics()
@@ -95,11 +140,13 @@ class TempUserStore:
         blob_name = self._make_full_blob_name_from_payload(payload, blob_prefix, blob_extension)
         perf_metrics.record_lap("make-blob-name")
 
-        await _upload_or_refresh_blob_metadata(self._container_client, blob_name, payload)
+        async with self._goc_container_client() as container_client:
+            await _upload_or_refresh_blob_metadata(container_client, blob_name, payload)
         perf_metrics.record_lap("upload-blob")
 
         redis_key = self._make_full_redis_key(key)
-        await self._redis_client.setex(redis_key, self._ttl_s, blob_name)
+        async with self._goc_redis_client_async() as redis_client:
+            await redis_client.setex(redis_key, self._ttl_s, blob_name)
 
         perf_metrics.record_lap("write-redis")
 
@@ -114,15 +161,18 @@ class TempUserStore:
         redis_key = self._make_full_redis_key(key)
         LOGGER.debug(f"##### get_bytes() {redis_key=}")
 
-        blob_name = await self._redis_client.get(redis_key)
+        async with self._goc_redis_client_async() as redis_client:
+            blob_name = await redis_client.get(redis_key)
         perf_metrics.record_lap("read-redis")
 
         if not blob_name:
             LOGGER.debug(f"##### get_bytes() cache miss took: {perf_metrics.to_string()}  [{key=}]")
             return None
 
-        payload_bytes = await _download_blob(self._container_client, blob_name)
+        async with self._goc_container_client() as container_client:
+            payload_bytes = await _download_blob(container_client, blob_name)
         perf_metrics.record_lap("download-blob")
+
         if not payload_bytes:
             LOGGER.debug(f"##### get_bytes() blob miss took: {perf_metrics.to_string()}  [{key=}, {blob_name=}]")
             return None
@@ -132,7 +182,9 @@ class TempUserStore:
 
         return payload_bytes
 
-    async def put_pydantic_model(self, key: str, model: BaseModel, format: Literal["msgpack", "json"], blob_prefix: str | None) -> bool:
+    async def put_pydantic_model(
+        self, key: str, model: BaseModel, format: Literal["msgpack", "json"], blob_prefix: str | None
+    ) -> bool:
         perf_metrics = PerfMetrics()
 
         payload: bytes
@@ -184,6 +236,28 @@ class TempUserStore:
 
         return model
 
+    @asynccontextmanager
+    async def _goc_redis_client_async(self) -> AsyncIterator[redis.Redis]:
+        if self._shared_redis_client:
+            yield self._shared_redis_client
+        else:
+            client = redis.Redis.from_url(self._redis_url, decode_responses=True)
+            try:
+                yield client
+            finally:
+                await client.aclose()
+
+    @asynccontextmanager
+    async def _goc_container_client(self) -> AsyncIterator[ContainerClient]:
+        if self._shared_container_client:
+            yield self._shared_container_client
+        else:
+            client = ContainerClient.from_connection_string(self._storage_account_conn_str, _BLOB_CONTAINER_NAME)
+            try:
+                yield client
+            finally:
+                await client.close()
+
     def _make_full_redis_key(self, key: str) -> str:
         return f"{_REDIS_KEY_PREFIX}:user:{self._user_id}:{key}"
 
@@ -207,9 +281,8 @@ def _compute_payload_hash(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-async def _upload_or_refresh_blob_metadata(container_client: ContainerClient, blob_key: str, payload: bytes) -> str:
-    blob_client: BlobClient = container_client.get_blob_client(blob_key)
-
+async def _upload_or_refresh_blob_metadata(container_client: ContainerClient, blob_name: str, payload: bytes) -> str:
+    blob_client: BlobClient = container_client.get_blob_client(blob_name)
     try:
         # Note that even if we're specifying `overwrite=False`, we might actually end up uploading the entire blob
         # payload here before that condition is detected. We should probably just check for the blob's existence first,
@@ -250,19 +323,15 @@ async def _download_blob(container_client: ContainerClient, blob_name: str) -> b
 
 
 def _check_if_blob_container_exists(storage_account_conn_string: str, container_name: str) -> bool:
-    sync_container_client = SyncContainerClient.from_connection_string(
-        conn_str=storage_account_conn_string,
-        container_name=container_name,
-    )
-
-    try:
-        sync_container_client.get_container_properties()
-        return True
-    except ResourceNotFoundError:
-        return False
-    except Exception as e:
-        LOGGER.error(f"Failed to check if blob container exists: {e}")
-        return False
+    with SyncContainerClient.from_connection_string(storage_account_conn_string, container_name) as sync_client:
+        try:
+            sync_client.get_container_properties()
+            return True
+        except ResourceNotFoundError:
+            return False
+        except Exception as e:
+            LOGGER.error(f"Failed to check if blob container exists: {e}")
+            return False
 
 
 def get_temp_user_store_for_user(authenticated_user: AuthenticatedUser) -> TempUserStore:
@@ -270,4 +339,9 @@ def get_temp_user_store_for_user(authenticated_user: AuthenticatedUser) -> TempU
     Convenience function to get a TempUserStore instance for the specified authenticated user.
     """
     factory = TempUserStoreFactory.get_instance()
-    return factory.get_store_for_user(authenticated_user)
+    return factory.get_store_for_user_id(authenticated_user.get_user_id())
+
+
+def get_temp_user_store_for_user_id(user_id: str) -> TempUserStore:
+    factory = TempUserStoreFactory.get_instance()
+    return factory.get_store_for_user_id(user_id)

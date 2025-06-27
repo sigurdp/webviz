@@ -1,43 +1,30 @@
-import asyncio
+import datetime
 import logging
-from typing import Annotated, List, Optional, Literal, Union, Type, get_origin, get_args
+from hashlib import sha256
 from types import UnionType
+from typing import Annotated, Generic, List, Literal, Optional, Type, TypeVar, Union, get_args, get_origin
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, Body, status
+from celery.result import AsyncResult
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 
-from primary.services.sumo_access.surface_access import SurfaceAccess
-from primary.services.utils.statistic_function import StatisticFunction
-from primary.services.utils.authenticated_user import AuthenticatedUser
 from primary.auth.auth_helper import AuthHelper
-from primary.services.surface_query_service.surface_query_service import RealizationSampleResult
+from primary.celery_worker.tasks import surface_tasks
+from primary.services.utils.authenticated_user import AuthenticatedUser
+from primary.services.utils.otel_span_tracing import otel_span_decorator, start_otel_span, start_otel_span_async
+from primary.services.utils.task_meta_tracker import get_task_meta_tracker_for_user
+from primary.services.utils.temp_user_store import get_temp_user_store_for_user
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 
-from . import converters
+from .._shared.long_running_operations import (LroErrorInfo, LroErrorResp, LroInProgressResp, LroProgressInfo,
+                                               LroSuccessResp)
 from . import schemas
-from . import dependencies
-
-from .surface_address import RealizationSurfaceAddress, ObservedSurfaceAddress, StatisticalSurfaceAddress
-from .surface_address import decode_surf_addr_str
-
-from hashlib import sha256
-import redis
-import datetime
-import os
-from typing import Generic, TypeVar
-from pydantic import BaseModel
-from azure.storage.blob.aio import BlobServiceClient, ContainerClient, StorageStreamDownloader
-from celery.result import AsyncResult
-from primary.celery_worker.tasks import test_tasks
-from primary.services.utils.otel_span_tracing import otel_span_decorator, start_otel_span, start_otel_span_async
-from primary import config
-
+from .surface_address import RealizationSurfaceAddress, decode_surf_addr_str
 
 LOGGER = logging.getLogger(__name__)
 
 router = APIRouter()
-
-redis_store = redis.Redis.from_url(config.REDIS_CACHE_URL, db=5, decode_responses=True)
 
 
 """
@@ -96,105 +83,118 @@ async def get_celery_surface_data(
     return ret_data
 """
 
+def _extract_state_and_progress_msg_from_celery_result(celery_result: AsyncResult) -> tuple[str, str | None]:
+    state_str = celery_result.state
+    progress_msg = None
+
+    # We use our own custom "IN_PROGRESS" state to communicate the progress message
+    # The progress message is set as a metadata dict on the "IN_PROGRESS" state inside the task,
+    # and the dict is accessible here through the result property of the AsyncResult
+    if state_str == "IN_PROGRESS":
+        result = celery_result.result
+        if isinstance(result, dict) and "progress_msg" in result:
+            progress_msg = result["progress_msg"]
+
+    return state_str, progress_msg
 
 
-class TaskProgress(BaseModel):
-    progress: str
-    task_id: str
-
-
-@router.get("/celery_polling_surface_data", description="Get surface data via Celery.")
-async def get_celery_polling_surface_data(
-    # fmt:off
+@router.get("/celery_surface_data", description="Hybrid get of surface data via Celery.")
+async def get_celery_surface_data(
     response: Response,
     authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
-    surf_addr_str: Annotated[str, Query(description="Surface address string, supported address types are *REAL*, *OBS* and *STAT*")],
-    # fmt:on
-) -> schemas.SurfaceDataFloat | TaskProgress:
+    surf_addr_str: Annotated[str, Query()],
+) -> LroSuccessResp[schemas.SurfaceDataFloat] | LroInProgressResp | LroErrorResp:
     perf_metrics = ResponsePerfMetrics(response)
+
+    addr = decode_surf_addr_str(surf_addr_str)
+    if not isinstance(addr, RealizationSurfaceAddress):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Endpoint only supports address types REAL")
 
     user_id = authenticated_user.get_user_id()
     access_token = authenticated_user.get_sumo_access_token()
 
-    addr = decode_surf_addr_str(surf_addr_str)
-    if not isinstance(addr, RealizationSurfaceAddress):
-        raise HTTPException(status_code=404, detail="Endpoint only supports address types REAL")
+    param_hash = sha256(surf_addr_str.encode()).hexdigest()
+    store_key = f"celery_polling_surface_data__{param_hash}"
 
-    task_key = _make_task_key(user_id, surf_addr_str)
+    user_store = get_temp_user_store_for_user(authenticated_user)
 
-    celery_task_id_key = f"{task_key}:celery_task_id"
-    celery_task_id = redis_store.get(celery_task_id_key)
+    # Easy store/cache lookup first.
+    # If we find the payload, we just return it
+    existing_surf_data = await user_store.get_pydantic_model(key=store_key, model_class=schemas.SurfaceDataFloat, format="msgpack")
+    if existing_surf_data:
+        return LroSuccessResp(status="success", data=existing_surf_data)
 
-    if not celery_task_id:
-        # Start a new task
-        with start_otel_span("schedule-task"):
-            celery_result: AsyncResult = test_tasks.surface_from_addr.delay(access_token, surf_addr_str)
+    tracker = get_task_meta_tracker_for_user(authenticated_user)
+    existing_celery_task_id = await tracker.get_task_id_by_payload_hash_async(param_hash)
 
-        celery_task_id = celery_result.id
-        redis_store.set(celery_task_id_key, celery_task_id)
-        redis_store.expire(celery_task_id_key, 600)
+    if existing_celery_task_id:
+        # We have an existing task id for this request payload, query the state of the celery task
+        celery_result = AsyncResult(existing_celery_task_id)
 
-    celery_result = AsyncResult(celery_task_id)
+        # Note that here, ready() means that the task is done (includes both success, failure and revoked)
+        if celery_result.ready():
+            # Task is done, but we found no result in the store in the code above. We will proceed to report this back as an error.
+            # First, remove the mapping so that we'll trigger submit of a new celery task the next time
+            await tracker.delete_payload_hash_to_task_mapping_async(payload_hash=param_hash)
 
-    # Note that here ready includes both success and failure (and revoked)
-    if not celery_result.ready():
-        response.headers["Cache-Control"] = "no-store"
-        response.status_code = status.HTTP_202_ACCEPTED
-        return TaskProgress(task_id=celery_task_id, progress=f"Working: {celery_result.state} ({celery_result.info=}) - [{datetime.datetime.now()}]")
+            if celery_result.successful():
+                # Task was actually successful, but we did not find a result in the store.
+                # This could be either an error or the task may have succeeded just after we checked the store.
+                # For now, we'll report it back as an error either way.
+                LOGGER.error(f"Celery task is successful but no result was found in store [task_id={existing_celery_task_id}]")
+                raise HTTPException(status_code=500, detail=f"Task successful but no result found, task_id={existing_celery_task_id}")
+            
+            if celery_result.failed():
+                LOGGER.error(f"Celery task failed: {celery_result.result} [task_id={existing_celery_task_id}]")
+                
+                # !!!!!!
+                # To discuss:
+                # What should the http status code for such an hybrid endpoint be in this case?
+                # If we think in terms of polling the status of a straight long running submit/poll endpoint, then this would be a 200.
+                # But if we think in terms of a hybrid approach (more similar to an ordinary get), this would probably be 500
+                response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
-    if not celery_result.successful():
-        if celery_result.failed():
-            raise HTTPException(status_code=500, detail=f"Task failed [{datetime.datetime.now()}] {str(celery_result.result)}")
+                # Also to discuss, what goes into the error message here?
+                # We should not propagate the error from the failed task since that may leak exception messages from the celery task worker.
+                return LroErrorResp(
+                    status="failure",
+                    error=LroErrorInfo(message=f"Task execution failed, task_id={existing_celery_task_id}",)
+                )
+            
+            # Not sure what other states we may end up in here, so just add a general guard
+            raise HTTPException(status_code=500, detail=f"Unexpected state in completed task, task_id={existing_celery_task_id}")
+        
         else:
-            raise HTTPException(status_code=202, detail=f"Task trouble  [{datetime.datetime.now()}]")
+            response.headers["Cache-Control"] = "no-store"
+            state_str, details_str = _extract_state_and_progress_msg_from_celery_result(celery_result)
+            return LroInProgressResp(
+                status="in_progress",
+                operation_id=existing_celery_task_id,
+                progress=LroProgressInfo(progress_message=f"Task in progress: state={state_str}, details={details_str}  [{datetime.datetime.now()}]"),
+            )
 
+    # Start a new celery task
+    with start_otel_span("schedule-task"):
+        new_celery_task: AsyncResult = surface_tasks.surface_from_addr.delay(
+            user_id=user_id,
+            sumo_access_token=access_token,
+            surf_addr_str=surf_addr_str,
+            target_store_key=store_key,
+            )
 
-    blob_name_without_extension = str(celery_result.result)
-    msgpack_blob_name = blob_name_without_extension + ".msgpack"
+    celery_task_id = new_celery_task.id
+    await tracker.register_task_async(task_system="celery", task_id=celery_task_id, expected_store_key=store_key)
+    await tracker.set_payload_hash_to_task_mapping_async(payload_hash=param_hash, task_id=celery_task_id)
 
-    async with start_otel_span_async("download-task-result"):
-        try:
-            blob_bytes = await _download_celery_result_blob(msgpack_blob_name)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to download result from blob storage")
+    response.headers["Cache-Control"] = "no-store"
+    response.status_code = status.HTTP_202_ACCEPTED
+    state_str, details_str = _extract_state_and_progress_msg_from_celery_result(new_celery_task)
+    return LroInProgressResp(
+        status="in_progress",
+        operation_id=celery_task_id,
+        progress=LroProgressInfo(progress_message=f"Task submitted: state={state_str}, details={details_str}  [{datetime.datetime.now()}]"),
+    )
 
-    with start_otel_span("unpack-msg"):
-        ret_data: schemas.SurfaceDataFloat = test_tasks.msgpack_to_pydantic(schemas.SurfaceDataFloat, blob_bytes)
-
-    LOGGER.info(f"Got {addr.address_type} surface in: {perf_metrics.to_string()}")
-
-    return ret_data
-
-
-
-def _make_task_key(user_id: str, input_data: str) -> str:
-    key_hash = sha256(input_data.encode()).hexdigest()
-    return f"user:{user_id}:task:{key_hash}"
-
-
-
-_CONTAINER_CLIENT: ContainerClient | None = None
-
-@otel_span_decorator()
-async def _download_celery_result_blob(blob_name: str) -> bytes:
-    global _CONTAINER_CLIENT
-
-    if not _CONTAINER_CLIENT:
-        azure_storage_connection_string = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
-        container_name = "celery-results"
-
-        with start_otel_span("get-container-client"):
-            blob_service_client = BlobServiceClient.from_connection_string(azure_storage_connection_string)
-            _CONTAINER_CLIENT = blob_service_client.get_container_client(container_name)
-
-    with start_otel_span("get-client"):
-        blob_client = _CONTAINER_CLIENT.get_blob_client(blob=blob_name)
-
-    async with start_otel_span_async("download"):
-        download_stream: StorageStreamDownloader[bytes] = await blob_client.download_blob()
-        blob_byte_data: bytes = await download_stream.readall()
-
-    return blob_byte_data
 
 
 
@@ -207,33 +207,12 @@ async def _download_celery_result_blob(blob_name: str) -> bytes:
 T = TypeVar("T")
 
 
-class ErrorInfo(BaseModel):
-    message: str
-    code: int
-
-class ProgressInfo(BaseModel):
-    progress_message: str
-
-
-class SuccessTaskResp(BaseModel, Generic[T]):
-    status: Literal["success"]
-    data: T
-
-class InProgressTaskResp(BaseModel):
-    status: Literal["inProgress"]
-    progress: ProgressInfo
-
-class ErrorTaskResp(BaseModel):
-    status: Literal["error"]
-    error: ErrorInfo
-
-
-def make_response_envelope(result_type: Type[T]) -> Type:
-    return Union[
-        SuccessTaskResp[result_type],
-        InProgressTaskResp,
-        ErrorTaskResp,
-    ]
+# def make_response_envelope(result_type: Type[T]) -> Type:
+#     return Union[
+#         LroSuccessResp[result_type],
+#         LroInProgressResp,
+#         LroErrorResp,
+#     ]
 
 
 def make_response_envelope(result_type: Type) -> Type:
@@ -243,10 +222,9 @@ def make_response_envelope(result_type: Type) -> Type:
     else:
         result_types = (result_type,)
 
-    success_variants = tuple(SuccessTaskResp[rt] for rt in result_types)
+    success_variants = tuple(LroSuccessResp[rt] for rt in result_types)
 
-    return Union[*success_variants, InProgressTaskResp, ErrorTaskResp]
-
+    return Union[*success_variants, LroInProgressResp, LroErrorResp]
 
 
 class MyAscResult(BaseModel):
@@ -264,15 +242,13 @@ class MyBinResult(BaseModel):
 @router.get("/sigurd_experiment", response_model=make_response_envelope(MyAscResult | MyBinResult))
 async def get_sigurd_experiment():
     
-    return SuccessTaskResp[MyAscResult](
+    return LroSuccessResp[MyAscResult](
         status="success",
         data=MyAscResult(
             the_string="Hello, world!",
             the_value=42
         )
     )
-
-
 
 
 
@@ -293,8 +269,6 @@ async def get_query_param_model(
 ) -> str:
     return f"Yes: {datetime.datetime.now()}"
 """
-
-
 
 
 """

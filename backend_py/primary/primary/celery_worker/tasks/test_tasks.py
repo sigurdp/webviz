@@ -1,160 +1,16 @@
 import logging
-import asyncio
-import uuid
-import io
-import os
-import msgpack
-
-from azure.storage.blob import BlobServiceClient, ContainerClient, ContentSettings
-from dotenv import load_dotenv
-from pydantic import BaseModel
-
-import xtgeo
-
-from celery.signals import worker_process_init
-from celery import Task
-
-from webviz_pkg.core_utils.perf_metrics import PerfMetrics
-
-from primary.services.utils.otel_span_tracing import otel_span_decorator, start_otel_span, start_otel_span_async
 
 from primary.celery_worker.celery_app import celery_app
-
-from primary.services.sumo_access.surface_access import SurfaceAccess
-
-from primary.routers.surface.surface_address import RealizationSurfaceAddress, ObservedSurfaceAddress, StatisticalSurfaceAddress
-from primary.routers.surface.surface_address import decode_surf_addr_str
-from primary.routers.surface.converters import to_api_surface_data_float
-
-
-LOGGER = logging.getLogger(__name__)
-
-load_dotenv()
-
-
-_CONTAINER_CLIENT: ContainerClient | None = None
-
-@worker_process_init.connect(weak=False)
-def init_blob_client_for_worker(*args, **kwargs):
-    LOGGER.info("Entering init_blob_client_for_worker()")
-
-    global _CONTAINER_CLIENT
-
-    azure_storage_connection_string = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
-    container_name = "celery-results"
-
-    blob_service_client = BlobServiceClient.from_connection_string(azure_storage_connection_string)
-    _CONTAINER_CLIENT = blob_service_client.get_container_client(container_name)
-
-    try:
-        _CONTAINER_CLIENT.create_container()
-    except Exception:
-        # Container probably already exists
-        pass  
-
-
-
-def pydantic_to_msgpack(model: BaseModel) -> bytes:
-    return msgpack.packb(model.model_dump(), use_bin_type=True)
-
-def msgpack_to_pydantic(model_class: type[BaseModel], data: bytes) -> BaseModel:
-    return model_class(**msgpack.unpackb(data, raw=False))
-
-
 
 
 @celery_app.task
 def capitalize_string(input_str: str) -> str:
-    LOGGER.info(f"capitalize_string --- : {input_str=}")
+    logger = logging.getLogger(__name__)
+    logger.info(f"capitalize_string --- : {input_str=}")
 
     ret_str = input_str
     ret_str.capitalize()
 
     return f"Processed: {ret_str=}"
 
-
-@celery_app.task
-def surface_meta(sumo_access_token: str, case_uuid:str, ensemble_name: str) -> str:
-    LOGGER.info(f"surface_meta --- : {sumo_access_token=}, {case_uuid=}, {ensemble_name=}")
-
-    access = SurfaceAccess.from_iteration_name(sumo_access_token, case_uuid, ensemble_name)
-
-    sumo_surf_meta_set = asyncio.run(access.get_realization_surfaces_metadata_async())
-
-    LOGGER.info(sumo_surf_meta_set)
-
-    return f"surface_meta OK"
-
-
-@otel_span_decorator()
-async def do_async_work(task: Task, sumo_access_token: str, surf_addr_str: str) -> str:
-    LOGGER.info(f"do_async_work --- : {surf_addr_str=}")
-
-    perf_metrics = PerfMetrics()
-    task.update_state(state="PROGRESS", meta={"status": "Starting"})
-
-    addr = decode_surf_addr_str(surf_addr_str)
-    LOGGER.info(f"decoded addr: {addr=}")
-
-    if addr.address_type != "REAL":
-        raise ValueError(f"Unsupported address type: {addr.address_type}")
-    
-
-    async with start_otel_span_async("get-xtgeo-surf"):
-        task.update_state(state="PROGRESS", meta={"status": "Downloading"})
-        access = SurfaceAccess.from_iteration_name(sumo_access_token, addr.case_uuid, addr.ensemble_name)
-        xtgeo_surf: xtgeo.RegularSurface = await access.get_realization_surface_data_async(
-            real_num=addr.realization,
-            name=addr.name,
-            attribute=addr.attribute,
-            time_or_interval_str=addr.iso_time_or_interval,
-        )
-        perf_metrics.record_lap("get-xtgeo")
-        LOGGER.info(f"xtgeo_surf: {xtgeo_surf=}")
-
-    blob_name_without_extension = str(uuid.uuid4())
-
-    #gri_blob_name = blob_name_without_extension + ".gri"
-    # xtg_blob_name = blob_name_without_extension + ".xtg"
-    msgpack_blob_name = blob_name_without_extension + ".msgpack"
-
-    # with start_otel_span("irap-to-blob-store"):
-    #     byte_stream = io.BytesIO()
-    #     xtgeo_surf.to_file(byte_stream, fformat="irap_binary")
-    #     byte_stream.seek(0)
-    #     _CONTAINER_CLIENT.upload_blob(name=gri_blob_name, data=byte_stream, overwrite=True)
-    #     perf_metrics.record_lap("store-irap")
-
-    # byte_stream = io.BytesIO()
-    # xtgeo_surf.to_file(byte_stream, fformat="xtgregsurf")
-    # byte_stream.seek(0)
-    # container_client.upload_blob(name=xtg_blob_name, data=byte_stream, overwrite=True)
-
-    with start_otel_span("msgpack-to-blob-store"):
-        task.update_state(state="PROGRESS", meta={"status": "MsgPackToBlobStore"})
-        surf_data_response = to_api_surface_data_float(xtgeo_surf)
-        msgpacked_bytes = pydantic_to_msgpack(surf_data_response)
-
-        content_settings = ContentSettings(content_type="application/vnd.msgpack")
-        _CONTAINER_CLIENT.upload_blob(name=msgpack_blob_name, data=msgpacked_bytes, content_settings=content_settings, overwrite=True)
-        perf_metrics.record_lap("store-msgpack")
-
-    task.update_state(state="PROGRESS", meta={"status": "Done"})
-    LOGGER.debug(f"do_async_work took: {perf_metrics.to_string()}")
-
-    return blob_name_without_extension
-
-
-
-@celery_app.task(bind=True)
-def surface_from_addr(self, sumo_access_token: str, surf_addr_str: str) -> str:
-    LOGGER.info(f"surface_from_addr --- : {surf_addr_str=}")
-
-    self.update_state("PROGRESS", meta={"status": "Before async"})
-
-    blob_name = asyncio.run(do_async_work(self, sumo_access_token, surf_addr_str))
-
-    LOGGER.info(f"surface_from_addr done, {blob_name=}")
-
-    return blob_name
 

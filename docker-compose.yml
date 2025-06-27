@@ -49,12 +49,18 @@ services:
     build:
       context: .
       dockerfile: ./backend_py/primary/celery-worker.Dockerfile
+      args:
+        INSTALL_DEV_UTILS: true
     environment:
       - APPLICATIONINSIGHTS_CONNECTION_STRING
       - OTEL_RESOURCE_ATTRIBUTES=service.name=celery-worker, service.namespace=local
+      # - CELERY_WORKER_CONCURRENCY=2
+      # - CELERY_WORKER_LOGLEVEL=debug
     volumes:
       - ./backend_py/primary/primary:/home/appuser/backend_py/primary/primary
       - ./backend_py/libs:/home/appuser/backend_py/libs
+    command:
+      [ "sh", "-c", "watchmedo auto-restart --directory=./primary --pattern=*.py --recursive -- celery --app primary.celery_worker.celery_app.celery_app worker" ]
 
 
   surface-query:

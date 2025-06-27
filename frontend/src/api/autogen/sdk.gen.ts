@@ -92,9 +92,9 @@ import type {
     DeprecatedGetStratigraphicUnitsData_api,
     DeprecatedGetStratigraphicUnitsResponse_api,
     DeprecatedGetStratigraphicUnitsError_api,
-    GetCeleryPollingSurfaceDataData_api,
-    GetCeleryPollingSurfaceDataResponse_api,
-    GetCeleryPollingSurfaceDataError_api,
+    GetCelerySurfaceDataData_api,
+    GetCelerySurfaceDataResponse_api,
+    GetCelerySurfaceDataError_api,
     GetSigurdExperimentData_api,
     GetSigurdExperimentResponse_api,
     GetParameterNamesAndDescriptionData_api,
@@ -757,19 +757,15 @@ export const deprecatedGetStratigraphicUnits = <ThrowOnError extends boolean = f
 };
 
 /**
- * Get Celery Polling Surface Data
- * Get surface data via Celery.
+ * Get Celery Surface Data
+ * Hybrid get of surface data via Celery.
  */
-export const getCeleryPollingSurfaceData = <ThrowOnError extends boolean = false>(
-    options: Options<GetCeleryPollingSurfaceDataData_api, ThrowOnError>,
+export const getCelerySurfaceData = <ThrowOnError extends boolean = false>(
+    options: Options<GetCelerySurfaceDataData_api, ThrowOnError>,
 ) => {
-    return (options?.client ?? client).get<
-        GetCeleryPollingSurfaceDataResponse_api,
-        GetCeleryPollingSurfaceDataError_api,
-        ThrowOnError
-    >({
+    return (options?.client ?? client).get<GetCelerySurfaceDataResponse_api, GetCelerySurfaceDataError_api, ThrowOnError>({
         ...options,
-        url: "/surface/celery_polling_surface_data",
+        url: "/surface/celery_surface_data",
     });
 };
 

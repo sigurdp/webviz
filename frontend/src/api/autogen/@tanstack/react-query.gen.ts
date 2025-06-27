@@ -35,7 +35,7 @@ import {
     getDeltaSurfaceData,
     getMisfitSurfaceData,
     deprecatedGetStratigraphicUnits,
-    getCeleryPollingSurfaceData,
+    getCelerySurfaceData,
     getSigurdExperiment,
     getParameterNamesAndDescription,
     getParameter,
@@ -128,7 +128,7 @@ import type {
     GetDeltaSurfaceDataData_api,
     GetMisfitSurfaceDataData_api,
     DeprecatedGetStratigraphicUnitsData_api,
-    GetCeleryPollingSurfaceDataData_api,
+    GetCelerySurfaceDataData_api,
     GetSigurdExperimentData_api,
     GetParameterNamesAndDescriptionData_api,
     GetParameterData_api,
@@ -927,14 +927,14 @@ export const deprecatedGetStratigraphicUnitsOptions = (options: Options<Deprecat
     });
 };
 
-export const getCeleryPollingSurfaceDataQueryKey = (options: Options<GetCeleryPollingSurfaceDataData_api>) => [
-    createQueryKey("getCeleryPollingSurfaceData", options),
+export const getCelerySurfaceDataQueryKey = (options: Options<GetCelerySurfaceDataData_api>) => [
+    createQueryKey("getCelerySurfaceData", options),
 ];
 
-export const getCeleryPollingSurfaceDataOptions = (options: Options<GetCeleryPollingSurfaceDataData_api>) => {
+export const getCelerySurfaceDataOptions = (options: Options<GetCelerySurfaceDataData_api>) => {
     return queryOptions({
         queryFn: async ({ queryKey, signal }) => {
-            const { data } = await getCeleryPollingSurfaceData({
+            const { data } = await getCelerySurfaceData({
                 ...options,
                 ...queryKey[0],
                 signal,
@@ -942,7 +942,7 @@ export const getCeleryPollingSurfaceDataOptions = (options: Options<GetCeleryPol
             });
             return data;
         },
-        queryKey: getCeleryPollingSurfaceDataQueryKey(options),
+        queryKey: getCelerySurfaceDataQueryKey(options),
     });
 };
 

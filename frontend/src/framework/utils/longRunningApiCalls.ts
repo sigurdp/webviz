@@ -1,10 +1,5 @@
-import {
-    client,
-    type HttpValidationError_api,
-    type LroErrorResp_api,
-    type LroInProgressResp_api,
-    type ProgressInfo_api,
-} from "@api";
+import { client, type HttpValidationError_api } from "@api";
+import type { LroErrorResp_api, LroInProgressResp_api, LroProgressInfo_api } from "@api";
 import type { RequestResult } from "@hey-api/client-axios";
 import type { QueryFunctionContext } from "@tanstack/query-core";
 import type { UseQueryOptions } from "@tanstack/react-query";
@@ -31,11 +26,11 @@ interface WrapLongRunningQueryArgs<TArgs, TData> {
     queryKey: unknown[];
     pollIntervalMs?: number;
     maxRetries?: number;
-    onProgress?: (progress: ProgressInfo_api | undefined) => void;
+    onProgress?: (progress: LroProgressInfo_api | undefined) => void;
 }
 
 interface OnProgressCallback {
-    (progress: ProgressInfo_api | undefined): void;
+    (progress: LroProgressInfo_api | undefined): void;
 }
 
 type PollResource<TArgs, TData> =

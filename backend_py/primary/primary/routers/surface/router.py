@@ -155,16 +155,16 @@ async def get_surface_data(
     if not isinstance(addr, RealizationSurfaceAddress | ObservedSurfaceAddress | StatisticalSurfaceAddress):
         raise HTTPException(status_code=404, detail="Endpoint only supports address types REAL, OBS and STAT")
 
-    temp_user_store = get_temp_user_store_for_user(authenticated_user)
-    store_key = f"surface_data__{surf_addr_str}"
-    stored_surface = await temp_user_store.get_pydantic_model(
-        model_class=schemas.SurfaceDataFloat, key=store_key, format="msgpack"
-    )
-    if stored_surface is not None:
-        LOGGER.debug(f"Found existing stored surface for key: {store_key}")
-        perf_metrics.record_lap("fetch-stored-surface")
-        LOGGER.info(f"Got STORED {addr.address_type} surface in: {perf_metrics.to_string()}")
-        return stored_surface
+    # temp_user_store = get_temp_user_store_for_user(authenticated_user)
+    # store_key = f"surface_data__{surf_addr_str}"
+    # stored_surface = await temp_user_store.get_pydantic_model(
+    #     model_class=schemas.SurfaceDataFloat, key=store_key, format="msgpack"
+    # )
+    # if stored_surface is not None:
+    #     LOGGER.debug(f"Found existing stored surface for key: {store_key}")
+    #     perf_metrics.record_lap("fetch-stored-surface")
+    #     LOGGER.info(f"Got STORED {addr.address_type} surface in: {perf_metrics.to_string()}")
+    #     return stored_surface
 
     if addr.address_type == "REAL":
         access = SurfaceAccess.from_iteration_name(access_token, addr.case_uuid, addr.ensemble_name)
@@ -177,6 +177,12 @@ async def get_surface_data(
         perf_metrics.record_lap("get-surf")
         if not xtgeo_surf:
             raise HTTPException(status_code=404, detail="Could not get realization surface")
+        
+        # !!!!!!!!!!!!!!!!!!
+        # !!!!!!!!!!!!!!!!!!
+        # !!!!!!!!!!!!!!!!!!
+        if addr.realization % 2 != 0:
+            raise HTTPException(status_code=400, detail="FAKE error on odd realizations")
 
     elif addr.address_type == "STAT":
         service_stat_func_to_compute = StatisticFunction.from_string_value(addr.stat_function)
@@ -216,13 +222,13 @@ async def get_surface_data(
 
     perf_metrics.record_lap("convert")
 
-    await temp_user_store.put_pydantic_model(
-        key=store_key,
-        model=surf_data_response,
-        blob_prefix="testCachedSurfaceData",
-        format="msgpack",
-    )
-    perf_metrics.record_lap("write-user-store")
+    # await temp_user_store.put_pydantic_model(
+    #     key=store_key,
+    #     model=surf_data_response,
+    #     blob_prefix="testCachedSurfaceData",
+    #     format="msgpack",
+    # )
+    # perf_metrics.record_lap("write-user-store")
 
     LOGGER.info(f"Got {addr.address_type} surface in: {perf_metrics.to_string()}")
 

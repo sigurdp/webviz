@@ -10,9 +10,15 @@ import { rotatePoint2Around } from "@lib/utils/vec2";
 import { ContentError, ContentInfo } from "@modules/_shared/components/ContentMessage";
 import { usePropagateApiErrorToStatusWriter } from "@modules/_shared/hooks/usePropagateApiErrorToStatusWriter";
 import { useSurfaceDataQueryByAddress } from "@modules_shared/Surface";
-import { SurfaceDataFloat_trans } from "@modules_shared/Surface/queryDataTransforms";
-//import { useCelerySurfaceDataQueryByAddress, UseQueryResultWithProgress } from "@modules_shared/Surface/queryHooks";
-import { useCeleryPollingSurfaceDataQueryByAddress } from "@modules_shared/Surface/queryHooks";
+
+import { Options } from "@hey-api/client-axios";
+import { useQuery } from "@tanstack/react-query";
+import { wrapLongRunningQuery } from "@framework/utils/longRunningApiCalls";
+import { LroProgressInfo_api } from "@api";
+import { getCelerySurfaceData, GetCelerySurfaceDataData_api } from "@api";
+import { getCelerySurfaceDataQueryKey } from "@api";
+import { SurfaceDataFloat_trans, transformSurfaceData } from "@modules_shared/Surface/queryDataTransforms";
+import { encodeSurfAddrStr } from "@modules/_shared/Surface/surfaceAddress";
 
 
 import type { Interfaces } from "./interfaces";
@@ -23,10 +29,37 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     const statusWriter = useViewStatusWriter(props.viewContext);
 
     //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "png", null, true);
-    const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, true);
-    
-    //const surfDataQuery = useCeleryPollingSurfaceDataQueryByAddress(surfaceAddress, true);
-    //console.log(`ProgressMsg: ${surfDataQuery.progressMsg}`);
+    //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, true);
+
+    const queryFnOptions: Options<GetCelerySurfaceDataData_api, false> = {
+        query: {
+            surf_addr_str: surfaceAddress ? encodeSurfAddrStr(surfaceAddress) : "DUMMY",
+        },
+    };
+    const queryKey = getCelerySurfaceDataQueryKey(queryFnOptions);
+
+    function handleProgress(progress: LroProgressInfo_api | undefined) {
+        if (progress) {
+            console.log(`PROGRESS: ${progress.progress_message}`);
+        }
+    }
+
+    const wrappedQuery = wrapLongRunningQuery({
+        queryFn: getCelerySurfaceData,
+        queryFnArgs: queryFnOptions,
+        queryKey: queryKey,
+        pollIntervalMs: 500,
+        maxRetries: 10,
+        onProgress: handleProgress
+    });
+
+    const surfDataQuery = useQuery({ ...wrappedQuery, enabled: surfaceAddress != null });
+
+    let surfData: SurfaceDataFloat_trans | null = null;
+    if (surfDataQuery.data) {
+        surfData = transformSurfaceData(surfDataQuery.data) as SurfaceDataFloat_trans;
+    }
+
 
     const isLoading = surfDataQuery.isFetching;
     statusWriter.setLoading(isLoading);
@@ -34,8 +67,7 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     const hasError = surfDataQuery.isError;
     usePropagateApiErrorToStatusWriter(surfDataQuery, statusWriter);
 
-    const surfData = surfDataQuery.data;
-    //const surfData = surfDataQuery.data && "valuesFloat32Arr" in surfDataQuery.data ? surfDataQuery.data : null;
+    //const surfData = surfDataQuery.data;
 
     return (
         <div className="relative w-full h-full flex flex-col">

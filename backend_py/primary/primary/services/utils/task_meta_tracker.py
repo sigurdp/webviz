@@ -45,11 +45,11 @@ class TaskMetaTrackerFactory:
             raise RuntimeError("TaskMetaTrackerFactory is not initialized, call initialize() first")
         return cls._instance
 
-    def get_tracker_for_user(self, authenticated_user: AuthenticatedUser) -> "TaskMetaTracker":
-        if not authenticated_user:
-            raise ValueError("An authenticated_user must be specified")
+    def get_tracker_for_user_id(self, user_id: str) -> "TaskMetaTracker":
+        if not user_id:
+            raise ValueError("A user_id must be specified")
 
-        return TaskMetaTracker(self._redis_client, self._ttl_s, authenticated_user)
+        return TaskMetaTracker(user_id, self._redis_client, self._ttl_s)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -58,11 +58,15 @@ class TaskMeta:
     final_outcome: Literal["success", "failure"] | None = None
     expected_store_key: str | None = None
 
+
 class TaskMetaTracker:
-    def __init__(self, redis_client: redis.Redis, ttl_s: int, authenticated_user: AuthenticatedUser):
+    def __init__(self, user_id: str, redis_client: redis.Redis, ttl_s: int):
+        if not user_id:
+            raise ValueError("A user_id must be specified")
+
+        self._user_id = user_id
         self._redis_client: redis.Redis = redis_client
         self._ttl_s: int = ttl_s
-        self._user_id = authenticated_user.get_user_id()
 
     async def register_task_async(self, task_system: str, task_id: str, expected_store_key: str | None) -> None:
         redis_hash_name = self._make_full_redis_key_for_task(task_id)
@@ -112,7 +116,7 @@ class TaskMetaTracker:
         redis_key = self._make_full_redis_key_for_payload_hash_key(payload_hash)
         
         # May want to set a shorter TTL for this entry
-        await self._redis_client.setex(redis_key, self._ttl_s, task_id)
+        res = await self._redis_client.setex(redis_key, self._ttl_s, task_id)
 
     async def delete_payload_hash_to_task_mapping_async(self, payload_hash: str) -> None:
         redis_key = self._make_full_redis_key_for_payload_hash_key(payload_hash)
@@ -132,4 +136,8 @@ class TaskMetaTracker:
 
 def get_task_meta_tracker_for_user(authenticated_user: AuthenticatedUser) -> TaskMetaTracker:
     factory = TaskMetaTrackerFactory.get_instance()
-    return factory.get_tracker_for_user(authenticated_user)
+    return factory.get_tracker_for_user_id(user_id=authenticated_user.get_user_id())
+
+def get_task_meta_tracker_for_user_id(user_id: str) -> TaskMetaTracker:
+    factory = TaskMetaTrackerFactory.get_instance()
+    return factory.get_tracker_for_user_id(user_id=user_id)

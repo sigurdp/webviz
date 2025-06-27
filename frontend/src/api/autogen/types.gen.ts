@@ -185,16 +185,6 @@ export type EnsembleSensitivityCase_api = {
     realizations: Array<number>;
 };
 
-export type ErrorInfo_api = {
-    message: string;
-    code: number;
-};
-
-export type ErrorTaskResp_api = {
-    status: "error";
-    error: ErrorInfo_api;
-};
-
 export type FenceMeshSection_api = {
     vertices_uz_b64arr: B64FloatArray_api;
     poly_indices_b64arr: B64UintArray_api;
@@ -324,11 +314,6 @@ export type HttpValidationError_api = {
     detail?: Array<ValidationError_api>;
 };
 
-export type InProgressTaskResp_api = {
-    status: "inProgress";
-    progress: ProgressInfo_api;
-};
-
 /**
  * Statistical volumetric data for single volume table
  *
@@ -454,9 +439,24 @@ export type LroSuccessRespListSurfaceRealizationSampleValues_api = {
     data: Array<SurfaceRealizationSampleValues_api>;
 };
 
+export type LroSuccessRespMyAscResult_api = {
+    status: "success";
+    data: MyAscResult_api;
+};
+
+export type LroSuccessRespMyBinResult_api = {
+    status: "success";
+    data: MyBinResult_api;
+};
+
 export type LroSuccessRespNoneType_api = {
     status: "success";
     data: null;
+};
+
+export type LroSuccessRespSurfaceDataFloat_api = {
+    status: "success";
+    data: SurfaceDataFloat_api;
 };
 
 export type MyAscResult_api = {
@@ -548,10 +548,6 @@ export type PolylineIntersection_api = {
     grid_dimensions: GridDimensions_api;
     min_grid_prop_value: number;
     max_grid_prop_value: number;
-};
-
-export type ProgressInfo_api = {
-    progress_message: string;
 };
 
 export type PvtData_api = {
@@ -822,16 +818,6 @@ export type StratigraphicUnit_api = {
     lithologyType?: number | number | string;
 };
 
-export type SuccessTaskRespMyAscResult_api = {
-    status: "success";
-    data: MyAscResult_api;
-};
-
-export type SuccessTaskRespMyBinResult_api = {
-    status: "success";
-    data: MyBinResult_api;
-};
-
 /**
  * A single observation of a summary vector at a specific date.
  */
@@ -1008,11 +994,6 @@ export type TableColumnStatisticalData_api = {
     statisticValues: {
         [key: string]: Array<number>;
     };
-};
-
-export type TaskProgress_api = {
-    progress: string;
-    task_id: string;
 };
 
 export enum UnitType_api {
@@ -2523,37 +2504,32 @@ export type DeprecatedGetStratigraphicUnitsResponses_api = {
 export type DeprecatedGetStratigraphicUnitsResponse_api =
     DeprecatedGetStratigraphicUnitsResponses_api[keyof DeprecatedGetStratigraphicUnitsResponses_api];
 
-export type GetCeleryPollingSurfaceDataData_api = {
+export type GetCelerySurfaceDataData_api = {
     body?: never;
     path?: never;
     query: {
-        /**
-         * Surface address string, supported address types are *REAL*, *OBS* and *STAT*
-         */
         surf_addr_str: string;
     };
-    url: "/surface/celery_polling_surface_data";
+    url: "/surface/celery_surface_data";
 };
 
-export type GetCeleryPollingSurfaceDataErrors_api = {
+export type GetCelerySurfaceDataErrors_api = {
     /**
      * Validation Error
      */
     422: HttpValidationError_api;
 };
 
-export type GetCeleryPollingSurfaceDataError_api =
-    GetCeleryPollingSurfaceDataErrors_api[keyof GetCeleryPollingSurfaceDataErrors_api];
+export type GetCelerySurfaceDataError_api = GetCelerySurfaceDataErrors_api[keyof GetCelerySurfaceDataErrors_api];
 
-export type GetCeleryPollingSurfaceDataResponses_api = {
+export type GetCelerySurfaceDataResponses_api = {
     /**
      * Successful Response
      */
-    200: SurfaceDataFloat_api | TaskProgress_api;
+    200: LroSuccessRespSurfaceDataFloat_api | LroInProgressResp_api | LroErrorResp_api;
 };
 
-export type GetCeleryPollingSurfaceDataResponse_api =
-    GetCeleryPollingSurfaceDataResponses_api[keyof GetCeleryPollingSurfaceDataResponses_api];
+export type GetCelerySurfaceDataResponse_api = GetCelerySurfaceDataResponses_api[keyof GetCelerySurfaceDataResponses_api];
 
 export type GetSigurdExperimentData_api = {
     body?: never;
@@ -2566,7 +2542,7 @@ export type GetSigurdExperimentResponses_api = {
     /**
      * Successful Response
      */
-    200: SuccessTaskRespMyAscResult_api | SuccessTaskRespMyBinResult_api | InProgressTaskResp_api | ErrorTaskResp_api;
+    200: LroSuccessRespMyAscResult_api | LroSuccessRespMyBinResult_api | LroInProgressResp_api | LroErrorResp_api;
 };
 
 export type GetSigurdExperimentResponse_api = GetSigurdExperimentResponses_api[keyof GetSigurdExperimentResponses_api];

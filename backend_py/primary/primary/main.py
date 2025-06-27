@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 import datetime
 import logging
 import os
@@ -67,10 +69,29 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.name}"
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # The first part of this function, before the yield, will be executed before the FastPI application starts.
+    HTTPX_ASYNC_CLIENT_WRAPPER.start()
+
+    # Do one time initialization of the factory for TempUserStore instances
+    # The initialization will raise an exception if initialization fails
+    AZURE_STORAGE_CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+    TempUserStoreFactory.initialize(use_shared_clients=True, redis_url=config.REDIS_CACHE_URL, storage_account_conn_str=AZURE_STORAGE_CONNECTION_STRING, ttl_s=2*60)
+
+    TaskMetaTrackerFactory.initialize(redis_url=config.REDIS_CACHE_URL, ttl_s=2*60)
+
+    yield
+
+    # This part, after the yield, will be executed after the application has finished.
+    await HTTPX_ASYNC_CLIENT_WRAPPER.stop_async()
+
+
 app = FastAPI(
     generate_unique_id_function=custom_generate_unique_id,
     root_path="/api",
     default_response_class=ORJSONResponse,
+    lifespan=lifespan,
 )
 
 if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
@@ -78,25 +99,6 @@ if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     setup_azure_monitor_telemetry(app)
 else:
     LOGGER.warning("Skipping telemetry configuration, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
-
-
-# Do one time initialization of the factory for TempUserStore instances
-# The initialization will raise an exception if initialization fails
-AZURE_STORAGE_CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
-TempUserStoreFactory.initialize(redis_url=config.REDIS_CACHE_URL, storage_account_conn_string=AZURE_STORAGE_CONNECTION_STRING, ttl_s=2*60)
-
-TaskMetaTrackerFactory.initialize(redis_url=config.REDIS_CACHE_URL, ttl_s=2*60)
-
-
-# Start the httpx client on startup and stop it on shutdown of the app
-@app.on_event("startup")
-async def startup_event_async() -> None:
-    HTTPX_ASYNC_CLIENT_WRAPPER.start()
-
-
-@app.on_event("shutdown")
-async def shutdown_event_async() -> None:
-    await HTTPX_ASYNC_CLIENT_WRAPPER.stop_async()
 
 
 # The tags we add here will determine the name of the frontend api service for our endpoints as well as

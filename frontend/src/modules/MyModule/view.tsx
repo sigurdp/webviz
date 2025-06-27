@@ -4,7 +4,7 @@ import type { Options } from "@hey-api/client-axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 //import { postConcatenateOptions, postConcatenate, postConcatenateQueryKey, type PostConcatenateData_api, type ProgressInfo_api } from "@api";
-import { postGetTbSampleSurfInPoints, PostGetTbSampleSurfInPointsData_api, postGetTbSampleSurfInPointsQueryKey, type ProgressInfo_api } from "@api";
+import { postGetTbSampleSurfInPoints, PostGetTbSampleSurfInPointsData_api, postGetTbSampleSurfInPointsQueryKey, type LroProgressInfo_api } from "@api";
 import { postTbSampleSurfInPointsSubmit, PostTbSampleSurfInPointsSubmitData_api } from "@api";
 import { postTbSampleSurfInPointsSubmitOptions, postTbSampleSurfInPointsSubmitQueryKey } from "@api";
 
@@ -31,7 +31,7 @@ const SURFACE_ATTRIBUTE = "DS_extract_geogrid";
 const REALIZATION_NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 export function View(): React.ReactNode {
-    const [progress, setProgress] = React.useState<ProgressInfo_api | undefined>(undefined);
+    const [progress, setProgress] = React.useState<LroProgressInfo_api | undefined>(undefined);
     const [numPoints, setNumPoints] = React.useState<number>(3);
     const [delay, setDelay] = React.useState<number>(10);
     const [fail, setFail] = React.useState<boolean>(false);
