@@ -6,11 +6,12 @@ from typing import Annotated, Generic, List, Literal, Optional, Type, TypeVar, U
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 
 from primary.auth.auth_helper import AuthHelper
 from primary.celery_worker.tasks import surface_tasks
+from primary.celery_worker.tasks.surface_tasks import ExpectedTaskRes, TaskResOk, TaskResErr
 from primary.services.utils.authenticated_user import AuthenticatedUser
 from primary.services.utils.otel_span_tracing import otel_span_decorator, start_otel_span, start_otel_span_async
 from primary.services.utils.task_meta_tracker import get_task_meta_tracker_for_user
@@ -141,6 +142,33 @@ async def get_celery_surface_data(
                 # Task was actually successful, but we did not find a result in the store.
                 # This could be either an error or the task may have succeeded just after we checked the store.
                 # For now, we'll report it back as an error either way.
+
+                """
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                # Experiment with separating expected results and error from exceptions
+                # See ExpectedTaskRes over in surface_tasks.py
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                #task_res = surface_tasks.TaskRes.model_validate(celery_result.result)
+                LOGGER.info("-------------------------------------------")
+                ta: TypeAdapter[ExpectedTaskRes] = TypeAdapter(ExpectedTaskRes)
+                task_res = ta.validate_python(celery_result.result)
+                LOGGER.info(task_res)
+                LOGGER.info("-------------------------------------------")
+
+                if isinstance(task_res, TaskResErr):
+                    return LroErrorResp(
+                        status="failure",
+                        error=LroErrorInfo(message=f"Task execution failed: {task_res.message}, task_id={existing_celery_task_id}")
+                    )
+
+                # If we get here, the task was successful but we did not find a result in the store.
+                # Should we do another query against the result store?
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                """
+
                 LOGGER.error(f"Celery task is successful but no result was found in store [task_id={existing_celery_task_id}]")
                 raise HTTPException(status_code=500, detail=f"Task successful but no result found, task_id={existing_celery_task_id}")
             

@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from typing import Literal, Union, Annotated
 
 import xtgeo
 from celery import Task, shared_task
+from pydantic import BaseModel, Field
 from webviz_pkg.core_utils.perf_metrics import PerfMetrics
 
 from primary.celery_worker.celery_app import celery_app
@@ -16,6 +18,24 @@ def _set_task_progress_msg(task: Task, progress_msg: str) -> None:
     # Here we use our own, custom "IN_PROGRESS" state with a status message in the meta data
     # Note that this call actually overwrites Celery task state with the specified state and meta.
     task.update_state(state="IN_PROGRESS", meta={"progress_msg": progress_msg})
+
+
+# Separate expected results and error from exceptions
+# We probably want expected errors to be communicated through actually succeeding the task and then have a return value.
+# We want to return structured results from the tasks, so we can handle them in the client
+# Maybe use an Expected pattern or a Result(ok or err+msg)
+class TaskResOk(BaseModel):
+    status: Literal["ok"] = "ok"
+
+class TaskResErr(BaseModel):
+    status: Literal["err"] = "err"
+    message: str | None
+
+ExpectedTaskRes = Annotated[
+    Union[TaskResOk, TaskResErr],
+    Field(discriminator="status")
+]
+
 
 
 @celery_app.task
@@ -33,7 +53,7 @@ def surface_meta(sumo_access_token: str, case_uuid: str, ensemble_name: str) -> 
 @otel_span_decorator()
 async def do_surface_from_addr_async(
     task: Task, user_id: str, sumo_access_token: str, surf_addr_str: str, target_store_key: str
-) -> str | None:
+) -> ExpectedTaskRes:
     logger = logging.getLogger(__name__)
     #logger = get_task_logger(__name__)
     logger.debug(f"do_surface_from_addr_async() --- : {surf_addr_str=}")
@@ -60,10 +80,11 @@ async def do_surface_from_addr_async(
         logger.error(f"Failed to get xtgeo surface for {surf_addr_str=}")
         # We need something better here for these expected errors
         # We probably want to return a structured result from the task and have expected errors there
-        return None
+        return TaskResErr(message="Failed to get xtgeo surface")
 
     if addr.realization % 2 != 0:
-        raise ValueError("FAKE error on odd realizations")
+        #return TaskResError(message="FAKE error on odd realizations")
+        return TaskResErr(message="FAKE error on odd realizations")
 
     temp_user_store = get_temp_user_store_for_user_id(user_id)
 
@@ -77,11 +98,11 @@ async def do_surface_from_addr_async(
 
     logger.debug(f"do_surface_from_addr_async() took: {perf_metrics.to_string()}")
 
-    return target_store_key
+    return TaskResOk()
 
 
 @celery_app.task(bind=True)
-def surface_from_addr(self: Task, user_id: str, sumo_access_token: str, surf_addr_str: str, target_store_key: str) -> str | None:
+def surface_from_addr(self: Task, user_id: str, sumo_access_token: str, surf_addr_str: str, target_store_key: str) -> dict:
     logger = logging.getLogger(__name__)
     logger.debug(f"surface_from_addr() --- : {surf_addr_str=}")
 
@@ -95,8 +116,10 @@ def surface_from_addr(self: Task, user_id: str, sumo_access_token: str, surf_add
         target_store_key=target_store_key,
     )
 
-    store_key = asyncio.run(coro)
+    task_res = asyncio.run(coro)
 
     logger.debug(f"surface_from_addr() done in: {perf_metrics.to_string()}")
 
-    return store_key
+    # Celery doesn't know how to serialize a Pydantic model directly,
+    # so we need to convert it to a dict before returning.
+    return task_res.model_dump()
