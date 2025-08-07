@@ -2122,6 +2122,39 @@ export type GetSurfaceDataResponses_api = {
 
 export type GetSurfaceDataResponse_api = GetSurfaceDataResponses_api[keyof GetSurfaceDataResponses_api];
 
+export type GetStatisticalSurfaceDataHybridData_api = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Surface address string, supported address type is *STAT*
+         */
+        surf_addr_str: string;
+        t?: number;
+    };
+    url: "/surface/statistical_surface_data/hybrid";
+};
+
+export type GetStatisticalSurfaceDataHybridErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type GetStatisticalSurfaceDataHybridError_api =
+    GetStatisticalSurfaceDataHybridErrors_api[keyof GetStatisticalSurfaceDataHybridErrors_api];
+
+export type GetStatisticalSurfaceDataHybridResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: LroSuccessRespSurfaceDataFloat_api | LroInProgressResp_api | LroErrorResp_api;
+};
+
+export type GetStatisticalSurfaceDataHybridResponse_api =
+    GetStatisticalSurfaceDataHybridResponses_api[keyof GetStatisticalSurfaceDataHybridResponses_api];
+
 export type PostGetSurfaceIntersectionData_api = {
     body: BodyPostGetSurfaceIntersection_api;
     path?: never;

@@ -57,6 +57,7 @@ logging.getLogger("primary.services.user_grid3d_service").setLevel(logging.DEBUG
 logging.getLogger("primary.services.surface_query_service").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.grid3d").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.dev").setLevel(logging.DEBUG)
+logging.getLogger("primary.routers.surface").setLevel(logging.DEBUG)
 # logging.getLogger("primary.auth").setLevel(logging.DEBUG)
 # logging.getLogger("primary.services.utils.temp_user_store").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
@@ -79,7 +80,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     AZURE_STORAGE_CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
     TempUserStoreFactory.initialize(use_shared_clients=True, redis_url=config.REDIS_CACHE_URL, storage_account_conn_str=AZURE_STORAGE_CONNECTION_STRING, ttl_s=2*60)
 
-    TaskMetaTrackerFactory.initialize(redis_url=config.REDIS_CACHE_URL, ttl_s=2*60)
+    # !!!!!!!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!
+    TaskMetaTrackerFactory.initialize(redis_url=config.REDIS_CACHE_URL, ttl_s=24*60*60)
 
     yield
 

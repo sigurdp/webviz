@@ -17,6 +17,8 @@ import { wrapLongRunningQuery } from "@framework/utils/longRunningApiCalls";
 import { LroProgressInfo_api } from "@api";
 import { getCelerySurfaceData, GetCelerySurfaceDataData_api } from "@api";
 import { getCelerySurfaceDataQueryKey } from "@api";
+import { getStatisticalSurfaceDataHybrid, GetStatisticalSurfaceDataHybridData_api } from "@api";
+import { getStatisticalSurfaceDataHybridQueryKey } from "@api";
 import { SurfaceDataFloat_trans, transformSurfaceData } from "@modules_shared/Surface/queryDataTransforms";
 import { encodeSurfAddrStr } from "@modules/_shared/Surface/surfaceAddress";
 
@@ -31,12 +33,50 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "png", null, true);
     //const surfDataQuery = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, true);
 
-    const queryFnOptions: Options<GetCelerySurfaceDataData_api, false> = {
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+    // const queryFnOptions: Options<GetCelerySurfaceDataData_api, false> = {
+    //     query: {
+    //         surf_addr_str: surfaceAddress ? encodeSurfAddrStr(surfaceAddress) : "DUMMY",
+    //     },
+    // };
+    // const queryKey = getCelerySurfaceDataQueryKey(queryFnOptions);
+
+    // function handleProgress(progress: LroProgressInfo_api | undefined) {
+    //     if (progress) {
+    //         console.log(`PROGRESS: ${progress.progress_message}`);
+    //         statusWriter.setDebugMessage(`PROGRESS: ${progress.progress_message}`);
+    //     }
+    // }
+
+    // const wrappedQuery = wrapLongRunningQuery({
+    //     queryFn: getCelerySurfaceData,
+    //     queryFnArgs: queryFnOptions,
+    //     queryKey: queryKey,
+    //     pollIntervalMs: 500,
+    //     maxRetries: 10,
+    //     onProgress: handleProgress
+    // });
+
+    // const surfDataQuery = useQuery({ ...wrappedQuery, enabled: surfaceAddress != null });
+
+    // let surfData: SurfaceDataFloat_trans | null = null;
+    // if (surfDataQuery.data) {
+    //     surfData = transformSurfaceData(surfDataQuery.data) as SurfaceDataFloat_trans;
+    // }
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+
+    const surfDataQueryNorm = useSurfaceDataQueryByAddress(surfaceAddress, "float", null, surfaceAddress?.addressType !== "STAT");
+
+
+    
+    const queryFnOptions: Options<GetStatisticalSurfaceDataHybridData_api, false> = {
         query: {
             surf_addr_str: surfaceAddress ? encodeSurfAddrStr(surfaceAddress) : "DUMMY",
         },
     };
-    const queryKey = getCelerySurfaceDataQueryKey(queryFnOptions);
+    const queryKey = getStatisticalSurfaceDataHybridQueryKey(queryFnOptions);
 
     function handleProgress(progress: LroProgressInfo_api | undefined) {
         if (progress) {
@@ -46,29 +86,32 @@ export function MapView(props: ModuleViewProps<Interfaces>): React.ReactNode {
     }
 
     const wrappedQuery = wrapLongRunningQuery({
-        queryFn: getCelerySurfaceData,
+        queryFn: getStatisticalSurfaceDataHybrid,
         queryFnArgs: queryFnOptions,
         queryKey: queryKey,
         pollIntervalMs: 500,
-        maxRetries: 10,
+        maxRetries: 240,
         onProgress: handleProgress
     });
 
-    const surfDataQuery = useQuery({ ...wrappedQuery, enabled: surfaceAddress != null });
-
-    let surfData: SurfaceDataFloat_trans | null = null;
-    if (surfDataQuery.data) {
-        surfData = transformSurfaceData(surfDataQuery.data) as SurfaceDataFloat_trans;
-    }
+    const surfDataQuerySIG = useQuery({ ...wrappedQuery, enabled: surfaceAddress?.addressType === "STAT" });
 
 
-    const isLoading = surfDataQuery.isFetching;
+
+    const isLoading = surfDataQueryNorm.isFetching;
     statusWriter.setLoading(isLoading);
 
-    const hasError = surfDataQuery.isError;
-    usePropagateApiErrorToStatusWriter(surfDataQuery, statusWriter);
+    const hasError = surfDataQueryNorm.isError;
+    usePropagateApiErrorToStatusWriter(surfDataQueryNorm, statusWriter);
 
-    //const surfData = surfDataQuery.data;
+
+    let surfData: SurfaceDataFloat_trans | undefined = undefined;
+    if (surfDataQueryNorm && surfDataQueryNorm.data) {
+        surfData = surfDataQueryNorm.data;
+    }
+    else if (surfDataQuerySIG && surfDataQuerySIG.data) {
+        surfData = transformSurfaceData(surfDataQuerySIG.data) as SurfaceDataFloat_trans;
+    }
 
     return (
         <div className="relative w-full h-full flex flex-col">

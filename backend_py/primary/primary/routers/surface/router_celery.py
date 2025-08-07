@@ -126,7 +126,7 @@ async def get_celery_surface_data(
         return LroSuccessResp(status="success", data=existing_surf_data)
 
     tracker = get_task_meta_tracker_for_user(authenticated_user)
-    existing_celery_task_id = await tracker.get_task_id_by_payload_hash_async(param_hash)
+    existing_celery_task_id = await tracker.get_task_id_by_fingerprint_async(param_hash)
 
     if existing_celery_task_id:
         # We have an existing task id for this request payload, query the state of the celery task
@@ -136,7 +136,7 @@ async def get_celery_surface_data(
         if celery_result.ready():
             # Task is done, but we found no result in the store in the code above. We will proceed to report this back as an error.
             # First, remove the mapping so that we'll trigger submit of a new celery task the next time
-            await tracker.delete_payload_hash_to_task_mapping_async(payload_hash=param_hash)
+            await tracker.delete_fingerprint_to_task_mapping_async(fingerprint=param_hash)
 
             if celery_result.successful():
                 # Task was actually successful, but we did not find a result in the store.
@@ -211,8 +211,7 @@ async def get_celery_surface_data(
             )
 
     celery_task_id = new_celery_task.id
-    await tracker.register_task_async(task_system="celery", task_id=celery_task_id, expected_store_key=store_key)
-    await tracker.set_payload_hash_to_task_mapping_async(payload_hash=param_hash, task_id=celery_task_id)
+    await tracker.register_task_with_fingerprint_async(task_system="celery", task_id=celery_task_id, fingerprint=param_hash, expected_store_key=store_key)
 
     response.headers["Cache-Control"] = "no-store"
     response.status_code = status.HTTP_202_ACCEPTED

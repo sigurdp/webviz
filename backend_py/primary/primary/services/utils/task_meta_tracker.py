@@ -87,6 +87,15 @@ class TaskMetaTracker:
             }
         )
 
+    async def register_task_with_fingerprint_async(self, task_system: str, task_id: str, fingerprint: str, expected_store_key: str | None) -> None:
+        # Register the task itself in the usual way
+        await self.register_task_async(task_system, task_id, expected_store_key)
+
+        # Register the mapping from task fingerprint to task id
+        # May want to set a shorter TTL for this entry
+        fingerprint_redis_key = self._make_full_redis_key_for_fingerprint(fingerprint)
+        res = await self._redis_client.setex(fingerprint_redis_key, self._ttl_s, task_id)
+
     async def get_task_meta_async(self, task_id: str) -> TaskMeta | None:
         redis_hash_name = self._make_full_redis_key_for_task(task_id)
         value_dict: dict[str, str] = await self._redis_client.hgetall(name=redis_hash_name)
@@ -112,26 +121,20 @@ class TaskMetaTracker:
             expected_store_key=expected_store_key,
         )
     
-    async def set_payload_hash_to_task_mapping_async(self, payload_hash: str, task_id: str) -> None:
-        redis_key = self._make_full_redis_key_for_payload_hash_key(payload_hash)
-        
-        # May want to set a shorter TTL for this entry
-        res = await self._redis_client.setex(redis_key, self._ttl_s, task_id)
+    async def delete_fingerprint_to_task_mapping_async(self, fingerprint: str) -> None:
+        fingerprint_redis_key = self._make_full_redis_key_for_fingerprint(fingerprint)
+        await self._redis_client.delete(fingerprint_redis_key)
 
-    async def delete_payload_hash_to_task_mapping_async(self, payload_hash: str) -> None:
-        redis_key = self._make_full_redis_key_for_payload_hash_key(payload_hash)
-        await self._redis_client.delete(redis_key)
-
-    async def get_task_id_by_payload_hash_async(self, payload_hash: str) -> str | None:
-        redis_key = self._make_full_redis_key_for_payload_hash_key(payload_hash)
-        task_id = await self._redis_client.get(redis_key)
+    async def get_task_id_by_fingerprint_async(self, fingerprint: str) -> str | None:
+        fingerprint_redis_key = self._make_full_redis_key_for_fingerprint(fingerprint)
+        task_id = await self._redis_client.get(fingerprint_redis_key)
         return task_id
 
     def _make_full_redis_key_for_task(self, task_id: str) -> str:
         return f"{_REDIS_KEY_PREFIX}:user:{self._user_id}:task:{task_id}"
 
-    def _make_full_redis_key_for_payload_hash_key(self, payload_hash: str) -> str:
-        return f"{_REDIS_KEY_PREFIX}:user:{self._user_id}:payload_to_task_map:{payload_hash}"
+    def _make_full_redis_key_for_fingerprint(self, fingerprint: str) -> str:
+        return f"{_REDIS_KEY_PREFIX}:user:{self._user_id}:fingerprint_to_task_map:{fingerprint}"
 
 
 def get_task_meta_tracker_for_user(authenticated_user: AuthenticatedUser) -> TaskMetaTracker:

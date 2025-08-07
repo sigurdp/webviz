@@ -166,6 +166,8 @@ export function wrapLongRunningQuery<TArgs, TData, TQueryKey extends readonly un
                 }
                 return result.data;
             } else if (result.status === "in_progress" && result.operation_id) {
+                // ToDo: Verify with Ruben that it is OK to call onProgress here
+                onProgress?.(result.progress ?? undefined);
                 return pollUntilDone<TData>({
                     pollResource: result.poll_url
                         ? {

@@ -72,7 +72,7 @@ async def tb_hybrid_sample_in_points_async(
     # This is basically de-duplication
     # Checking whether a task with the same parameters has already been started AND is still pending or running
     tracker = get_task_meta_tracker_for_user(authenticated_user)
-    existing_task_id = await tracker.get_task_id_by_payload_hash_async(payload_hash=param_hash)
+    existing_task_id = await tracker.get_task_id_by_fingerprint_async(fingerprint=param_hash)
     if existing_task_id:
         existing_task_status = await _fetch_and_translate_task_status_or_none_async(existing_task_id)
         
@@ -80,7 +80,7 @@ async def tb_hybrid_sample_in_points_async(
             return existing_task_status
 
         # Delete the payload mapping for this task, so that it can be retried
-        await tracker.delete_payload_hash_to_task_mapping_async(payload_hash=param_hash)
+        await tracker.delete_fingerprint_to_task_mapping_async(fingerprint=param_hash)
 
         # If it is in a failed state, we report the error status and require a new invocation
         # For other outcomes (task not found or task completed) we will proceed with a new task launch
@@ -97,9 +97,8 @@ async def tb_hybrid_sample_in_points_async(
         realizations=realizations,
         x_coords=x_coords,
         y_coords=y_coords,
+        register_with_fingerprint=True,  # Register this with a task fingerprint!!
     )
-
-    await tracker.set_payload_hash_to_task_mapping_async(payload_hash=param_hash, task_id=task_id)
 
     return TaskStatus(task_id=task_id, status="in_progress", progress_msg="Task submitted")
 
@@ -117,6 +116,7 @@ async def tb_start_sample_in_points_async(
     realizations: Optional[List[int]],
     x_coords: list[float],
     y_coords: list[float],
+    register_with_fingerprint: bool
 ) -> str:
     perf_metrics = PerfMetrics()
 
@@ -166,11 +166,21 @@ async def tb_start_sample_in_points_async(
     perf_metrics.record_lap("enqueue-go")
 
     task_tracker = get_task_meta_tracker_for_user(authenticated_user)
-    await task_tracker.register_task_async(
-        task_system="asynq", 
-        task_id=task_status.taskId,
-        expected_store_key=store_key
-    )
+
+    if register_with_fingerprint:
+        await task_tracker.register_task_with_fingerprint_async(
+            task_system="asynq", 
+            task_id=task_status.taskId,
+            fingerprint=param_hash,
+            expected_store_key=store_key
+        )
+    else:
+        await task_tracker.register_task_async(
+            task_system="asynq", 
+            task_id=task_status.taskId,
+            expected_store_key=store_key
+        )
+
 
     return task_status.taskId
 

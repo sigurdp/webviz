@@ -245,6 +245,9 @@ async def get_ri_isect(
     return "OK"
 
 
+##################################################################
+##################################################################
+##################################################################
 
 import datetime
 import os
@@ -345,6 +348,10 @@ async def get_celery_surf(request: Request, surf_addr_str: str) -> str:
 
 
 
+##################################################################
+##################################################################
+##################################################################
+
 
 import json
 from primary import config
@@ -387,3 +394,36 @@ async def get_go_test() -> str:
 
 
 
+##################################################################
+##################################################################
+##################################################################
+
+from primary.services.sumo_access.surface_access import SurfaceAccess
+from primary.routers.surface.surface_address import decode_surf_addr_str
+from primary.services.utils.statistic_function import StatisticFunction
+import xtgeo
+
+
+@router.get("/stat_surf_pull_test")
+@no_cache
+async def get_stat_surf_pull_test(request: Request, surf_addr_str: str) -> str:
+    LOGGER.info(f"get_stat_surf_pull_test start !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
+    authenticated_user = AuthHelper.get_authenticated_user(request)
+    access_token = authenticated_user.get_sumo_access_token()
+
+    surf_addr_str = "STAT~~aea92953-b5a3-49c6-9119-5ab34dd10bc4~~iter-0~~VOLANTIS GP. Top~~DS_extract_geogrid~~MEAN~~*"
+
+    addr = decode_surf_addr_str(surf_addr_str)
+    service_stat_func_to_compute = StatisticFunction.from_string_value(addr.stat_function)
+
+    access = SurfaceAccess.from_iteration_name(access_token, addr.case_uuid, addr.ensemble_name)
+    xtgeo_surf: xtgeo.RegularSurface = await access.get_statistical_surface_data_async(
+        statistic_function=service_stat_func_to_compute,
+        name=addr.name,
+        attribute=addr.attribute,
+        realizations=addr.stat_realizations,
+        time_or_interval_str=addr.iso_time_or_interval,
+    )
+
+    return f"get_stat_surf_pull_test: time: {datetime.datetime.now()}"
