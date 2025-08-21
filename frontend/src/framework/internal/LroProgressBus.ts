@@ -13,6 +13,11 @@ class LroProgressBus {
     private _subscribersMap: Map<string, Set<ProgressCallback>> = new Map();
     private _lastProgressMap: Map<string, string | null> = new Map();
 
+    /**
+     * Subscribes to progress messages for a specific serialized query key.
+     * The callback is called immediately with the last known progress message.
+     * Returns a function to unsubscribe from the progress messages.
+     */
     subscribe(serializedKey: string, callback: ProgressCallback): () => void {
         let subscribersSet = this._subscribersMap.get(serializedKey);
         if (!subscribersSet) {
@@ -38,6 +43,11 @@ class LroProgressBus {
         };
     }
 
+    /**
+     * Publishes a progress message for a specific serialized query key.
+     * This will notify all subscribers of the progress message.
+     * If the message is null, it indicates that the operation is complete or has no progress.
+     */
     publish(serializedKey: string, message: string | null): void {
         this._lastProgressMap.set(serializedKey, message);
         const subscribersSet = this._subscribersMap.get(serializedKey);
@@ -53,10 +63,18 @@ class LroProgressBus {
         }
     }
 
+    /*
+     * Gets the last progress message for a specific serialized query key.
+     * Returns null if there is no progress message.
+     */
     getLast(serializedKey: string): string | null | undefined {
         return this._lastProgressMap.get(serializedKey);
     }
 
+    /*
+     * Removes all subscribers and stored progress messages for a specific serialized query key.
+     * This should be called to clean up after a long running operation has been performed.
+     */
     remove(serializedKey: string): void {
         this._subscribersMap.delete(serializedKey);
         this._lastProgressMap.delete(serializedKey);
@@ -65,6 +83,11 @@ class LroProgressBus {
 
 export const lroProgressBus = new LroProgressBus();
 
+/*
+ * A utility function to stringify an object in a stable way.
+ * This is used to serialize the query key for the LroProgressBus.
+ * It ensures that the string representation is consistent across different runs.
+ */
 function stableStringify(value: unknown): string {
     const seen = new WeakSet();
     const sorter = (a: any, b: any) => (a > b ? 1 : a < b ? -1 : 0);
@@ -91,6 +114,11 @@ function stableStringify(value: unknown): string {
     });
 }
 
+/*
+ * Serializes a query key into a stable string representation.
+ * This is used to ensure that the same query key always produces the same string,
+ * which is necessary for the LroProgressBus to work correctly.
+ */
 export function serializeQueryKey(key: readonly unknown[]): string {
     return stableStringify(key);
 }

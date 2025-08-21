@@ -187,6 +187,11 @@ export function wrapLongRunningQuery<TArgs, TData, TQueryKey extends readonly un
     };
 }
 
+/*
+ * A hook to subscribe to long-running operation progress messages.
+ * It uses the LroProgressBus to get the last progress message for the given query key.
+ * The optional callback is called whenever the progress message changes.
+ */
 export function useLroProgress(
     queryKey: readonly unknown[],
     callback?: (message: string | null) => void,
