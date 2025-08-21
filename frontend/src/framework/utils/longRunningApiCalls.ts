@@ -1,5 +1,8 @@
+import React from "react";
+
 import type { LroFailureResp_api, LroInProgressResp_api, HttpValidationError_api } from "@api";
 import { client } from "@api";
+import { lroProgressBus, serializeQueryKey } from "@framework/internal/LroProgressBus";
 import type { RequestResult } from "@hey-api/client-axios";
 import type { QueryFunctionContext } from "@tanstack/query-core";
 import type { UseQueryOptions } from "@tanstack/react-query";
@@ -20,7 +23,6 @@ type QueryFn<TArgs, TData> = (
 interface OnProgressCallback {
     (progressMessage: string | null): void;
 }
-
 interface WrapLongRunningQueryArgs<TArgs, TData> {
     queryFn: QueryFn<TArgs, TData>;
     queryFnArgs: TArgs;
@@ -44,14 +46,14 @@ type PollResource<TArgs, TData> =
 
 async function pollUntilDone<T>(options: {
     // The URL to poll for the long-running operation status or the original query function if polled from same endpoint
+    busKey: string;
     pollResource: PollResource<any, T>;
     taskId: string;
     intervalMs: number;
     maxRetries: number;
     signal?: AbortSignal;
-    onProgress?: OnProgressCallback;
 }): Promise<T> {
-    const { pollResource, intervalMs, maxRetries, signal, onProgress } = options;
+    const { pollResource, intervalMs, maxRetries, signal } = options;
     let currentPollUrl: string | null = pollResource.resourceType === "url" ? pollResource.url : null;
 
     for (let i = 0; i < maxRetries; i++) {
@@ -65,10 +67,12 @@ async function pollUntilDone<T>(options: {
 
         if (pollResource.resourceType === "url" && currentPollUrl) {
             // If pollResource is a URL, use it directly
-            response = await client.get<LongRunningApiResponse<T>, LroFailureResp_api | HttpValidationError_api, false>({
-                url: currentPollUrl,
-                signal,
-            });
+            response = await client.get<LongRunningApiResponse<T>, LroFailureResp_api | HttpValidationError_api, false>(
+                {
+                    url: currentPollUrl,
+                    signal,
+                },
+            );
         } else if (pollResource.resourceType === "queryFn") {
             // If pollResource is a function, call it with the operationId
             response = await pollResource.queryFn({
@@ -101,7 +105,7 @@ async function pollUntilDone<T>(options: {
                 }
                 currentPollUrl = data.poll_url;
             }
-            onProgress?.(data.progress_message ?? null);
+            lroProgressBus.publish(options.busKey, data.progress_message ?? null);
         }
 
         await new Promise<void>((resolve, reject) => {
@@ -131,6 +135,11 @@ export function wrapLongRunningQuery<TArgs, TData, TQueryKey extends readonly un
     maxRetries = 50,
     onProgress,
 }: WrapLongRunningQueryArgs<TArgs, TData> & { queryKey: TQueryKey }): UseQueryOptions<TData, Error, TData, TQueryKey> {
+    const busKey = serializeQueryKey(queryKey);
+
+    if (onProgress) {
+        lroProgressBus.subscribe(busKey, onProgress);
+    }
     return {
         queryKey,
         queryFn: async (ctx: QueryFunctionContext<TQueryKey>) => {
@@ -155,8 +164,9 @@ export function wrapLongRunningQuery<TArgs, TData, TQueryKey extends readonly un
                 }
                 return data.result;
             } else if (data.status === "in_progress" && data.task_id) {
-                onProgress?.(data.progress_message ?? null);
+                lroProgressBus.publish(busKey, data.progress_message ?? null);
                 return pollUntilDone<TData>({
+                    busKey,
                     pollResource: data.poll_url
                         ? {
                               resourceType: "url",
@@ -171,10 +181,10 @@ export function wrapLongRunningQuery<TArgs, TData, TQueryKey extends readonly un
                     intervalMs: pollIntervalMs,
                     maxRetries,
                     signal,
-                    onProgress,
                     taskId: data.task_id,
                 });
             }
+            lroProgressBus.remove(busKey);
             if (data.status === "failure") {
                 throw new Error(data.error?.message || "Unknown error");
             }
@@ -182,4 +192,19 @@ export function wrapLongRunningQuery<TArgs, TData, TQueryKey extends readonly un
             throw new Error("Invalid response status or missing poll_url");
         },
     };
+}
+
+export function useLroProgress(queryKey: readonly unknown[]): string | null {
+    const key = serializeQueryKey(queryKey);
+
+    const getSnapshot = React.useCallback(() => lroProgressBus.getLast(key) ?? null, [key]);
+
+    return React.useSyncExternalStore(
+        (onStoreChange) => {
+            // ensure we forward the message to the store change callback
+            return lroProgressBus.subscribe(key, () => onStoreChange());
+        },
+        getSnapshot,
+        () => null,
+    );
 }
