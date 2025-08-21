@@ -2,39 +2,45 @@ export interface ProgressCallback {
     (message: string | null): void;
 }
 
+/**
+ * A bus for long-running operation progress messages.
+ * It allows any consumer to subscribe to progress messages for a specific serialized query key.
+ * To serialize the query key, use the `serializeQueryKey` function.
+ * The progress messages are stored in a map, and the bus notifies subscribers when a new message is published.
+ * The bus also allows for a TTL (time-to-live) for the messages, after which the messages are removed.
+ */
 class LroProgressBus {
     private _subscribersMap: Map<string, Set<ProgressCallback>> = new Map();
     private _lastProgressMap: Map<string, string | null> = new Map();
-    private _ttlTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-    subscribe(key: string, callback: ProgressCallback): () => void {
-        let subscribersSet = this._subscribersMap.get(key);
+    subscribe(serializedKey: string, callback: ProgressCallback): () => void {
+        let subscribersSet = this._subscribersMap.get(serializedKey);
         if (!subscribersSet) {
             subscribersSet = new Set();
-            this._subscribersMap.set(key, subscribersSet);
+            this._subscribersMap.set(serializedKey, subscribersSet);
         }
         subscribersSet.add(callback);
 
         // Immediately call the callback with the last known progress message
-        const lastProgress = this._lastProgressMap.get(key);
+        const lastProgress = this._lastProgressMap.get(serializedKey);
         if (lastProgress !== undefined) {
             queueMicrotask(() => callback(lastProgress));
         }
 
         return () => {
-            const subscribersSet = this._subscribersMap.get(key);
+            const subscribersSet = this._subscribersMap.get(serializedKey);
             if (subscribersSet) {
                 subscribersSet.delete(callback);
                 if (subscribersSet.size === 0) {
-                    this._subscribersMap.delete(key);
+                    this._subscribersMap.delete(serializedKey);
                 }
             }
         };
     }
 
-    publish(key: string, message: string | null): void {
-        this._lastProgressMap.set(key, message);
-        const subscribersSet = this._subscribersMap.get(key);
+    publish(serializedKey: string, message: string | null): void {
+        this._lastProgressMap.set(serializedKey, message);
+        const subscribersSet = this._subscribersMap.get(serializedKey);
         if (!subscribersSet) {
             return;
         }
@@ -42,24 +48,18 @@ class LroProgressBus {
             try {
                 callback(message);
             } catch (error) {
-                console.error(`Error in progress callback for key "${key}":`, error);
+                console.error(`Error in progress callback for key "${serializedKey}":`, error);
             }
         }
     }
 
-    getLast(key: string): string | null | undefined {
-        return this._lastProgressMap.get(key);
+    getLast(serializedKey: string): string | null | undefined {
+        return this._lastProgressMap.get(serializedKey);
     }
 
-    remove(key: string): void {
-        this._subscribersMap.delete(key);
-        this._lastProgressMap.delete(key);
-    }
-
-    scheduleRemove(key: string, ttlMs = 60_000) {
-        this._ttlTimers.get(key) && clearTimeout(this._ttlTimers.get(key)!);
-        const t = setTimeout(() => this.remove(key), ttlMs);
-        this._ttlTimers.set(key, t);
+    remove(serializedKey: string): void {
+        this._subscribersMap.delete(serializedKey);
+        this._lastProgressMap.delete(serializedKey);
     }
 }
 
@@ -68,11 +68,15 @@ export const lroProgressBus = new LroProgressBus();
 function stableStringify(value: unknown): string {
     const seen = new WeakSet();
     const sorter = (a: any, b: any) => (a > b ? 1 : a < b ? -1 : 0);
-    return JSON.stringify(value, function (key, val) {
+    return JSON.stringify(value, function (_, val) {
         if (val && typeof val === "object") {
-            if (seen.has(val as object)) return; // drop cycles
+            if (seen.has(val as object)) {
+                return; // drop cycles
+            }
             seen.add(val as object);
-            if (Array.isArray(val)) return val;
+            if (Array.isArray(val)) {
+                return val;
+            }
             return Object.keys(val as object)
                 .sort(sorter)
                 .reduce(

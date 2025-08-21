@@ -19,17 +19,12 @@ type LongRunningApiResponse<TData> =
 type QueryFn<TArgs, TData> = (
     options: TArgs,
 ) => RequestResult<LongRunningApiResponse<TData>, LroFailureResp_api | HttpValidationError_api, false>;
-
-interface OnProgressCallback {
-    (progressMessage: string | null): void;
-}
 interface WrapLongRunningQueryArgs<TArgs, TData> {
     queryFn: QueryFn<TArgs, TData>;
     queryFnArgs: TArgs;
     queryKey: unknown[];
     pollIntervalMs?: number;
     maxRetries?: number;
-    onProgress?: OnProgressCallback;
 }
 
 type PollResource<TArgs, TData> =
@@ -133,78 +128,88 @@ export function wrapLongRunningQuery<TArgs, TData, TQueryKey extends readonly un
     queryKey,
     pollIntervalMs = 2000,
     maxRetries = 50,
-    onProgress,
 }: WrapLongRunningQueryArgs<TArgs, TData> & { queryKey: TQueryKey }): UseQueryOptions<TData, Error, TData, TQueryKey> {
     const busKey = serializeQueryKey(queryKey);
-
-    if (onProgress) {
-        lroProgressBus.subscribe(busKey, onProgress);
-    }
     return {
         queryKey,
         queryFn: async (ctx: QueryFunctionContext<TQueryKey>) => {
-            const signal = ctx.signal;
+            try {
+                const signal = ctx.signal;
 
-            const response = await queryFn({ ...queryFnArgs, signal, throwOnError: false });
-            const { data, error } = response;
+                const response = await queryFn({ ...queryFnArgs, signal, throwOnError: false });
+                const { data, error } = response;
 
-            if (error) {
-                throw new AxiosError(
-                    response.message,
-                    response.code,
-                    response.config,
-                    response.request,
-                    response.response,
-                );
-            }
-
-            if (data.status === "success") {
-                if (data.result === undefined) {
-                    throw new Error("Missing result in successful response");
+                if (error) {
+                    throw new AxiosError(
+                        response.message,
+                        response.code,
+                        response.config,
+                        response.request,
+                        response.response,
+                    );
                 }
-                return data.result;
-            } else if (data.status === "in_progress" && data.task_id) {
-                lroProgressBus.publish(busKey, data.progress_message ?? null);
-                return pollUntilDone<TData>({
-                    busKey,
-                    pollResource: data.poll_url
-                        ? {
-                              resourceType: "url",
-                              url: data.poll_url,
-                              taskId: data.task_id,
-                          }
-                        : {
-                              resourceType: "queryFn",
-                              queryFn,
-                              options: { ...queryFnArgs },
-                          },
-                    intervalMs: pollIntervalMs,
-                    maxRetries,
-                    signal,
-                    taskId: data.task_id,
-                });
-            }
-            lroProgressBus.remove(busKey);
-            if (data.status === "failure") {
-                throw new Error(data.error?.message || "Unknown error");
-            }
 
-            throw new Error("Invalid response status or missing poll_url");
+                if (data.status === "success") {
+                    if (data.result === undefined) {
+                        throw new Error("Missing result in successful response");
+                    }
+                    return data.result;
+                } else if (data.status === "in_progress" && data.task_id) {
+                    lroProgressBus.publish(busKey, data.progress_message ?? null);
+                    return pollUntilDone<TData>({
+                        busKey,
+                        pollResource: data.poll_url
+                            ? {
+                                  resourceType: "url",
+                                  url: data.poll_url,
+                                  taskId: data.task_id,
+                              }
+                            : {
+                                  resourceType: "queryFn",
+                                  queryFn,
+                                  options: { ...queryFnArgs },
+                              },
+                        intervalMs: pollIntervalMs,
+                        maxRetries,
+                        signal,
+                        taskId: data.task_id,
+                    });
+                }
+                if (data.status === "failure") {
+                    throw new Error(data.error?.message || "Unknown error");
+                }
+
+                throw new Error("Invalid response status or missing poll_url");
+            } finally {
+                lroProgressBus.remove(busKey);
+            }
         },
     };
 }
 
-export function useLroProgress(queryKey: readonly unknown[]): string | null {
-    const key = serializeQueryKey(queryKey);
+export function useLroProgress(
+    queryKey: readonly unknown[],
+    callback?: (message: string | null) => void,
+): string | null {
+    const serializedKey = serializeQueryKey(queryKey);
+    const prevProgressMessage = React.useRef<string | null>(null);
+    const getSnapshot = React.useCallback(() => lroProgressBus.getLast(serializedKey) ?? null, [serializedKey]);
 
-    const getSnapshot = React.useCallback(() => lroProgressBus.getLast(key) ?? null, [key]);
-
-    return React.useSyncExternalStore(
-        (onStoreChange) => {
-            // ensure we forward the message to the store change callback
-            return lroProgressBus.subscribe(key, () => onStoreChange());
-        },
+    const progressMessage = React.useSyncExternalStore(
+        (onStoreChange) => lroProgressBus.subscribe(serializedKey, onStoreChange),
         getSnapshot,
-        () => null,
+        () => null, // Fallback for server-side rendering
     );
+
+    React.useEffect(
+        function maybeCallCallbackOnMessageChange() {
+            if (progressMessage !== prevProgressMessage.current) {
+                callback?.(progressMessage);
+                prevProgressMessage.current = progressMessage;
+            }
+        },
+        [progressMessage, callback],
+    );
+
+    return progressMessage;
 }
