@@ -1,13 +1,14 @@
 import asyncio
-import datetime
 import logging
+from typing import Annotated, Literal
 
 import httpx
 import starsessions
-from fastapi import APIRouter, HTTPException, Request, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Path
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from primary.auth.auth_helper import AuthHelper
+from primary.auth.auth_helper import AuthenticatedUser, AuthHelper
 from primary.services.graph_access.graph_access import GraphApiAccess
 from primary.middleware.add_browser_cache import no_cache
 
@@ -25,18 +26,6 @@ class UserInfo(BaseModel):
 router = APIRouter()
 
 
-@router.get("/alive")
-@no_cache
-async def get_alive() -> str:
-    return f"ALIVE: Backend is alive at this time: {datetime.datetime.now()}"
-
-
-@router.get("/alive_protected")
-@no_cache
-async def get_alive_protected() -> str:
-    return f"ALIVE_PROTECTED: Backend is alive at this time: {datetime.datetime.now()}"
-
-
 @router.post("/logout")
 async def post_logout(request: Request) -> str:
     await starsessions.load_session(request)
@@ -45,15 +34,17 @@ async def post_logout(request: Request) -> str:
     return "Logout OK"
 
 
-@router.get("/logged_in_user", response_model=UserInfo)
+@router.get("/profile", response_model=UserInfo)
 @no_cache
-async def get_logged_in_user(
+async def get_my_profile(
     request: Request,
-    includeGraphApiInfo: bool = Query(  # pylint: disable=invalid-name
+    include_graph_api_info: bool = Query(
         False, description="Set to true to include user avatar and display name from Microsoft Graph API"
     ),
 ) -> UserInfo:
-
+    """
+    Get the user profile of the currently logged in user
+    """
     await starsessions.load_session(request)
     authenticated_user = AuthHelper.get_authenticated_user(request)
 
@@ -70,7 +61,7 @@ async def get_logged_in_user(
         has_smda_access=authenticated_user.has_smda_access_token(),
     )
 
-    if authenticated_user.has_graph_access_token() and includeGraphApiInfo:
+    if authenticated_user.has_graph_access_token() and include_graph_api_info:
         graph_api_access = GraphApiAccess(authenticated_user.get_graph_access_token())
         try:
             avatar_b64str_future = asyncio.create_task(graph_api_access.get_user_profile_photo("me"))
@@ -88,3 +79,65 @@ async def get_logged_in_user(
             print("Error while fetching user avatar and info from Microsoft Graph API (Invalid URL):\n", exc)
 
     return user_info
+
+
+@router.post("/tasks/purge")
+async def post_purge_all_tasks(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+) -> str:
+    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED)
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def post_cancel_task(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    task_id: Annotated[str, Path(description="The task id to cancel")],
+) -> str:
+    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED)
+
+
+@router.post("/caches/purge")
+async def post_purge_all_caches(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+) -> str:
+    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED)
+
+
+# !!!!!
+# !!!!!
+# !!!!!
+# Convenience GET endpoints for logout and purge all
+# !!!!!
+# !!!!!
+# !!!!!
+@router.get("/logout", response_class=HTMLResponse)
+async def get_logout() -> str:
+    html_content = """
+    <!doctype html>
+    <html>
+    <head><meta charset="utf-8"/><title>Logging out…</title></head>
+    <body>
+        <form id="logoutForm" method="post" action="/api/me/logout">
+            <p>Logging out...</p>
+        </form>
+        <script>
+            setTimeout(() => {
+                document.getElementById('logoutForm').submit();
+            }, 2000);
+        </script>
+        <noscript>
+            <p>Click the button to log out.</p>
+            <button form="logoutForm" type="submit">Log out</button>
+        </noscript>
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html_content, status_code=200)
+
+
+@router.get("/caches/purge-now")
+async def get_purge_all_caches_now(
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+) -> str:
+    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED)

@@ -197,6 +197,11 @@ import type {
     GetVfpTableData_api,
     GetVfpTableResponse_api,
     GetVfpTableError_api,
+    PostMeLogoutData_api,
+    PostMeLogoutResponse_api,
+    GetMeProfileData_api,
+    GetMeProfileResponse_api,
+    GetMeProfileError_api,
     LoginRouteData_api,
     LoginRouteError_api,
     AuthorizedCallbackRouteData_api,
@@ -204,13 +209,6 @@ import type {
     GetAliveResponse_api,
     GetAliveProtectedData_api,
     GetAliveProtectedResponse_api,
-    PostLogoutData_api,
-    PostLogoutResponse_api,
-    GetLoggedInUserData_api,
-    GetLoggedInUserResponse_api,
-    GetLoggedInUserError_api,
-    RootData_api,
-    RootResponse_api,
 } from "./types.gen";
 
 export const client = createClient(createConfig());
@@ -1235,6 +1233,31 @@ export const getVfpTable = <ThrowOnError extends boolean = false>(options: Optio
 };
 
 /**
+ * Post Me Logout
+ */
+export const postMeLogout = <ThrowOnError extends boolean = false>(
+    options?: Options<PostMeLogoutData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<PostMeLogoutResponse_api, unknown, ThrowOnError>({
+        ...options,
+        url: "/me/logout",
+    });
+};
+
+/**
+ * Get Me Profile
+ * Get the user profile of the currently logged in user
+ */
+export const getMeProfile = <ThrowOnError extends boolean = false>(
+    options?: Options<GetMeProfileData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<GetMeProfileResponse_api, GetMeProfileError_api, ThrowOnError>({
+        ...options,
+        url: "/me/profile",
+    });
+};
+
+/**
  *  Login Route
  */
 export const loginRoute = <ThrowOnError extends boolean = false>(options?: Options<LoginRouteData_api, ThrowOnError>) => {
@@ -1275,37 +1298,5 @@ export const getAliveProtected = <ThrowOnError extends boolean = false>(
     return (options?.client ?? client).get<GetAliveProtectedResponse_api, unknown, ThrowOnError>({
         ...options,
         url: "/alive_protected",
-    });
-};
-
-/**
- * Post Logout
- */
-export const postLogout = <ThrowOnError extends boolean = false>(options?: Options<PostLogoutData_api, ThrowOnError>) => {
-    return (options?.client ?? client).post<PostLogoutResponse_api, unknown, ThrowOnError>({
-        ...options,
-        url: "/logout",
-    });
-};
-
-/**
- * Get Logged In User
- */
-export const getLoggedInUser = <ThrowOnError extends boolean = false>(
-    options?: Options<GetLoggedInUserData_api, ThrowOnError>,
-) => {
-    return (options?.client ?? client).get<GetLoggedInUserResponse_api, GetLoggedInUserError_api, ThrowOnError>({
-        ...options,
-        url: "/logged_in_user",
-    });
-};
-
-/**
- * Root
- */
-export const root = <ThrowOnError extends boolean = false>(options?: Options<RootData_api, ThrowOnError>) => {
-    return (options?.client ?? client).get<RootResponse_api, unknown, ThrowOnError>({
-        ...options,
-        url: "/",
     });
 };

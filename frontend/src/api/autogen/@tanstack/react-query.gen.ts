@@ -70,13 +70,12 @@ import {
     getRealizationData,
     getVfpTableNames,
     getVfpTable,
+    postMeLogout,
+    getMeProfile,
     loginRoute,
     authorizedCallbackRoute,
     getAlive,
     getAliveProtected,
-    postLogout,
-    getLoggedInUser,
-    root,
     client,
 } from "../sdk.gen";
 import type {
@@ -159,14 +158,13 @@ import type {
     GetRealizationDataData_api,
     GetVfpTableNamesData_api,
     GetVfpTableData_api,
+    PostMeLogoutData_api,
+    PostMeLogoutResponse_api,
+    GetMeProfileData_api,
     LoginRouteData_api,
     AuthorizedCallbackRouteData_api,
     GetAliveData_api,
     GetAliveProtectedData_api,
-    PostLogoutData_api,
-    PostLogoutResponse_api,
-    GetLoggedInUserData_api,
-    RootData_api,
 } from "../types.gen";
 
 type QueryKey<TOptions extends Options> = [
@@ -1570,6 +1568,58 @@ export const getVfpTableOptions = (options: Options<GetVfpTableData_api>) => {
     });
 };
 
+export const postMeLogoutQueryKey = (options?: Options<PostMeLogoutData_api>) => [createQueryKey("postMeLogout", options)];
+
+export const postMeLogoutOptions = (options?: Options<PostMeLogoutData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postMeLogout({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postMeLogoutQueryKey(options),
+    });
+};
+
+export const postMeLogoutMutation = (options?: Partial<Options<PostMeLogoutData_api>>) => {
+    const mutationOptions: UseMutationOptions<
+        PostMeLogoutResponse_api,
+        AxiosError<DefaultError>,
+        Options<PostMeLogoutData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postMeLogout({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const getMeProfileQueryKey = (options?: Options<GetMeProfileData_api>) => [createQueryKey("getMeProfile", options)];
+
+export const getMeProfileOptions = (options?: Options<GetMeProfileData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getMeProfile({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getMeProfileQueryKey(options),
+    });
+};
+
 export const loginRouteQueryKey = (options?: Options<LoginRouteData_api>) => [createQueryKey("loginRoute", options)];
 
 export const loginRouteOptions = (options?: Options<LoginRouteData_api>) => {
@@ -1639,72 +1689,5 @@ export const getAliveProtectedOptions = (options?: Options<GetAliveProtectedData
             return data;
         },
         queryKey: getAliveProtectedQueryKey(options),
-    });
-};
-
-export const postLogoutQueryKey = (options?: Options<PostLogoutData_api>) => [createQueryKey("postLogout", options)];
-
-export const postLogoutOptions = (options?: Options<PostLogoutData_api>) => {
-    return queryOptions({
-        queryFn: async ({ queryKey, signal }) => {
-            const { data } = await postLogout({
-                ...options,
-                ...queryKey[0],
-                signal,
-                throwOnError: true,
-            });
-            return data;
-        },
-        queryKey: postLogoutQueryKey(options),
-    });
-};
-
-export const postLogoutMutation = (options?: Partial<Options<PostLogoutData_api>>) => {
-    const mutationOptions: UseMutationOptions<PostLogoutResponse_api, AxiosError<DefaultError>, Options<PostLogoutData_api>> = {
-        mutationFn: async (localOptions) => {
-            const { data } = await postLogout({
-                ...options,
-                ...localOptions,
-                throwOnError: true,
-            });
-            return data;
-        },
-    };
-    return mutationOptions;
-};
-
-export const getLoggedInUserQueryKey = (options?: Options<GetLoggedInUserData_api>) => [
-    createQueryKey("getLoggedInUser", options),
-];
-
-export const getLoggedInUserOptions = (options?: Options<GetLoggedInUserData_api>) => {
-    return queryOptions({
-        queryFn: async ({ queryKey, signal }) => {
-            const { data } = await getLoggedInUser({
-                ...options,
-                ...queryKey[0],
-                signal,
-                throwOnError: true,
-            });
-            return data;
-        },
-        queryKey: getLoggedInUserQueryKey(options),
-    });
-};
-
-export const rootQueryKey = (options?: Options<RootData_api>) => [createQueryKey("root", options)];
-
-export const rootOptions = (options?: Options<RootData_api>) => {
-    return queryOptions({
-        queryFn: async ({ queryKey, signal }) => {
-            const { data } = await root({
-                ...options,
-                ...queryKey[0],
-                signal,
-                throwOnError: true,
-            });
-            return data;
-        },
-        queryKey: rootQueryKey(options),
     });
 };

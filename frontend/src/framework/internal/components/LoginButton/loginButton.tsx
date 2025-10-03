@@ -3,7 +3,7 @@ import React from "react";
 import { Dropdown, MenuButton } from "@mui/base";
 import { AccountCircle, Login, Logout } from "@mui/icons-material";
 
-import { postLogout } from "@api";
+import { postMeLogout } from "@api";
 import { AuthState, useAuthProvider } from "@framework/internal/providers/AuthProvider";
 import { CircularProgress } from "@lib/components/CircularProgress";
 import { Menu } from "@lib/components/Menu";
@@ -37,7 +37,7 @@ export const LoginButton: React.FC<LoginButtonProps> = (props) => {
 
     async function handleLogout() {
         console.debug("Logging out...");
-        await postLogout();
+        await postMeLogout();
         console.debug("Redirecting to login screen...");
         window.location.href = "/";
     }

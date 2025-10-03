@@ -3891,6 +3891,55 @@ export type GetVfpTableResponses_api = {
 
 export type GetVfpTableResponse_api = GetVfpTableResponses_api[keyof GetVfpTableResponses_api];
 
+export type PostMeLogoutData_api = {
+    body?: never;
+    path?: never;
+    query?: {
+        t?: number;
+    };
+    url: "/me/logout";
+};
+
+export type PostMeLogoutResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type PostMeLogoutResponse_api = PostMeLogoutResponses_api[keyof PostMeLogoutResponses_api];
+
+export type GetMeProfileData_api = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Set to true to include user avatar and display name from Microsoft Graph API
+         */
+        include_graph_api_info?: boolean;
+        t?: number;
+    };
+    url: "/me/profile";
+};
+
+export type GetMeProfileErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type GetMeProfileError_api = GetMeProfileErrors_api[keyof GetMeProfileErrors_api];
+
+export type GetMeProfileResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: UserInfo_api;
+};
+
+export type GetMeProfileResponse_api = GetMeProfileResponses_api[keyof GetMeProfileResponses_api];
+
 export type LoginRouteData_api = {
     body?: never;
     path?: never;
@@ -3968,70 +4017,3 @@ export type GetAliveProtectedResponses_api = {
 };
 
 export type GetAliveProtectedResponse_api = GetAliveProtectedResponses_api[keyof GetAliveProtectedResponses_api];
-
-export type PostLogoutData_api = {
-    body?: never;
-    path?: never;
-    query?: {
-        t?: number;
-    };
-    url: "/logout";
-};
-
-export type PostLogoutResponses_api = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type PostLogoutResponse_api = PostLogoutResponses_api[keyof PostLogoutResponses_api];
-
-export type GetLoggedInUserData_api = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Set to true to include user avatar and display name from Microsoft Graph API
-         */
-        includeGraphApiInfo?: boolean;
-        t?: number;
-    };
-    url: "/logged_in_user";
-};
-
-export type GetLoggedInUserErrors_api = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError_api;
-};
-
-export type GetLoggedInUserError_api = GetLoggedInUserErrors_api[keyof GetLoggedInUserErrors_api];
-
-export type GetLoggedInUserResponses_api = {
-    /**
-     * Successful Response
-     */
-    200: UserInfo_api;
-};
-
-export type GetLoggedInUserResponse_api = GetLoggedInUserResponses_api[keyof GetLoggedInUserResponses_api];
-
-export type RootData_api = {
-    body?: never;
-    path?: never;
-    query?: {
-        t?: number;
-    };
-    url: "/";
-};
-
-export type RootResponses_api = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type RootResponse_api = RootResponses_api[keyof RootResponses_api];

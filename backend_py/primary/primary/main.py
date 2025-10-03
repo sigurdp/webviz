@@ -11,21 +11,21 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from primary.auth.auth_helper import AuthHelper
 from primary.auth.enforce_logged_in_middleware import EnforceLoggedInMiddleware
-from primary.middleware.add_process_time_to_server_timing_middleware import AddProcessTimeToServerTimingMiddleware
-
 from primary.middleware.add_browser_cache import AddBrowserCacheMiddleware
+from primary.middleware.add_process_time_to_server_timing_middleware import AddProcessTimeToServerTimingMiddleware
 from primary.routers.dev.router import router as dev_router
 from primary.routers.explore.router import router as explore_router
-from primary.routers.general import router as general_router
+from primary.routers.flow_network.router import router as flow_network_router
 from primary.routers.graph.router import router as graph_router
 from primary.routers.grid3d.router import router as grid3d_router
-from primary.routers.flow_network.router import router as flow_network_router
 from primary.routers.inplace_volumes.router import router as inplace_volumes_router
+from primary.routers.me import router as me_router
 from primary.routers.observations.router import router as observations_router
 from primary.routers.parameters.router import router as parameters_router
 from primary.routers.polygons.router import router as polygons_router
 from primary.routers.pvt.router import router as pvt_router
 from primary.routers.rft.router import router as rft_router
+from primary.routers.root import router as root_router
 from primary.routers.seismic.router import router as seismic_router
 from primary.routers.surface.router import router as surface_router
 from primary.routers.timeseries.router import router as timeseries_router
@@ -52,7 +52,7 @@ logging.getLogger("primary.services.user_grid3d_service").setLevel(logging.DEBUG
 logging.getLogger("primary.services.surface_query_service").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.grid3d").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.dev").setLevel(logging.DEBUG)
-logging.getLogger("primary.auth").setLevel(logging.DEBUG)
+# logging.getLogger("primary.auth").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
 
@@ -105,11 +105,14 @@ app.include_router(graph_router, prefix="/graph", tags=["graph"])
 app.include_router(observations_router, prefix="/observations", tags=["observations"])
 app.include_router(rft_router, prefix="/rft", tags=["rft"])
 app.include_router(vfp_router, prefix="/vfp", tags=["vfp"])
+app.include_router(me_router, prefix="/me", tags=["me"])
+
+# The dev router is not included in the openapi schema
 app.include_router(dev_router, prefix="/dev", tags=["dev"], include_in_schema=False)
 
 auth_helper = AuthHelper()
 app.include_router(auth_helper.router)
-app.include_router(general_router)
+app.include_router(root_router)
 
 configure_service_level_exception_handlers(app)
 override_default_fastapi_exception_handlers(app)
@@ -120,7 +123,7 @@ app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total-ex
 
 # Add out custom middleware to enforce that user is logged in
 # Also redirects to /login endpoint for some select paths
-unprotected_paths = ["/logout", "/logged_in_user", "/alive", "/openapi.json"]
+unprotected_paths = ["/me/logout", "/me/logged_in_user", "/alive", "/openapi.json"]
 paths_redirected_to_login = ["/", "/alive_protected"]
 
 app.add_middleware(
@@ -140,8 +143,3 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")  # type: ignore[ar
 # This middleware instance measures execution time of the endpoints, including the cost of other middleware
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total")
 app.add_middleware(AddBrowserCacheMiddleware)
-
-
-@app.get("/")
-async def root() -> str:
-    return f"Primary backend is alive at this time: {datetime.datetime.now()}"
