@@ -3,7 +3,7 @@ import React from "react";
 import { Dropdown, MenuButton } from "@mui/base";
 import { AccountCircle, Login, Logout } from "@mui/icons-material";
 
-import { postMeLogout } from "@api";
+import { postLogout, postPurgeAllTasks } from "@api";
 import { AuthState, useAuthProvider } from "@framework/internal/providers/AuthProvider";
 import { CircularProgress } from "@lib/components/CircularProgress";
 import { Menu } from "@lib/components/Menu";
@@ -40,9 +40,14 @@ export const LoginButton: React.FC<LoginButtonProps> = (props) => {
 
     async function handleLogout() {
         console.debug("Logging out...");
-        await postMeLogout();
+        await postLogout();
         console.debug("Redirecting to login screen...");
         window.location.reload();
+    }
+
+    async function handlePurgeAllTasks() {
+        console.debug("Purging all tasks...");
+        await postPurgeAllTasks();
     }
 
     function makeIcon() {
@@ -116,6 +121,10 @@ export const LoginButton: React.FC<LoginButtonProps> = (props) => {
                 <MenuItem onClick={handleLogout}>
                     <Logout fontSize="small" className="mr-2" />
                     Sign out
+                </MenuItem>
+                <MenuDivider />
+                <MenuItem onClick={handlePurgeAllTasks}>
+                    Purge all my tasks
                 </MenuItem>
             </Menu>
         </Dropdown>

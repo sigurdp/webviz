@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { UserInfo_api } from "@api";
-import { getMeProfile } from "@api";
+import { getMyProfile } from "@api";
 
 export enum AuthState {
     LoggedIn = "LoggedIn",
@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactElement }> = (props) 
     const [userInfo, setUserInfo] = React.useState<UserInfo_api | null>(null);
 
     React.useEffect(() => {
-        getMeProfile({
+        getMyProfile({
             query: {
                 include_graph_api_info: true,
             },

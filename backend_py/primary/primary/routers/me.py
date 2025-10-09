@@ -4,13 +4,15 @@ from typing import Annotated, Literal
 
 import httpx
 import starsessions
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, Path
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from primary.auth.auth_helper import AuthenticatedUser, AuthHelper
 from primary.services.graph_access.graph_access import GraphApiAccess
 from primary.middleware.add_browser_cache import no_cache
+from primary.services.utils.task_meta_tracker import get_task_meta_tracker_for_user
+from primary.utils.response_perf_metrics import ResponsePerfMetrics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,9 +85,19 @@ async def get_my_profile(
 
 @router.post("/tasks/purge")
 async def post_purge_all_tasks(
+    response: Response,
     authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
 ) -> str:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED)
+    perf_metrics = ResponsePerfMetrics(response)
+    LOGGER.info(f"Purging all tasks for user {authenticated_user.get_username()}...")
+
+    LOGGER.info(f"Purging tasks from task meta tracker")
+    task_tracker = get_task_meta_tracker_for_user(authenticated_user)
+    await task_tracker.purge_all_task_meta_async()
+
+    LOGGER.info(f"Purging of tasks took: {perf_metrics.to_string()}")
+
+    return "All tasks purged"
 
 
 @router.post("/tasks/{task_id}/cancel")

@@ -3953,7 +3953,7 @@ export type GetVfpTableResponses_api = {
 
 export type GetVfpTableResponse_api = GetVfpTableResponses_api[keyof GetVfpTableResponses_api];
 
-export type PostMeLogoutData_api = {
+export type GetLogoutData_api = {
     body?: never;
     path?: never;
     query?: {
@@ -3962,16 +3962,34 @@ export type PostMeLogoutData_api = {
     url: "/me/logout";
 };
 
-export type PostMeLogoutResponses_api = {
+export type GetLogoutResponses_api = {
     /**
      * Successful Response
      */
     200: string;
 };
 
-export type PostMeLogoutResponse_api = PostMeLogoutResponses_api[keyof PostMeLogoutResponses_api];
+export type GetLogoutResponse_api = GetLogoutResponses_api[keyof GetLogoutResponses_api];
 
-export type GetMeProfileData_api = {
+export type PostLogoutData_api = {
+    body?: never;
+    path?: never;
+    query?: {
+        t?: number;
+    };
+    url: "/me/logout";
+};
+
+export type PostLogoutResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type PostLogoutResponse_api = PostLogoutResponses_api[keyof PostLogoutResponses_api];
+
+export type GetMyProfileData_api = {
     body?: never;
     path?: never;
     query?: {
@@ -3984,23 +4002,109 @@ export type GetMeProfileData_api = {
     url: "/me/profile";
 };
 
-export type GetMeProfileErrors_api = {
+export type GetMyProfileErrors_api = {
     /**
      * Validation Error
      */
     422: HttpValidationError_api;
 };
 
-export type GetMeProfileError_api = GetMeProfileErrors_api[keyof GetMeProfileErrors_api];
+export type GetMyProfileError_api = GetMyProfileErrors_api[keyof GetMyProfileErrors_api];
 
-export type GetMeProfileResponses_api = {
+export type GetMyProfileResponses_api = {
     /**
      * Successful Response
      */
     200: UserInfo_api;
 };
 
-export type GetMeProfileResponse_api = GetMeProfileResponses_api[keyof GetMeProfileResponses_api];
+export type GetMyProfileResponse_api = GetMyProfileResponses_api[keyof GetMyProfileResponses_api];
+
+export type PostPurgeAllTasksData_api = {
+    body?: never;
+    path?: never;
+    query?: {
+        t?: number;
+    };
+    url: "/me/tasks/purge";
+};
+
+export type PostPurgeAllTasksResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type PostPurgeAllTasksResponse_api = PostPurgeAllTasksResponses_api[keyof PostPurgeAllTasksResponses_api];
+
+export type PostCancelTaskData_api = {
+    body?: never;
+    path: {
+        /**
+         * The task id to cancel
+         */
+        task_id: string;
+    };
+    query?: {
+        t?: number;
+    };
+    url: "/me/tasks/{task_id}/cancel";
+};
+
+export type PostCancelTaskErrors_api = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError_api;
+};
+
+export type PostCancelTaskError_api = PostCancelTaskErrors_api[keyof PostCancelTaskErrors_api];
+
+export type PostCancelTaskResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type PostCancelTaskResponse_api = PostCancelTaskResponses_api[keyof PostCancelTaskResponses_api];
+
+export type PostPurgeAllCachesData_api = {
+    body?: never;
+    path?: never;
+    query?: {
+        t?: number;
+    };
+    url: "/me/caches/purge";
+};
+
+export type PostPurgeAllCachesResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type PostPurgeAllCachesResponse_api = PostPurgeAllCachesResponses_api[keyof PostPurgeAllCachesResponses_api];
+
+export type GetPurgeAllCachesNowData_api = {
+    body?: never;
+    path?: never;
+    query?: {
+        t?: number;
+    };
+    url: "/me/caches/purge-now";
+};
+
+export type GetPurgeAllCachesNowResponses_api = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type GetPurgeAllCachesNowResponse_api = GetPurgeAllCachesNowResponses_api[keyof GetPurgeAllCachesNowResponses_api];
 
 export type LoginRouteData_api = {
     body?: never;

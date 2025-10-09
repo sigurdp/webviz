@@ -200,11 +200,22 @@ import type {
     GetVfpTableData_api,
     GetVfpTableResponse_api,
     GetVfpTableError_api,
-    PostMeLogoutData_api,
-    PostMeLogoutResponse_api,
-    GetMeProfileData_api,
-    GetMeProfileResponse_api,
-    GetMeProfileError_api,
+    GetLogoutData_api,
+    GetLogoutResponse_api,
+    PostLogoutData_api,
+    PostLogoutResponse_api,
+    GetMyProfileData_api,
+    GetMyProfileResponse_api,
+    GetMyProfileError_api,
+    PostPurgeAllTasksData_api,
+    PostPurgeAllTasksResponse_api,
+    PostCancelTaskData_api,
+    PostCancelTaskResponse_api,
+    PostCancelTaskError_api,
+    PostPurgeAllCachesData_api,
+    PostPurgeAllCachesResponse_api,
+    GetPurgeAllCachesNowData_api,
+    GetPurgeAllCachesNowResponse_api,
     LoginRouteData_api,
     LoginRouteError_api,
     AuthorizedCallbackRouteData_api,
@@ -1252,27 +1263,84 @@ export const getVfpTable = <ThrowOnError extends boolean = false>(options: Optio
 };
 
 /**
- * Post Me Logout
+ * Get Logout
  */
-export const postMeLogout = <ThrowOnError extends boolean = false>(
-    options?: Options<PostMeLogoutData_api, ThrowOnError>,
-) => {
-    return (options?.client ?? client).post<PostMeLogoutResponse_api, unknown, ThrowOnError>({
+export const getLogout = <ThrowOnError extends boolean = false>(options?: Options<GetLogoutData_api, ThrowOnError>) => {
+    return (options?.client ?? client).get<GetLogoutResponse_api, unknown, ThrowOnError>({
+        ...options,
+        responseType: "text",
+        url: "/me/logout",
+    });
+};
+
+/**
+ * Post Logout
+ */
+export const postLogout = <ThrowOnError extends boolean = false>(options?: Options<PostLogoutData_api, ThrowOnError>) => {
+    return (options?.client ?? client).post<PostLogoutResponse_api, unknown, ThrowOnError>({
         ...options,
         url: "/me/logout",
     });
 };
 
 /**
- * Get Me Profile
+ * Get My Profile
  * Get the user profile of the currently logged in user
  */
-export const getMeProfile = <ThrowOnError extends boolean = false>(
-    options?: Options<GetMeProfileData_api, ThrowOnError>,
+export const getMyProfile = <ThrowOnError extends boolean = false>(
+    options?: Options<GetMyProfileData_api, ThrowOnError>,
 ) => {
-    return (options?.client ?? client).get<GetMeProfileResponse_api, GetMeProfileError_api, ThrowOnError>({
+    return (options?.client ?? client).get<GetMyProfileResponse_api, GetMyProfileError_api, ThrowOnError>({
         ...options,
         url: "/me/profile",
+    });
+};
+
+/**
+ * Post Purge All Tasks
+ */
+export const postPurgeAllTasks = <ThrowOnError extends boolean = false>(
+    options?: Options<PostPurgeAllTasksData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<PostPurgeAllTasksResponse_api, unknown, ThrowOnError>({
+        ...options,
+        url: "/me/tasks/purge",
+    });
+};
+
+/**
+ * Post Cancel Task
+ */
+export const postCancelTask = <ThrowOnError extends boolean = false>(
+    options: Options<PostCancelTaskData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<PostCancelTaskResponse_api, PostCancelTaskError_api, ThrowOnError>({
+        ...options,
+        url: "/me/tasks/{task_id}/cancel",
+    });
+};
+
+/**
+ * Post Purge All Caches
+ */
+export const postPurgeAllCaches = <ThrowOnError extends boolean = false>(
+    options?: Options<PostPurgeAllCachesData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).post<PostPurgeAllCachesResponse_api, unknown, ThrowOnError>({
+        ...options,
+        url: "/me/caches/purge",
+    });
+};
+
+/**
+ * Get Purge All Caches Now
+ */
+export const getPurgeAllCachesNow = <ThrowOnError extends boolean = false>(
+    options?: Options<GetPurgeAllCachesNowData_api, ThrowOnError>,
+) => {
+    return (options?.client ?? client).get<GetPurgeAllCachesNowResponse_api, unknown, ThrowOnError>({
+        ...options,
+        url: "/me/caches/purge-now",
     });
 };
 

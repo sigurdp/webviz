@@ -71,8 +71,13 @@ import {
     getRealizationData,
     getVfpTableNames,
     getVfpTable,
-    postMeLogout,
-    getMeProfile,
+    getLogout,
+    postLogout,
+    getMyProfile,
+    postPurgeAllTasks,
+    postCancelTask,
+    postPurgeAllCaches,
+    getPurgeAllCachesNow,
     loginRoute,
     authorizedCallbackRoute,
     getAlive,
@@ -160,9 +165,18 @@ import type {
     GetRealizationDataData_api,
     GetVfpTableNamesData_api,
     GetVfpTableData_api,
-    PostMeLogoutData_api,
-    PostMeLogoutResponse_api,
-    GetMeProfileData_api,
+    GetLogoutData_api,
+    PostLogoutData_api,
+    PostLogoutResponse_api,
+    GetMyProfileData_api,
+    PostPurgeAllTasksData_api,
+    PostPurgeAllTasksResponse_api,
+    PostCancelTaskData_api,
+    PostCancelTaskError_api,
+    PostCancelTaskResponse_api,
+    PostPurgeAllCachesData_api,
+    PostPurgeAllCachesResponse_api,
+    GetPurgeAllCachesNowData_api,
     LoginRouteData_api,
     AuthorizedCallbackRouteData_api,
     GetAliveData_api,
@@ -1589,12 +1603,12 @@ export const getVfpTableOptions = (options: Options<GetVfpTableData_api>) => {
     });
 };
 
-export const postMeLogoutQueryKey = (options?: Options<PostMeLogoutData_api>) => [createQueryKey("postMeLogout", options)];
+export const getLogoutQueryKey = (options?: Options<GetLogoutData_api>) => [createQueryKey("getLogout", options)];
 
-export const postMeLogoutOptions = (options?: Options<PostMeLogoutData_api>) => {
+export const getLogoutOptions = (options?: Options<GetLogoutData_api>) => {
     return queryOptions({
         queryFn: async ({ queryKey, signal }) => {
-            const { data } = await postMeLogout({
+            const { data } = await getLogout({
                 ...options,
                 ...queryKey[0],
                 signal,
@@ -1602,18 +1616,31 @@ export const postMeLogoutOptions = (options?: Options<PostMeLogoutData_api>) => 
             });
             return data;
         },
-        queryKey: postMeLogoutQueryKey(options),
+        queryKey: getLogoutQueryKey(options),
     });
 };
 
-export const postMeLogoutMutation = (options?: Partial<Options<PostMeLogoutData_api>>) => {
-    const mutationOptions: UseMutationOptions<
-        PostMeLogoutResponse_api,
-        AxiosError<DefaultError>,
-        Options<PostMeLogoutData_api>
-    > = {
+export const postLogoutQueryKey = (options?: Options<PostLogoutData_api>) => [createQueryKey("postLogout", options)];
+
+export const postLogoutOptions = (options?: Options<PostLogoutData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postLogout({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postLogoutQueryKey(options),
+    });
+};
+
+export const postLogoutMutation = (options?: Partial<Options<PostLogoutData_api>>) => {
+    const mutationOptions: UseMutationOptions<PostLogoutResponse_api, AxiosError<DefaultError>, Options<PostLogoutData_api>> = {
         mutationFn: async (localOptions) => {
-            const { data } = await postMeLogout({
+            const { data } = await postLogout({
                 ...options,
                 ...localOptions,
                 throwOnError: true,
@@ -1624,12 +1651,12 @@ export const postMeLogoutMutation = (options?: Partial<Options<PostMeLogoutData_
     return mutationOptions;
 };
 
-export const getMeProfileQueryKey = (options?: Options<GetMeProfileData_api>) => [createQueryKey("getMeProfile", options)];
+export const getMyProfileQueryKey = (options?: Options<GetMyProfileData_api>) => [createQueryKey("getMyProfile", options)];
 
-export const getMeProfileOptions = (options?: Options<GetMeProfileData_api>) => {
+export const getMyProfileOptions = (options?: Options<GetMyProfileData_api>) => {
     return queryOptions({
         queryFn: async ({ queryKey, signal }) => {
-            const { data } = await getMeProfile({
+            const { data } = await getMyProfile({
                 ...options,
                 ...queryKey[0],
                 signal,
@@ -1637,7 +1664,137 @@ export const getMeProfileOptions = (options?: Options<GetMeProfileData_api>) => 
             });
             return data;
         },
-        queryKey: getMeProfileQueryKey(options),
+        queryKey: getMyProfileQueryKey(options),
+    });
+};
+
+export const postPurgeAllTasksQueryKey = (options?: Options<PostPurgeAllTasksData_api>) => [
+    createQueryKey("postPurgeAllTasks", options),
+];
+
+export const postPurgeAllTasksOptions = (options?: Options<PostPurgeAllTasksData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postPurgeAllTasks({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postPurgeAllTasksQueryKey(options),
+    });
+};
+
+export const postPurgeAllTasksMutation = (options?: Partial<Options<PostPurgeAllTasksData_api>>) => {
+    const mutationOptions: UseMutationOptions<
+        PostPurgeAllTasksResponse_api,
+        AxiosError<DefaultError>,
+        Options<PostPurgeAllTasksData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postPurgeAllTasks({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const postCancelTaskQueryKey = (options: Options<PostCancelTaskData_api>) => [
+    createQueryKey("postCancelTask", options),
+];
+
+export const postCancelTaskOptions = (options: Options<PostCancelTaskData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postCancelTask({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postCancelTaskQueryKey(options),
+    });
+};
+
+export const postCancelTaskMutation = (options?: Partial<Options<PostCancelTaskData_api>>) => {
+    const mutationOptions: UseMutationOptions<
+        PostCancelTaskResponse_api,
+        AxiosError<PostCancelTaskError_api>,
+        Options<PostCancelTaskData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postCancelTask({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const postPurgeAllCachesQueryKey = (options?: Options<PostPurgeAllCachesData_api>) => [
+    createQueryKey("postPurgeAllCaches", options),
+];
+
+export const postPurgeAllCachesOptions = (options?: Options<PostPurgeAllCachesData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await postPurgeAllCaches({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: postPurgeAllCachesQueryKey(options),
+    });
+};
+
+export const postPurgeAllCachesMutation = (options?: Partial<Options<PostPurgeAllCachesData_api>>) => {
+    const mutationOptions: UseMutationOptions<
+        PostPurgeAllCachesResponse_api,
+        AxiosError<DefaultError>,
+        Options<PostPurgeAllCachesData_api>
+    > = {
+        mutationFn: async (localOptions) => {
+            const { data } = await postPurgeAllCaches({
+                ...options,
+                ...localOptions,
+                throwOnError: true,
+            });
+            return data;
+        },
+    };
+    return mutationOptions;
+};
+
+export const getPurgeAllCachesNowQueryKey = (options?: Options<GetPurgeAllCachesNowData_api>) => [
+    createQueryKey("getPurgeAllCachesNow", options),
+];
+
+export const getPurgeAllCachesNowOptions = (options?: Options<GetPurgeAllCachesNowData_api>) => {
+    return queryOptions({
+        queryFn: async ({ queryKey, signal }) => {
+            const { data } = await getPurgeAllCachesNow({
+                ...options,
+                ...queryKey[0],
+                signal,
+                throwOnError: true,
+            });
+            return data;
+        },
+        queryKey: getPurgeAllCachesNowQueryKey(options),
     });
 };
 
