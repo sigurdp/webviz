@@ -852,14 +852,14 @@ docs = ["pydocstyle"]
 
 [[package]]
 name = "fmu-sumo"
-version = "2.6.0"
+version = "2.6.2"
 description = "Python package for interacting with Sumo in an FMU setting"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
 files = [
-    {file = "fmu_sumo-2.6.0-py3-none-any.whl", hash = "sha256:a73d0d9b109d80b3213a32ef6fc096f428cc16b39fb854c1e375e4dfedd9cba6"},
-    {file = "fmu_sumo-2.6.0.tar.gz", hash = "sha256:cb8da7fe06c0a158517a3fbf348adbc3eabfeefd1163ba6f9a2fe689285b52a3"},
+    {file = "fmu_sumo-2.6.2-py3-none-any.whl", hash = "sha256:f93a11a42f97a08106b72edddeb70143da22b7e871a0471aa0cf93e01093cd0e"},
+    {file = "fmu_sumo-2.6.2.tar.gz", hash = "sha256:210fc588df46886823e329c6d0187fe9ce2c9631ba9c4bc6e33601667cfdc8ce"},
 ]
 
 [package.dependencies]
@@ -4102,4 +4102,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.13"
-content-hash = "714724e13cc8e2de0293906716e192b78851d3668cb0381d1a990475cfadb3d1"
+content-hash = "70e2a072515a9a123fa7cc3fe5cca779cc1feb806c2828fc383d6334bf6cbab7"
