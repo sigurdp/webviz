@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Annotated, Literal
+from typing import Annotated
 
 import httpx
 import starsessions
@@ -8,10 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from webviz_services.graph_access.graph_access import GraphApiAccess
+from webviz_services.utils.task_meta_tracker import get_task_meta_tracker_for_user
+
 from primary.auth.auth_helper import AuthenticatedUser, AuthHelper
-from primary.services.graph_access.graph_access import GraphApiAccess
 from primary.middleware.add_browser_cache import no_cache
-from primary.services.utils.task_meta_tracker import get_task_meta_tracker_for_user
 from primary.utils.response_perf_metrics import ResponsePerfMetrics
 
 LOGGER = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ async def post_purge_all_tasks(
     perf_metrics = ResponsePerfMetrics(response)
     LOGGER.info(f"Purging all tasks for user {authenticated_user.get_username()}...")
 
-    LOGGER.info(f"Purging tasks from task meta tracker")
+    LOGGER.info("Purging tasks from task meta tracker")
     task_tracker = get_task_meta_tracker_for_user(authenticated_user)
     await task_tracker.purge_all_task_meta_async()
 
