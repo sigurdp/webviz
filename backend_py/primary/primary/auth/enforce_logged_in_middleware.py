@@ -88,14 +88,18 @@ class EnforceLoggedInMiddleware:
             # !!!!!!!!!!!!!!!!!!!!!
             # !!!!!!!!!!!!!!!!!!!!!
             # !!!!!!!!!!!!!!!!!!!!!
-            #user_identificator = authenticated_user.get_user_id()
-            user_identificator = authenticated_user.get_username()
+            user_id = authenticated_user.get_user_id()
+            user_name = authenticated_user.get_username()
             curr_span = trace.get_current_span()
-            curr_span.set_attribute("enduser.id", user_identificator)
-            curr_span.set_attribute("enduser.pseudo.id", f"XXX_{user_identificator}")
-            curr_span.set_attribute("app.user_id_raw", user_identificator)
-            LOGGER.info(f"HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH {user_identificator}")
 
+            # Shows up as "Auth Id", "Authenticated user Id" or user_AuthenticatedId in Application Insights
+            curr_span.set_attribute("enduser.id", f"auth_{user_name}")
+
+            # Shows up as "User Id" or user_Id in Application Insights
+            curr_span.set_attribute("enduser.pseudo.id", f"pseudo_{user_name}")
+
+            curr_span.set_attribute("app.user_name_raw", f"cust_{user_name}")
+            curr_span.set_attribute("app.user_id_raw", f"cust_{user_id}")
 
         else:
             LOGGER.debug(
