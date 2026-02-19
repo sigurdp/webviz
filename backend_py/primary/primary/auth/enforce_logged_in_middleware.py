@@ -12,6 +12,9 @@ from webviz_core_utils.perf_metrics import PerfMetrics
 
 from .auth_helper import AuthHelper
 
+from opentelemetry import trace
+
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -80,6 +83,22 @@ class EnforceLoggedInMiddleware:
                 text_response = PlainTextResponse("Not authorized yet, must log in", 401)
                 await text_response(scope, receive, send)
                 return
+
+            # !!!!!!!!!!!!!!!!!!!!!
+            # !!!!!!!!!!!!!!!!!!!!!
+            # !!!!!!!!!!!!!!!!!!!!!
+            # !!!!!!!!!!!!!!!!!!!!!
+            # !!!!!!!!!!!!!!!!!!!!!
+            # !!!!!!!!!!!!!!!!!!!!!
+            #user_identificator = authenticated_user.get_user_id()
+            user_identificator = authenticated_user.get_username()
+            curr_span = trace.get_current_span()
+            curr_span.set_attribute("enduser.id", user_identificator)
+            curr_span.set_attribute("enduser.pseudo.id", f"XXX_{user_identificator}")
+            curr_span.set_attribute("app.user_id_raw", user_identificator)
+            LOGGER.info(f"HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH {user_identificator}")
+
+
         else:
             LOGGER.debug(
                 f"EnforceLoggedInMiddleware for UNPROTECTED path ({path_to_check=}) took: {perf_metrics.to_string()}"
