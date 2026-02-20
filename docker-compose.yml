@@ -86,16 +86,21 @@ services:
       - ./backend_py/libs:/home/appuser/backend_py/libs
 
   redis-user-session:
-    image: dhi.io/redis:8.2-compat
-    command: ["redis-server", "--loglevel", "debug", "--protected-mode", "no"]
+    build:
+      context: .
+      dockerfile: redisNonRoot.Dockerfile
     expose:
       - 6379
+    command: ["redis-server",  "--loglevel", "verbose"]
 
   redis-cache:
-    image: dhi.io/redis:8.2-compat
-    command: ["redis-server", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru", "--save", "''", "--appendonly", "no", "--loglevel", "debug", "--protected-mode", "no"]
+    build:
+      context: .
+      dockerfile: redisNonRoot.Dockerfile
     expose:
       - 6379
+    command: ["redis-server",  "--maxmemory", "1gb",  "--maxmemory-policy", "allkeys-lru",  "--save", "''",  "--appendonly", "no",  "--logfile", "''",  "--loglevel", "verbose"]
+
 
   # redis-user-session:
   #   image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
