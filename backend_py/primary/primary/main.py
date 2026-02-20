@@ -148,25 +148,6 @@ override_default_fastapi_exception_handlers(app)
 # This middleware instance approximately measures execution time of the route handler itself
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total-exec-route")
 
-
-
-# from fastapi import Request
-# from opentelemetry import trace
-
-# @app.middleware("http")
-# async def add_client_ip_for_geo(request: Request, call_next):
-#     response = await call_next(request)
-
-#     span = trace.get_current_span()
-#     if span and request.client:
-#         LOGGER.info(f"AAAAAAAAAAAAAAAAAAAAAAA - setting client host in span attributes: {request.client.host}")
-#         span.set_attribute("app.sigurd_ip", request.client.host)
-#         span.set_attribute("http.client_ip", request.client.host)
-
-#     return response
-
-
-
 # Add out custom middleware to enforce that user is logged in
 # Also redirects to /login endpoint for some select paths
 unprotected_paths = ["/logout", "/logged_in_user", "/alive", "/openapi.json"]
@@ -182,13 +163,39 @@ session_store = RedisStore(config.REDIS_USER_SESSION_URL, prefix="auth-sessions:
 app.add_middleware(SessionMiddleware, store=session_store)
 
 
+
+from fastapi import Request
+from opentelemetry import trace
+
+@app.middleware("http")
+async def add_geo_ip(request: Request, call_next):
+    response = await call_next(request)
+
+    if request.client:
+        curr_span = trace.get_current_span()
+        if curr_span and curr_span.is_recording():
+            LOGGER.info(f"-------------------- setting client host in span attributes: {request.client.host}")
+            curr_span.set_attribute("http.client_ip", request.client.host)      # legacy-ish but widely used
+            # curr_span.set_attribute("net.peer.ip", request.client.host)         # also commonly recognized
+            # curr_span.set_attribute("client.address", request.client.host)      # newer semconv
+
+            curr_span.set_attribute("app.client_ip_observed", request.client.host)
+    else:
+        LOGGER.warning("!!!!!!!!!!!!!!!!!!!!! Could not get client IP from request")
+
+    return response
+
+
+
+
+
 # As of mypy 1.16 and Starlette 47, the ProxyHeadersMiddleware gives an incorrect type error here
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")  # type: ignore[arg-type]
 
+app.add_middleware(AddBrowserCacheMiddleware)
 
 # This middleware instance measures execution time of the endpoints, including the cost of other middleware
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total")
-app.add_middleware(AddBrowserCacheMiddleware)
 
 
 @app.get("/")

@@ -102,13 +102,13 @@ class EnforceLoggedInMiddleware:
             curr_span.set_attribute("app.user_id_raw", f"cust_{user_id}")
 
             # !!!!!!!!!!!!!!!!!!!!!
-            if request.client:
-                LOGGER.info(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! - setting client host in span attributes: {request.client.host}")
-                curr_span.set_attribute("app.sigurd_ip", request.client.host)
+            # if request.client:
+            #     LOGGER.info(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! - setting client host in span attributes: {request.client.host}")
+            #     curr_span.set_attribute("app.sigurd_ip", request.client.host)
 
-                curr_span.set_attribute("http.client_ip", request.client.host)      # legacy-ish but widely used
-                curr_span.set_attribute("net.peer.ip", request.client.host)         # also commonly recognized
-                curr_span.set_attribute("client.address", request.client.host)      # newer semconv
+            #     curr_span.set_attribute("http.client_ip", request.client.host)      # legacy-ish but widely used
+            #     curr_span.set_attribute("net.peer.ip", request.client.host)         # also commonly recognized
+            #     curr_span.set_attribute("client.address", request.client.host)      # newer semconv
 
 
         else:
