@@ -168,7 +168,7 @@ spec:
             averageUtilization: 80
 
     - name: redis-user-session
-      image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
+      image: redis:8.4.1
       ports:
         - name: http
           port: 6379
@@ -176,7 +176,7 @@ spec:
         ALLOW_EMPTY_PASSWORD: yes
 
     - name: redis-cache
-      image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
+      image: redis:8.4.1
       ports:
         - name: http
           port: 6379
