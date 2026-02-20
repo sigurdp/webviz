@@ -168,7 +168,9 @@ spec:
             averageUtilization: 80
 
     - name: redis-user-session
-      image: redis:8.4.1
+      #image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
+      image: dhi.io/redis:8.2-compat
+      command: ["redis-server", "--loglevel", "debug", "--protected-mode", "no"]
       ports:
         - name: http
           port: 6379
@@ -176,7 +178,9 @@ spec:
         ALLOW_EMPTY_PASSWORD: yes
 
     - name: redis-cache
-      image: redis:8.4.1
+      #image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
+      image: dhi.io/redis:8.2-compat
+      command: ["redis-server", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru", "--save", "''", "--appendonly", "no", "--loglevel", "debug", "--protected-mode", "no"]
       ports:
         - name: http
           port: 6379
