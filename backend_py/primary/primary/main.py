@@ -148,6 +148,25 @@ override_default_fastapi_exception_handlers(app)
 # This middleware instance approximately measures execution time of the route handler itself
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total-exec-route")
 
+
+
+# from fastapi import Request
+# from opentelemetry import trace
+
+# @app.middleware("http")
+# async def add_client_ip_for_geo(request: Request, call_next):
+#     response = await call_next(request)
+
+#     span = trace.get_current_span()
+#     if span and request.client:
+#         LOGGER.info(f"AAAAAAAAAAAAAAAAAAAAAAA - setting client host in span attributes: {request.client.host}")
+#         span.set_attribute("app.sigurd_ip", request.client.host)
+#         span.set_attribute("http.client_ip", request.client.host)
+
+#     return response
+
+
+
 # Add out custom middleware to enforce that user is logged in
 # Also redirects to /login endpoint for some select paths
 unprotected_paths = ["/logout", "/logged_in_user", "/alive", "/openapi.json"]
