@@ -171,8 +171,8 @@ spec:
       #image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
       #dockerFileName: redisNonRoot.Dockerfile
       image: redis:8.4.1
-      command: ["redis-server",  "--loglevel", "verbose"]
       runAsUser: 999
+      command: ["redis-server",  "--loglevel", "notice"]
       ports:
         - name: http
           port: 6379
@@ -183,8 +183,9 @@ spec:
       #image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
       #dockerFileName: redisNonRoot.Dockerfile
       image: redis:8.4.1
-      command: ["redis-server",  "--maxmemory", "3gb",  "--maxmemory-policy", "allkeys-lru",  "--save", "''",  "--appendonly", "no",  "--loglevel", "verbose"]
       runAsUser: 999
+      # maxmemory for redis must be aligned with component's requested memory, here 3gb vs 4gb
+      command: ["redis-server",  "--maxmemory", "3gb",  "--maxmemory-policy", "allkeys-lru",  "--save", "''",  "--appendonly", "no",  "--loglevel", "notice"]
       ports:
         - name: http
           port: 6379
