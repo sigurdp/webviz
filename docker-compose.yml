@@ -86,21 +86,18 @@ services:
       - ./backend_py/libs:/home/appuser/backend_py/libs
 
   redis-user-session:
-    build:
-      context: .
-      dockerfile: redisNonRoot.Dockerfile
+    image: redis:8.4.1
     expose:
       - 6379
-    command: ["redis-server",  "--loglevel", "verbose"]
+    user: "999:999"
+    command: ["redis-server",  "--loglevel", "notice"]
 
   redis-cache:
-    build:
-      context: .
-      dockerfile: redisNonRoot.Dockerfile
+    image: redis:8.4.1
     expose:
       - 6379
-    command: ["redis-server",  "--maxmemory", "1gb",  "--maxmemory-policy", "allkeys-lru",  "--save", "''",  "--appendonly", "no",  "--logfile", "''",  "--loglevel", "verbose"]
-
+    user: "999:999"
+    command: ["redis-server",  "--maxmemory", "1gb",  "--maxmemory-policy", "allkeys-lru",  "--save", "''",  "--appendonly", "no",  "--logfile", "''",  "--loglevel", "notice"]
 
   # redis-user-session:
   #   image: bitnami/redis:6.2.10@sha256:bd42fcdab5959ce2b21b6ea8410d4b3ee87ecb2e320260326ec731ecfcffbd0e
