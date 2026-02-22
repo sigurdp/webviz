@@ -20,10 +20,9 @@ from primary.persistence.setup_local_database import maybe_setup_local_database
 from primary.auth.auth_helper import AuthHelper
 from primary.auth.enforce_logged_in_middleware import EnforceLoggedInMiddleware
 from primary.middleware.add_process_time_to_server_timing_middleware import AddProcessTimeToServerTimingMiddleware
+from primary.middleware.add_browser_cache import AddBrowserCacheMiddleware
 from primary.middleware.otel_span_enrichment_middleware import OtelSpanClientAddressEnrichmentMiddleware
 from primary.middleware.otel_span_enrichment_middleware import OtelSpanEndUserEnrichmentMiddleware
-
-from primary.middleware.add_browser_cache import AddBrowserCacheMiddleware
 from primary.routers.dev.router import router as dev_router
 from primary.routers.explore.router import router as explore_router
 from primary.routers.general import router as general_router
@@ -151,9 +150,8 @@ override_default_fastapi_exception_handlers(app)
 # This middleware instance approximately measures execution time of the route handler itself
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total-exec-route")
 
-
+# Enrich telemetry spans with end user information (must be after the EnforceLoggedInMiddleware to have access to the user info)
 app.add_middleware(OtelSpanEndUserEnrichmentMiddleware)
-
 
 # Add out custom middleware to enforce that user is logged in
 # Also redirects to /login endpoint for some select paths
@@ -169,31 +167,8 @@ app.add_middleware(
 session_store = RedisStore(config.REDIS_USER_SESSION_URL, prefix="auth-sessions:")
 app.add_middleware(SessionMiddleware, store=session_store)
 
-
-
-# from fastapi import Request
-# from opentelemetry import trace
-
-# @app.middleware("http")
-# async def add_geo_ip(request: Request, call_next):
-#     response = await call_next(request)
-
-#     if request.client:
-#         curr_span = trace.get_current_span()
-#         if curr_span and curr_span.is_recording():
-#             LOGGER.info(f"-------------------- setting client host in span attributes: {request.client.host}")
-#             curr_span.set_attribute("http.client_ip", request.client.host)      # legacy-ish but widely used
-#             # curr_span.set_attribute("net.peer.ip", request.client.host)         # also commonly recognized
-#             # curr_span.set_attribute("client.address", request.client.host)      # newer semconv
-
-#             curr_span.set_attribute("app.client_ip_observed", request.client.host)
-#     else:
-#         LOGGER.warning("!!!!!!!!!!!!!!!!!!!!! Could not get client IP from request")
-
-#     return response
-
+# Enrich telemetry spans with client address information (must be after ProxyHeadersMiddleware)
 app.add_middleware(OtelSpanClientAddressEnrichmentMiddleware)
-
 
 # As of mypy 1.16 and Starlette 47, the ProxyHeadersMiddleware gives an incorrect type error here
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")  # type: ignore[arg-type]
