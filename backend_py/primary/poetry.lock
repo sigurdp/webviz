@@ -1992,6 +1992,21 @@ files = [
 arrays = ["numpy"]
 
 [[package]]
+name = "nemony"
+version = "0.0.2"
+description = "Convert text to adjective-noun mnemonics."
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "nemony-0.0.2-py3-none-any.whl", hash = "sha256:1dcac87d1d472e3264a428e7bc43fc6fc51351e8eef5690e6024224e9b466284"},
+    {file = "nemony-0.0.2.tar.gz", hash = "sha256:fffb99721910caea5ee6bfc57483b49d68aeadd0beb974145a887ea4f4645080"},
+]
+
+[package.dependencies]
+pyyaml = "*"
+
+[[package]]
 name = "numexpr"
 version = "2.11.0"
 description = "Fast numerical expression evaluator for NumPy"
@@ -4291,4 +4306,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.13"
-content-hash = "dbd0c9416e7dea38ec29a03e2bf3693e695b61c6bf57978e2e3698186fe73182"
+content-hash = "6f988262d364bcea90582df31c5d4fbbfb8641925dfcdd36490e49203bc1721e"

@@ -3,6 +3,7 @@ import logging
 from opentelemetry import trace
 from starlette.requests import Request
 from starlette.types import ASGIApp, Scope, Receive, Send
+import nemony
 
 from webviz_services.utils.authenticated_user import AuthenticatedUser
 
@@ -64,16 +65,18 @@ class OtelSpanEndUserEnrichmentMiddleware:
                     user_id = maybe_authenticated_user_obj.get_user_id()
                     user_name = maybe_authenticated_user_obj.get_username()
 
-                    LOGGER.debug(f"-------------------- OtelSpanEndUserEnrichmentMiddleware: {user_id=}, {user_name=}")
+                    pseudonym = nemony.encode(user_id, sep="-")
+                    LOGGER.debug(f"-------------------- OtelSpanEndUserEnrichmentMiddleware: {user_id=}, {user_name=}, {pseudonym=}")
 
                     # Shows up as "Auth Id", "Authenticated user Id" or user_AuthenticatedId in Application Insights
-                    curr_span.set_attribute("enduser.id", f"auth_{user_name}")
+                    curr_span.set_attribute("enduser.id", f"auth__{pseudonym}")
 
                     # Shows up as "User Id" or user_Id in Application Insights
-                    curr_span.set_attribute("enduser.pseudo.id", f"pseudo_{user_name}")
+                    curr_span.set_attribute("enduser.pseudo.id", f"pseudo__{pseudonym}")
 
-                    curr_span.set_attribute("app.user_name_raw", f"cust_{user_name}")
-                    curr_span.set_attribute("app.user_id_raw", f"cust_{user_id}")
+                    curr_span.set_attribute("app.user_name_raw", f"cust__{user_name}")
+                    curr_span.set_attribute("app.user_id_raw", f"cust__{user_id}")
+                    curr_span.set_attribute("app.user_id_pseudonym", f"cust__{pseudonym}")
 
             except:  # nosec # pylint: disable=bare-except
                 LOGGER.warning("!!!!!!!!!!!!!!!!!!!!! OtelSpanEndUserEnrichmentMiddleware: Could not get end user information from request")
