@@ -10,7 +10,7 @@ from webviz_core_utils.perf_metrics import PerfMetrics
 
 from .auth_helper import AuthHelper
 
-from opentelemetry import trace
+# from opentelemetry import trace
 
 
 LOGGER = logging.getLogger(__name__)
@@ -88,27 +88,18 @@ class EnforceLoggedInMiddleware:
             # !!!!!!!!!!!!!!!!!!!!!
             # !!!!!!!!!!!!!!!!!!!!!
             # !!!!!!!!!!!!!!!!!!!!!
-            user_id = authenticated_user.get_user_id()
-            user_name = authenticated_user.get_username()
-            curr_span = trace.get_current_span()
+            # user_id = authenticated_user.get_user_id()
+            # user_name = authenticated_user.get_username()
+            # curr_span = trace.get_current_span()
 
-            # Shows up as "Auth Id", "Authenticated user Id" or user_AuthenticatedId in Application Insights
-            curr_span.set_attribute("enduser.id", f"auth_{user_name}")
+            # # Shows up as "Auth Id", "Authenticated user Id" or user_AuthenticatedId in Application Insights
+            # curr_span.set_attribute("enduser.id", f"auth_{user_name}")
 
-            # Shows up as "User Id" or user_Id in Application Insights
-            curr_span.set_attribute("enduser.pseudo.id", f"pseudo_{user_name}")
+            # # Shows up as "User Id" or user_Id in Application Insights
+            # curr_span.set_attribute("enduser.pseudo.id", f"pseudo_{user_name}")
 
-            curr_span.set_attribute("app.user_name_raw", f"cust_{user_name}")
-            curr_span.set_attribute("app.user_id_raw", f"cust_{user_id}")
-
-            # !!!!!!!!!!!!!!!!!!!!!
-            # if request.client:
-            #     LOGGER.info(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! - setting client host in span attributes: {request.client.host}")
-            #     curr_span.set_attribute("app.sigurd_ip", request.client.host)
-
-            #     curr_span.set_attribute("http.client_ip", request.client.host)      # legacy-ish but widely used
-            #     curr_span.set_attribute("net.peer.ip", request.client.host)         # also commonly recognized
-            #     curr_span.set_attribute("client.address", request.client.host)      # newer semconv
+            # curr_span.set_attribute("app.user_name_raw", f"cust_{user_name}")
+            # curr_span.set_attribute("app.user_id_raw", f"cust_{user_id}")
 
 
         else:

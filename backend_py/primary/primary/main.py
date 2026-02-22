@@ -20,6 +20,8 @@ from primary.persistence.setup_local_database import maybe_setup_local_database
 from primary.auth.auth_helper import AuthHelper
 from primary.auth.enforce_logged_in_middleware import EnforceLoggedInMiddleware
 from primary.middleware.add_process_time_to_server_timing_middleware import AddProcessTimeToServerTimingMiddleware
+from primary.middleware.otel_span_enrichment_middleware import OtelSpanClientAddressEnrichmentMiddleware
+from primary.middleware.otel_span_enrichment_middleware import OtelSpanEndUserEnrichmentMiddleware
 
 from primary.middleware.add_browser_cache import AddBrowserCacheMiddleware
 from primary.routers.dev.router import router as dev_router
@@ -63,6 +65,7 @@ logging.getLogger("primary.routers.grid3d").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.dev").setLevel(logging.DEBUG)
 logging.getLogger("primary.routers.surface").setLevel(logging.DEBUG)
 logging.getLogger("primary.persistence").setLevel(logging.DEBUG)
+logging.getLogger("primary.middleware").setLevel(logging.DEBUG)
 # logging.getLogger("primary.auth").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
 # logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
@@ -148,6 +151,10 @@ override_default_fastapi_exception_handlers(app)
 # This middleware instance approximately measures execution time of the route handler itself
 app.add_middleware(AddProcessTimeToServerTimingMiddleware, metric_name="total-exec-route")
 
+
+app.add_middleware(OtelSpanEndUserEnrichmentMiddleware)
+
+
 # Add out custom middleware to enforce that user is logged in
 # Also redirects to /login endpoint for some select paths
 unprotected_paths = ["/logout", "/logged_in_user", "/alive", "/openapi.json"]
@@ -164,29 +171,28 @@ app.add_middleware(SessionMiddleware, store=session_store)
 
 
 
-from fastapi import Request
-from opentelemetry import trace
+# from fastapi import Request
+# from opentelemetry import trace
 
-@app.middleware("http")
-async def add_geo_ip(request: Request, call_next):
-    response = await call_next(request)
+# @app.middleware("http")
+# async def add_geo_ip(request: Request, call_next):
+#     response = await call_next(request)
 
-    if request.client:
-        curr_span = trace.get_current_span()
-        if curr_span and curr_span.is_recording():
-            LOGGER.info(f"-------------------- setting client host in span attributes: {request.client.host}")
-            curr_span.set_attribute("http.client_ip", request.client.host)      # legacy-ish but widely used
-            # curr_span.set_attribute("net.peer.ip", request.client.host)         # also commonly recognized
-            # curr_span.set_attribute("client.address", request.client.host)      # newer semconv
+#     if request.client:
+#         curr_span = trace.get_current_span()
+#         if curr_span and curr_span.is_recording():
+#             LOGGER.info(f"-------------------- setting client host in span attributes: {request.client.host}")
+#             curr_span.set_attribute("http.client_ip", request.client.host)      # legacy-ish but widely used
+#             # curr_span.set_attribute("net.peer.ip", request.client.host)         # also commonly recognized
+#             # curr_span.set_attribute("client.address", request.client.host)      # newer semconv
 
-            curr_span.set_attribute("app.client_ip_observed", request.client.host)
-    else:
-        LOGGER.warning("!!!!!!!!!!!!!!!!!!!!! Could not get client IP from request")
+#             curr_span.set_attribute("app.client_ip_observed", request.client.host)
+#     else:
+#         LOGGER.warning("!!!!!!!!!!!!!!!!!!!!! Could not get client IP from request")
 
-    return response
+#     return response
 
-
-
+app.add_middleware(OtelSpanClientAddressEnrichmentMiddleware)
 
 
 # As of mypy 1.16 and Starlette 47, the ProxyHeadersMiddleware gives an incorrect type error here
