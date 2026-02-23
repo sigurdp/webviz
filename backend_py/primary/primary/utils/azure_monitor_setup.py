@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
+from opentelemetry.sdk.resources import Resource
 
 
 # A lot of the configuration will be read from environment variables during the execution of this function.
@@ -18,7 +19,15 @@ def setup_azure_monitor_telemetry(fastapi_app: FastAPI) -> None:
     # environment variable is not set or if it is invalid.
     # Starting with version 1.8.6, the default sampler is RateLimitedSampler. We restore the old behavior by setting the
     # sampling_ratio to 1.0, which restores classic Application Insights sampler.
+
+    # !!!!!!!!!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!!!
+    #resource = Resource.create(attributes={ "service.namespace": "SIG-NS" })
+    resource = None
+
     configure_azure_monitor(
+        resource=resource,
         sampling_ratio=1.0,
         logging_formatter=logging.Formatter("[%(name)s]: %(message)s"),
         instrumentation_options={
