@@ -24,10 +24,9 @@ def setup_azure_monitor_telemetry(fastapi_app: FastAPI) -> None:
     # !!!!!!!!!!!!!!!!!!!!
     # !!!!!!!!!!!!!!!!!!!!
     #resource = Resource.create(attributes={ "service.namespace": "SIG-NS" })
-    resource = None
 
     configure_azure_monitor(
-        resource=resource,
+        # resource=resource,
         sampling_ratio=1.0,
         logging_formatter=logging.Formatter("[%(name)s]: %(message)s"),
         instrumentation_options={
