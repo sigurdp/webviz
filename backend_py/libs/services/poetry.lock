@@ -2183,21 +2183,22 @@ files = [
 
 [[package]]
 name = "redis"
-version = "7.1.1"
+version = "5.3.1"
 description = "Python client for Redis database and key-value store"
 optional = false
-python-versions = ">=3.10"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "redis-7.1.1-py3-none-any.whl", hash = "sha256:f77817f16071c2950492c67d40b771fa493eb3fccc630a424a10976dbb794b7a"},
-    {file = "redis-7.1.1.tar.gz", hash = "sha256:a2814b2bda15b39dad11391cc48edac4697214a8a5a4bd10abe936ab4892eb43"},
+    {file = "redis-5.3.1-py3-none-any.whl", hash = "sha256:dc1909bd24669cc31b5f67a039700b16ec30571096c5f1f0d9d2324bff31af97"},
+    {file = "redis-5.3.1.tar.gz", hash = "sha256:ca49577a531ea64039b5a36db3d6cd1a0c7a60c34124d46924a45b956e8cf14c"},
 ]
 
+[package.dependencies]
+PyJWT = ">=2.9.0"
+
 [package.extras]
-circuit-breaker = ["pybreaker (>=1.4.0)"]
-hiredis = ["hiredis (>=3.2.0)"]
-jwt = ["pyjwt (>=2.9.0)"]
-ocsp = ["cryptography (>=36.0.1)", "pyopenssl (>=20.0.1)", "requests (>=2.31.0)"]
+hiredis = ["hiredis (>=3.0.0)"]
+ocsp = ["cryptography (>=36.0.1)", "pyopenssl (==23.2.1)", "requests (>=2.31.0)"]
 
 [[package]]
 name = "requests"
@@ -2619,14 +2620,14 @@ types-pyOpenSSL = "*"
 
 [[package]]
 name = "types-setuptools"
-version = "82.0.0.20260210"
+version = "80.9.0.20250822"
 description = "Typing stubs for setuptools"
 optional = false
-python-versions = ">=3.10"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "types_setuptools-82.0.0.20260210-py3-none-any.whl", hash = "sha256:5124a7daf67f195c6054e0f00f1d97c69caad12fdcf9113eba33eff0bce8cd2b"},
-    {file = "types_setuptools-82.0.0.20260210.tar.gz", hash = "sha256:d9719fbbeb185254480ade1f25327c4654f8c00efda3fec36823379cebcdee58"},
+    {file = "types_setuptools-80.9.0.20250822-py3-none-any.whl", hash = "sha256:53bf881cb9d7e46ed12c76ef76c0aaf28cfe6211d3fab12e0b83620b1a8642c3"},
+    {file = "types_setuptools-80.9.0.20250822.tar.gz", hash = "sha256:070ea7716968ec67a84c7f7768d9952ff24d28b65b6594797a464f1b3066f965"},
 ]
 
 [[package]]
@@ -2796,4 +2797,4 @@ tests = ["coverage (>=4.1)", "mypy", "pylint", "pytest", "pytest-cov", "pytest-m
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.13"
-content-hash = "f9c1bf3ee6a590b6d9fc51d66d27ddbf7c7919f5c3b417b8b9d2becf4d5de578"
+content-hash = "fe10bc409325bfd168db27a72212d18386cdfe34e3241a8e32f25b82c78bf5c9"
