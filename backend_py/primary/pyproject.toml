@@ -23,13 +23,14 @@ httpx = "^0.28.1"
 azure-monitor-opentelemetry = "1.8.6"
 opentelemetry-instrumentation-httpx = "*"
 opentelemetry-instrumentation-redis = "*"
-webviz-core-utils = { path = "../libs/core_utils", develop = true }
-webviz-server-schemas = { path = "../libs/server_schemas", develop = true }
-webviz-services = { path = "../libs/services", develop = true }
+aiohttp = "^3.11.18"
 azure-cosmos = "^4.9.0"
 nanoid = "^2.0.0"
 nemony = "0.0.2"
-aiohttp = "^3.11.18"
+
+webviz-core-utils = { path = "../libs/core_utils", develop = true }
+webviz-server-schemas = { path = "../libs/server_schemas", develop = true }
+webviz-services = { path = "../libs/services", develop = true }
 
 [tool.poetry.group.dev.dependencies]
 types-nanoid = "^2.0.0"
