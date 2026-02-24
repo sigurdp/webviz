@@ -33,9 +33,12 @@ RESOURCE_SCOPES_DICT = {
 
 DEFAULT_CACHE_MAX_AGE = 3600  # 1 hour
 DEFAULT_STALE_WHILE_REVALIDATE = 3600 * 24  # 24 hour
+
 REDIS_USER_SESSION_URL = "redis://redis-user-session:6379"
 REDIS_CACHE_URL = "redis://redis-cache:6379"
 
-COSMOS_DB_PROD_CONNECTION_STRING = os.environ.get("WEBVIZ_DB_CONNECTION_STRING", None)
-COSMOS_DB_EMULATOR_URI = "https://cosmos-db-emulator:8081"
-COSMOS_DB_EMULATOR_KEY = "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+_is_on_radix_platform = os.getenv("RADIX_APP") is not None
+if _is_on_radix_platform:
+    COSMOS_DB_URL = os.getenv("WEBVIZ_COSMOS_DB_URL", "https://webviz-db.documents.azure.com:443/")
+else:
+    COSMOS_DB_URL = os.getenv("WEBVIZ_COSMOS_DB_URL", "https://webviz-dev-db.documents.azure.com:443/")

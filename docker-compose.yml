@@ -98,6 +98,7 @@ services:
       # https://redis.io/docs/management/config/#configuring-redis-as-a-cache
       - REDIS_EXTRA_FLAGS=--maxmemory 1gb  --maxmemory-policy allkeys-lru  --save ''  --appendonly no  --loglevel notice
 
+
   worker-mock:
     build:
       context: .
@@ -145,6 +146,7 @@ services:
   #   environment:
   #     ACCEPT_EULA: Y
   #     MSSQL_SA_PASSWORD: MySecretPassw0rd
+
 
 # When using the Cosmos DB Emulator, make sure to uncomment the relevant parts in the backend-primary service as well,
 # to ensure it waits for the emulator to be healthy before starting.

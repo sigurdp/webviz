@@ -4,7 +4,6 @@ import datetime
 import logging
 import os
 
-from azure.cosmos.aio import CosmosClient
 from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
 from fastapi.routing import APIRoute
@@ -20,7 +19,6 @@ from webviz_services.utils.task_meta_tracker import TaskMetaTrackerFactory
 from primary.auth.auth_helper import AuthHelper
 from primary.auth.enforce_logged_in_middleware import EnforceLoggedInMiddleware
 from primary.middleware.add_process_time_to_server_timing_middleware import AddProcessTimeToServerTimingMiddleware
-
 from primary.middleware.add_browser_cache import AddBrowserCacheMiddleware
 from primary.persistence.persistence_stores import PersistenceStoresSingleton
 from primary.routers.dev.router import router as dev_router
@@ -44,10 +42,10 @@ from primary.routers.well.router import router as well_router
 from primary.routers.well_completions.router import router as well_completions_router
 from primary.routers.persistence.router import router as persistence_router
 from primary.utils.azure_monitor_setup import setup_azure_monitor_telemetry
+from primary.utils.azure_service_credentials import ClientSecretVars, create_credential_for_azure_services
 from primary.utils.exception_handlers import configure_service_level_exception_handlers
 from primary.utils.exception_handlers import override_default_fastapi_exception_handlers
 from primary.utils.logging_setup import ensure_console_log_handler_is_configured, setup_normal_log_levels
-from primary.utils.azure_service_credentials import ClientSecretVars, create_credential_for_azure_services
 from primary.utils.message_bus import MessageBusSingleton
 
 from . import config
@@ -87,11 +85,6 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.name}"
 
 
-# !!!!!!!!!!!!
-# from azure.cosmos.aio import CosmosClient
-# from azure.cosmos.aio import DatabaseProxy
-
-
 @asynccontextmanager
 async def lifespan_handler_async(_fastapi_app: FastAPI) -> AsyncIterator[None]:
     # The first part of this function, before the yield, will be executed before the FastPI application starts.
@@ -104,19 +97,13 @@ async def lifespan_handler_async(_fastapi_app: FastAPI) -> AsyncIterator[None]:
     )
     azure_services_credential = create_credential_for_azure_services(client_secret_vars_for_dev)
 
-    if config.COSMOS_DB_PROD_CONNECTION_STRING:
-        LOGGER.info("Using COSMOS_DB_PROD_CONNECTION_STRING from environment to initialize PersistenceStoresSingleton")
-        await PersistenceStoresSingleton.initialize_with_connection_string(config.COSMOS_DB_PROD_CONNECTION_STRING)
-    else:
-        # If no connection string is provided, we use the dev database with credential authentication.
-        LOGGER.info("Using credential for azure services to initialize PersistenceStoresSingleton")
-        await PersistenceStoresSingleton.initialize_with_credential(
-            "https://webviz-dev-db.documents.azure.com:443/", azure_services_credential
-        )
-
     # For local development, you can use the Cosmos DB Emulator. The emulator does not require credentials,
     # so we can initialize the PersistenceStoresSingleton with the emulator connection settings.
     # PersistenceStoresSingleton.initialize_with_emulator()
+    LOGGER.info(
+        f"Using credential for azure services to initialize PersistenceStoresSingleton with: {config.COSMOS_DB_URL}"
+    )
+    await PersistenceStoresSingleton.initialize_with_credential_async(config.COSMOS_DB_URL, azure_services_credential)
 
     sb_conn_string = os.getenv("SERVICEBUS_CONNECTION_STRING")
     if sb_conn_string:
@@ -134,11 +121,18 @@ async def lifespan_handler_async(_fastapi_app: FastAPI) -> AsyncIterator[None]:
     # This part, after the yield, will be executed after the application has finished.
     yield
 
-    await PersistenceStoresSingleton.shutdown_async()
     await MessageBusSingleton.shutdown_async()
+    await PersistenceStoresSingleton.shutdown_async()
     await azure_services_credential.close()
     await HTTPX_ASYNC_CLIENT_WRAPPER.stop_async()
 
+
+# Note that if WEBVIZ_SKIP_LIFESPAN_GENERATE_API_ONLY is set to true,
+# we skip the actual initialization of the FastAPI app and just set lifespan_handler_async to None.
+# This allows us to import this module and access the app object without running the lifespan handler,
+# which may be desirable in certain contexts such as API code generation.
+if os.getenv("WEBVIZ_SKIP_LIFESPAN_GENERATE_API_ONLY") is not None:
+    lifespan_handler_async = None  # type: ignore[assignment]
 
 app = FastAPI(
     generate_unique_id_function=custom_generate_unique_id,
