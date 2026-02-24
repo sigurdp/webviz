@@ -178,6 +178,7 @@ spec:
       secretRefs:
         azureKeyVaults:
           - name: webviz
+            useAzureIdentity: true
             items:
               # - name: WEBVIZ-SERVICEBUS-NAMESPACE-SENDLISTEN-CONN-STRING
               #   envVar: SERVICEBUS_CONNECTION_STRING
@@ -205,6 +206,7 @@ spec:
           secretRefs:
             azureKeyVaults:
               - name: webviz
+                useAzureIdentity: true
                 items:
                   - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-DEV
                     envVar: APPLICATIONINSIGHTS_CONNECTION_STRING
