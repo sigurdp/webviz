@@ -40,6 +40,7 @@ spec:
       secretRefs:
         azureKeyVaults:
           - name: webviz
+            useAzureIdentity: true
             items:
               - name: WEBVIZ-CLIENT-SECRET
                 envVar: WEBVIZ_CLIENT_SECRET
