@@ -43,7 +43,7 @@ from primary.routers.vfp.router import router as vfp_router
 from primary.routers.well.router import router as well_router
 from primary.routers.well_completions.router import router as well_completions_router
 from primary.routers.persistence.router import router as persistence_router
-from primary.utils.azure_monitor_setup import setup_azure_monitor_telemetry
+from primary.utils.azure_monitor_setup import setup_azure_monitor_telemetry_for_primary
 from primary.utils.azure_service_credentials import ClientSecretVars, create_credential_for_azure_services
 from primary.utils.exception_handlers import configure_service_level_exception_handlers
 from primary.utils.exception_handlers import override_default_fastapi_exception_handlers
@@ -132,11 +132,14 @@ app = FastAPI(
     lifespan=lifespan_handler_async,
 )
 
-if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-    LOGGER.info("Configuring Azure Monitor telemetry for primary backend")
-    setup_azure_monitor_telemetry(app)
-else:
-    LOGGER.warning("Skipping telemetry configuration, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
+
+setup_azure_monitor_telemetry_for_primary(app)
+
+# if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
+#     LOGGER.info("Configuring Azure Monitor telemetry for primary backend")
+#     setup_azure_monitor_telemetry_for_primary(app)
+# else:
+#     LOGGER.warning("Skipping telemetry configuration, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
 
 
 # The tags we add here will determine the name of the frontend api service for our endpoints as well as
