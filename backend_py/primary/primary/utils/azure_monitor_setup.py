@@ -9,11 +9,12 @@ from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.sdk.resources import Resource
 
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 import os
 
-from webviz_services.sumo_access.sumo_fingerprinter import LOGGER
 from typing import Mapping, Optional
+
+LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, kw_only=True)
 class AzureMonitorSettings:
@@ -39,8 +40,8 @@ class AzureMonitorSettings:
 
         # The service_name retrieved from radix will typically be lowercase prod, preprod, dev or review.
         # Convert to uppercase and construct the expected environment variable name for the connection string
-        # on the form "WEBVIZ-INSIGHTS-CONNECTIONSTRING-<ENV>"", e.g. "WEBVIZ-INSIGHTS-CONNECTIONSTRING-PROD"
-        env_var_name = f"WEBVIZ_INSIGHTS_CONNECTIONSTRING_{service_name.upper()}"
+        # on the form "WEBVIZ_INSIGHTS_CONNECTIONSTRING_<NAMESPACE>"", e.g. "WEBVIZ_INSIGHTS_CONNECTIONSTRING_PROD"
+        env_var_name = f"WEBVIZ_INSIGHTS_CONNECTIONSTRING_{service_namespace.upper()}"
         insights_connection_string = os.getenv(env_var_name)
         if not insights_connection_string:
             # Currently we may not have environment variables set up for all Radix environments, so log a warning if the expected environment variable is missing,
