@@ -16,27 +16,25 @@ LOGGER = logging.getLogger(__name__)
 def setup_azure_monitor_telemetry_for_primary(fastapi_app: FastAPI) -> None:
 
     if is_running_on_radix_platform():
-        monitor_destination = AzureMonitorDestination.from_radix_env()
+        azmon_dest = AzureMonitorDestination.from_radix_env()
     else:
         # For local development and testing of telemetry.
         # Picks up APPLICATIONINSIGHTS_CONNECTION_STRING env variable if it is set, and configures from that.
-        monitor_destination = AzureMonitorDestination.for_local_dev(service_name="backend-primary")
+        azmon_dest = AzureMonitorDestination.for_local_dev(service_name="backend-primary")
 
-    LOGGER.info("------------------- AzureMonitorDestination ------------------")
-    LOGGER.info(monitor_destination)
-    LOGGER.info("--------------------------------------------------------------")
-
-    if not monitor_destination:
+    if not azmon_dest:
         LOGGER.warning("Skipping telemetry configuration for primary backend, no valid AzureMonitorDestination")
         return
 
-    LOGGER.info("Configuring Azure Monitor telemetry for primary backend")
+    LOGGER.info(
+        f"Configuring Azure Monitor telemetry for primary backend, resource attributes: {azmon_dest.resource_attributes}"
+    )
 
     # Starting with version 1.8.6, the default sampler is RateLimitedSampler. We restore the old behavior by setting the
     # sampling_ratio to 1.0, which restores classic Application Insights sampler.
     configure_azure_monitor(
-        connection_string=monitor_destination.insights_connection_string,
-        resource=Resource.create(attributes=monitor_destination.resource_attributes),
+        connection_string=azmon_dest.insights_connection_string,
+        resource=Resource.create(attributes=azmon_dest.resource_attributes),
         sampling_ratio=1.0,
         logging_formatter=logging.Formatter("[%(name)s]: %(message)s"),
         instrumentation_options={
