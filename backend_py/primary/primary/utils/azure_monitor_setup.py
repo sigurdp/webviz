@@ -13,11 +13,6 @@ from webviz_core_utils.azure_monitor_destination import AzureMonitorDestination
 LOGGER = logging.getLogger(__name__)
 
 
-# A lot of the configuration will be read from environment variables during the execution of this function.
-# Notable environment variables that may be consumed are:
-# - APPLICATIONINSIGHTS_CONNECTION_STRING
-# - OTEL_RESOURCE_ATTRIBUTES
-# - OTEL_SERVICE_NAME
 def setup_azure_monitor_telemetry_for_primary(fastapi_app: FastAPI) -> None:
 
     if is_running_on_radix_platform():

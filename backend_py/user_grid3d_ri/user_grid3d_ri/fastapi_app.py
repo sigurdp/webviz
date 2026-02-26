@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from .utils.inactivity_shutdown import InactivityShutdown
 from .utils.radix_utils import IS_ON_RADIX_PLATFORM
-from .utils.azure_monitor_setup import setup_azure_monitor_telemetry
+from .utils.azure_monitor_setup import setup_azure_monitor_telemetry_for_user_grid3d_ri
 from .routers import health_router
 from .routers import grid_router
 from .routers import intersection_router
@@ -31,11 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 app = FastAPI()
 
-if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-    LOGGER.info("Configuring Azure Monitor telemetry for user-grid3d-ri")
-    setup_azure_monitor_telemetry(app)
-else:
-    LOGGER.warning("Skipping telemetry configuration, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
+setup_azure_monitor_telemetry_for_user_grid3d_ri(app)
 
 app.include_router(health_router.router)
 app.include_router(grid_router.router)
