@@ -132,14 +132,8 @@ app = FastAPI(
     lifespan=lifespan_handler_async,
 )
 
-
+# Will setup telemetry when running in Radix, and when running locally if APPLICATIONINSIGHTS_CONNECTION_STRING env variable is set.
 setup_azure_monitor_telemetry_for_primary(app)
-
-# if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-#     LOGGER.info("Configuring Azure Monitor telemetry for primary backend")
-#     setup_azure_monitor_telemetry_for_primary(app)
-# else:
-#     LOGGER.warning("Skipping telemetry configuration, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
 
 
 # The tags we add here will determine the name of the frontend api service for our endpoints as well as
