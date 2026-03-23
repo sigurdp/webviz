@@ -103,7 +103,6 @@ services:
       - AZURE_CLIENT_SECRET
       - SERVICEBUS_CONNECTION_STRING
       - APPLICATIONINSIGHTS_CONNECTION_STRING
-      - OTEL_RESOURCE_ATTRIBUTES=service.name=worker-mock, service.namespace=local
       # For debugging instrumentation
       - OTEL_LOG_LEVEL=debug
       - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true

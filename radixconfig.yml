@@ -48,10 +48,6 @@ spec:
                 envVar: WEBVIZ_SMDA_SUBSCRIPTION_KEY
               - name: WEBVIZ-ENTERPRISE-SUBSCRIPTION-KEY
                 envVar: WEBVIZ_ENTERPRISE_SUBSCRIPTION_KEY
-
-              # - name: WEBVIZ-SERVICEBUS-NAMESPACE-SENDLISTEN-CONN-STRING
-              #   envVar: SERVICEBUS_CONNECTION_STRING
-
               # Inject all app insights connection strings as env vars.
               # Our azure monitor setup code will pick the right one based on the radix environment
               - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-PROD
@@ -62,6 +58,10 @@ spec:
                 envVar: WEBVIZ_INSIGHTS_CONNECTIONSTRING_DEV
               - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-REVIEW
                 envVar: WEBVIZ_INSIGHTS_CONNECTIONSTRING_REVIEW
+
+              # Should not be needed with workload identity
+              # - name: WEBVIZ-SERVICEBUS-NAMESPACE-SENDLISTEN-CONN-STRING
+              #   envVar: SERVICEBUS_CONNECTION_STRING
 
       variables:
         UVICORN_PORT: 5000
@@ -165,8 +165,22 @@ spec:
           - name: webviz
             useAzureIdentity: true
             items:
+              # Inject all app insights connection strings as env vars.
+              # Our azure monitor setup code will pick the right one based on the radix environment
+              - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-PROD
+                envVar: WEBVIZ_INSIGHTS_CONNECTIONSTRING_PROD
+              - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-PREPROD
+                envVar: WEBVIZ_INSIGHTS_CONNECTIONSTRING_PREPROD
+              - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-DEV
+                envVar: WEBVIZ_INSIGHTS_CONNECTIONSTRING_DEV
+              - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-REVIEW
+                envVar: WEBVIZ_INSIGHTS_CONNECTIONSTRING_REVIEW
+
+              # Should not be needed with workload identity
               # - name: WEBVIZ-SERVICEBUS-NAMESPACE-SENDLISTEN-CONN-STRING
               #   envVar: SERVICEBUS_CONNECTION_STRING
+
+              # But we need this one for scaling, see below
               - name: WEBVIZ-SERVICEBUS-NAMESPACE-MANAGE-CONN-STRING
                 envVar: SERVICEBUS_MANAGE_CONNECTION_STRING
       resources:
@@ -186,17 +200,6 @@ spec:
               messageCount: 1
               activationMessageCount: 0
               connectionFromEnv: SERVICEBUS_MANAGE_CONNECTION_STRING
-      environmentConfig:
-        - environment: dev
-          secretRefs:
-            azureKeyVaults:
-              - name: webviz
-                useAzureIdentity: true
-                items:
-                  - name: WEBVIZ-INSIGHTS-CONNECTIONSTRING-DEV
-                    envVar: APPLICATIONINSIGHTS_CONNECTION_STRING
-          variables:
-            OTEL_RESOURCE_ATTRIBUTES: service.name=worker-mock, service.namespace=dev
 
     - name: redis-user-session
       image: redis:7.2

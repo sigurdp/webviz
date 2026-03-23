@@ -3,17 +3,31 @@ import sys
 import asyncio
 import logging
 
+from azure.monitor.opentelemetry import configure_azure_monitor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.propagate import extract
+from opentelemetry.propagate import inject
+from opentelemetry import trace
+
+from webviz_core_utils.radix_utils import is_running_on_radix_platform
+from webviz_core_utils.azure_monitor_destination import AzureMonitorDestination
+
+from azure.identity.aio import DefaultAzureCredential
+from azure.servicebus.aio import ServiceBusClient, ServiceBusReceiver
+from azure.servicebus import ServiceBusReceivedMessage
+
+
+
 logging.basicConfig(format="%(asctime)s %(levelname)-7s [%(name)s]: %(message)s", datefmt="%H:%M:%S")
 logging.getLogger().setLevel(logging.INFO)
 
 LOGGER = logging.getLogger(__name__)
 
 
-# Import and configure telemetry first
-if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-    from azure.monitor.opentelemetry import configure_azure_monitor
 
-    LOGGER.info("Configuring Azure Monitor telemetry for worker")
+def _setup_azure_monitor_telemetry_for_mock_worker() -> None:
+
+    LOGGER.info("Configuring Azure Monitor telemetry for worker-mock...")
 
     # Due to our default log level of DEBUG, these loggers become quite noisy, so limit them to INFO or WARNING
     logging.getLogger("urllib3").setLevel(logging.INFO)
@@ -21,26 +35,28 @@ if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     logging.getLogger("azure.monitor.opentelemetry").setLevel(logging.INFO)
     logging.getLogger("azure.monitor.opentelemetry.exporter").setLevel(logging.WARNING)
 
-    configure_azure_monitor()
+    if is_running_on_radix_platform():
+        azmon_dest = AzureMonitorDestination.from_radix_env()
+    else:
+        # Picks up APPLICATIONINSIGHTS_CONNECTION_STRING env variable if it is set, and configures from that.
+        azmon_dest = AzureMonitorDestination.for_local_dev(service_name="worker-mock")
 
-    # configure_azure_monitor(
-    #     enable_live_metrics=True,
-    #     logging_formatter=logging.Formatter("[%(name)s]: %(message)s"),
-    #     instrumentation_options={
-    #         "azure_sdk": {"enabled": True},
-    #     },
-    # )
-else:
-    LOGGER.warning("Skipping telemetry configuration for worker, APPLICATIONINSIGHTS_CONNECTION_STRING env variable not set.")
+    if not azmon_dest:
+        LOGGER.warning("Skipping telemetry configuration for worker-mock, no valid AzureMonitorDestination")
+        return
+
+    LOGGER.info(
+        f"Configuring Azure Monitor telemetry for worker-mock, resource attributes: {azmon_dest.resource_attributes}"
+    )
+
+    configure_azure_monitor(
+        connection_string=azmon_dest.insights_connection_string,
+        resource=Resource.create(attributes=azmon_dest.resource_attributes),
+        sampling_ratio=1.0,
+        logging_formatter=logging.Formatter("[%(name)s]: %(message)s"),
+    )
 
 
-from opentelemetry.propagate import extract
-from opentelemetry.propagate import inject
-from opentelemetry import trace
-
-from azure.identity.aio import DefaultAzureCredential
-from azure.servicebus.aio import ServiceBusClient, ServiceBusReceiver
-from azure.servicebus import ServiceBusReceivedMessage
 
 
 
@@ -65,12 +81,14 @@ async def main_async() -> int:
     LOGGER.info("Starting worker...")
     LOGGER.info("========================================")
 
+    _setup_azure_monitor_telemetry_for_mock_worker()
+
     sb_conn_string = os.getenv("SERVICEBUS_CONNECTION_STRING")
     LOGGER.info(f"{sb_conn_string=}")
 
     if sb_conn_string:
         LOGGER.info("Using SERVICEBUS_CONNECTION_STRING from environment")
-        client = ServiceBusClient.from_connection_string(conn_str=sb_conn_string, retry_total=10)
+        sb_client = ServiceBusClient.from_connection_string(conn_str=sb_conn_string, retry_total=10)
     else:
         LOGGER.info("Using DefaultAzureCredential for authentication")
         LOGGER.info(f"AZURE_TENANT_ID: {os.getenv('AZURE_TENANT_ID')}")
@@ -81,13 +99,13 @@ async def main_async() -> int:
         LOGGER.info(f"{type(credential)=}")
 
         fully_qualified_sb_namespace = "webviz-test.servicebus.windows.net"
-        client = ServiceBusClient(fully_qualified_namespace=fully_qualified_sb_namespace, credential=credential)
+        sb_client = ServiceBusClient(fully_qualified_namespace=fully_qualified_sb_namespace, credential=credential)
 
     queue_name = "test-queue"
     LOGGER.info(f"{queue_name=}")
 
-    async with client:
-        receiver: ServiceBusReceiver = client.get_queue_receiver(
+    async with sb_client:
+        receiver: ServiceBusReceiver = sb_client.get_queue_receiver(
             queue_name=queue_name,
             max_wait_time=None  # seconds to wait for messages before returning
         )

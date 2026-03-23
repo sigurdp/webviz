@@ -317,12 +317,10 @@ async def get_ri_isect(
 
 
 from azure.servicebus import ServiceBusMessage
-from primary.middleware.add_browser_cache import no_cache
 from primary.utils.message_bus import MessageBusSingleton, MessageBus
 
 
 @router.get("/sb/{msg_text}")
-@no_cache
 async def get_send_sb_msg(
     # fmt:off
     response: Response,
