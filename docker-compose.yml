@@ -121,6 +121,15 @@ services:
     # depends_on:
     #   - sb-emulator
 
+  goworker-mock:
+    build:
+      context: .
+      dockerfile: ./backend_go/goworker_mock/dev.Dockerfile
+    environment:
+      - SERVICEBUS_CONNECTION_STRING
+    volumes:
+      - ./backend_go/goworker_mock:/home/appuser/backend_go/goworker_mock
+
   # sb-emulator:
   #   image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
   #   environment:
