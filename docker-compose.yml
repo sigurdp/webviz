@@ -125,7 +125,7 @@ services:
   goworker-mock:
     build:
       context: .
-      dockerfile: ./backend_go/goworker_mock/dev.Dockerfile
+      dockerfile: ./backend_go/goworker_mock/Dockerfile.dev
     environment:
       - SERVICEBUS_CONNECTION_STRING
       - AZURE_STORAGE_CONNECTION_STRING
