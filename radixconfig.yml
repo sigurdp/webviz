@@ -158,7 +158,8 @@ spec:
           cpu:
             averageUtilization: 80
 
-    - name: worker-mock
+
+    - name: pyworker-mock
       dockerFileName: ./backend_py/worker_mock/Dockerfile
       identity:
         azure:
@@ -203,6 +204,22 @@ spec:
               messageCount: 1
               activationMessageCount: 0
               connectionFromEnv: SERVICEBUS_MANAGE_CONNECTION_STRING
+
+    - name: goworker-mock
+      dockerFileName: ./backend_go/goworker_mock/dev.Dockerfile
+      identity:
+        azure:
+          clientId: 900ed417-a860-4970-bd37-73b059ca6f0d
+      secretRefs:
+        azureKeyVaults:
+          - name: webviz
+            useAzureIdentity: true
+            items:
+              - name: WEBVIZ-SERVICEBUS-NAMESPACE-SENDLISTEN-CONN-STRING
+                envVar: SERVICEBUS_CONNECTION_STRING
+      secrets:
+        - AZURE_STORAGE_CONNECTION_STRING
+
 
     - name: redis-user-session
       image: redis:7.2

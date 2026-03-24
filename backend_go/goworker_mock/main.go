@@ -17,7 +17,7 @@ import (
 
 func main() {
 
-	tryDoingDummyBlobStoreWrite := false
+	tryDoingDummyBlobStoreWrite := yes
 	if tryDoingDummyBlobStoreWrite {
 		redisUrl := "redis://redis-cache:6379"
 		azureStorageConnectionString := mustEnv("AZURE_STORAGE_CONNECTION_STRING")
