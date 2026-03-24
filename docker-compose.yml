@@ -94,10 +94,10 @@ services:
     command: ["redis-server",  "--maxmemory", "1gb",  "--maxmemory-policy", "allkeys-lru",  "--save", "''",  "--appendonly", "no",  "--logfile", "''",  "--loglevel", "notice"]
 
 
-  worker-mock:
+  pyworker-mock:
     build:
       context: .
-      dockerfile: ./backend_py/worker_mock/Dockerfile
+      dockerfile: ./backend_py/pyworker_mock/Dockerfile
     environment:
       - AZURE_TENANT_ID
       - AZURE_CLIENT_ID
@@ -108,15 +108,15 @@ services:
       - OTEL_LOG_LEVEL=debug
       - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
     volumes:
-      - ./backend_py/worker_mock/src:/home/appuser/backend_py/worker_mock/src
+      - ./backend_py/pyworker_mock/src:/home/appuser/backend_py/pyworker_mock/src
       - ./backend_py/libs:/home/appuser/backend_py/libs
     command:
       [
         "watchfiles",
-        "python -m worker_mock.worker_main",
-        "/home/appuser/backend_py/worker_mock/src",
+        "python -m pyworker_mock.worker_main",
+        "/home/appuser/backend_py/pyworker_mock/src",
       ]
-    #command: ["python", "-m", "worker_mock.worker_main"]
+    #command: ["python", "-m", "pyworker_mock.worker_main"]
     #restart: on-failure
     restart: always
     # depends_on:

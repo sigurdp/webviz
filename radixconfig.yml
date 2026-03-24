@@ -160,7 +160,7 @@ spec:
 
 
     - name: pyworker-mock
-      dockerFileName: ./backend_py/worker_mock/Dockerfile
+      dockerFileName: ./backend_py/pyworker_mock/Dockerfile
       identity:
         azure:
           clientId: 900ed417-a860-4970-bd37-73b059ca6f0d
@@ -206,7 +206,7 @@ spec:
               connectionFromEnv: SERVICEBUS_MANAGE_CONNECTION_STRING
 
     - name: goworker-mock
-      dockerFileName: ./backend_go/goworker_mock/Dockerfile.dev
+      dockerFileName: ./backend_go/goworker_mock/Dockerfile.prod
       identity:
         azure:
           clientId: 900ed417-a860-4970-bd37-73b059ca6f0d

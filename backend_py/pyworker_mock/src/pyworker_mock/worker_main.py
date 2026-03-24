@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 
 def _setup_azure_monitor_telemetry_for_mock_worker() -> None:
 
-    LOGGER.info("Configuring Azure Monitor telemetry for worker-mock...")
+    LOGGER.info("Configuring Azure Monitor telemetry for pyworker-mock...")
 
     # Due to our default log level of DEBUG, these loggers become quite noisy, so limit them to INFO or WARNING
     logging.getLogger("urllib3").setLevel(logging.INFO)
@@ -39,14 +39,14 @@ def _setup_azure_monitor_telemetry_for_mock_worker() -> None:
         azmon_dest = AzureMonitorDestination.from_radix_env()
     else:
         # Picks up APPLICATIONINSIGHTS_CONNECTION_STRING env variable if it is set, and configures from that.
-        azmon_dest = AzureMonitorDestination.for_local_dev(service_name="worker-mock")
+        azmon_dest = AzureMonitorDestination.for_local_dev(service_name="pyworker-mock")
 
     if not azmon_dest:
-        LOGGER.warning("Skipping telemetry configuration for worker-mock, no valid AzureMonitorDestination")
+        LOGGER.warning("Skipping telemetry configuration for pyworker-mock, no valid AzureMonitorDestination")
         return
 
     LOGGER.info(
-        f"Configuring Azure Monitor telemetry for worker-mock, resource attributes: {azmon_dest.resource_attributes}"
+        f"Configuring Azure Monitor telemetry for pyworker-mock, resource attributes: {azmon_dest.resource_attributes}"
     )
 
     configure_azure_monitor(
