@@ -31,6 +31,7 @@ services:
       - WEBVIZ_SUMO_ENV
       - WEBVIZ_VDS_HOST_ADDRESS
       - APPLICATIONINSIGHTS_CONNECTION_STRING
+      - AZURE_STORAGE_CONNECTION_STRING
       - CODESPACE_NAME # Automatically set env. variable by GitHub codespace
     volumes:
       - ./backend_py/primary/primary:/home/appuser/backend_py/primary/primary
@@ -127,6 +128,7 @@ services:
       dockerfile: ./backend_go/goworker_mock/dev.Dockerfile
     environment:
       - SERVICEBUS_CONNECTION_STRING
+      - AZURE_STORAGE_CONNECTION_STRING
     volumes:
       - ./backend_go/goworker_mock:/home/appuser/backend_go/goworker_mock
 

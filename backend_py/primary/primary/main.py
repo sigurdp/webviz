@@ -47,6 +47,7 @@ from primary.utils.exception_handlers import configure_service_level_exception_h
 from primary.utils.exception_handlers import override_default_fastapi_exception_handlers
 from primary.utils.logging_setup import ensure_console_log_handler_is_configured, setup_normal_log_levels
 from primary.utils.message_bus import MessageBusSingleton
+from primary.utils.temp_user_store import TempUserStoreFactory
 
 from . import config
 
@@ -105,6 +106,7 @@ async def lifespan_handler_async(_fastapi_app: FastAPI) -> AsyncIterator[None]:
     )
     await PersistenceStoresSingleton.initialize_with_credential_async(config.COSMOS_DB_URL, azure_services_credential)
 
+
     sb_conn_string = os.getenv("SERVICEBUS_CONNECTION_STRING")
     if sb_conn_string:
         LOGGER.info("Initializing MessageBusSingleton using SERVICEBUS_CONNECTION_STRING from environment")
@@ -114,6 +116,12 @@ async def lifespan_handler_async(_fastapi_app: FastAPI) -> AsyncIterator[None]:
         await MessageBusSingleton.initialize_with_credential_async(
             "webviz-test.servicebus.windows.net", azure_services_credential
         )
+
+    # Do one time initialization of the factory for TempUserStore instances
+    # The initialization will raise an exception if initialization fails
+    AZURE_STORAGE_CONNECTION_STRING = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+    TempUserStoreFactory.initialize(use_shared_clients=True, redis_url=config.REDIS_CACHE_URL, storage_account_conn_str=AZURE_STORAGE_CONNECTION_STRING, ttl_s=2*60)
+
 
     TaskMetaTrackerFactory.initialize(redis_url=config.REDIS_CACHE_URL)
     SumoFingerprinterFactory.initialize(redis_url=config.REDIS_CACHE_URL)

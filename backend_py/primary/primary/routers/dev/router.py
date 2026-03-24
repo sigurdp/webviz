@@ -318,6 +318,8 @@ async def get_ri_isect(
 
 from azure.servicebus import ServiceBusMessage
 from primary.utils.message_bus import MessageBusSingleton, MessageBus
+from primary.utils.temp_user_store import get_temp_user_store_for_user, TempUserStore
+from pydantic import BaseModel
 
 
 @router.get("/sb/{msg_text}")
@@ -351,3 +353,47 @@ async def get_send_sb_msg(
 
     LOGGER.info(f"Sent {count} message(s) with {msg_text=} on service queue {queue_name} in {perf_metrics.to_string()}")
     return f"Sent {count} message(s) with {msg_text=} on service queue {queue_name} in {perf_metrics.to_string()}"
+
+
+class MyModel(BaseModel):
+    msg_text: str
+
+
+@router.get("/tus/write/{msg_text}")
+async def get_tus_write_msg(
+    response: Response,
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    msg_text: Annotated[str, Path(description="The string to write")],
+    store_key: Annotated[str, Query(description="Key to write at")] = "sigKey",
+) -> str:
+
+    perf_metrics = ResponsePerfMetrics(response)
+
+    temp_user_store: TempUserStore = get_temp_user_store_for_user(authenticated_user)
+    perf_metrics.record_lap("get-store")
+
+    payload = MyModel(msg_text=msg_text)
+    await temp_user_store.put_pydantic_model_async(store_key, payload, "json", "myPrefix")
+    perf_metrics.record_lap("write-store")
+
+    LOGGER.info(f"Wrote to temp user store {payload=} {store_key=} in {perf_metrics.to_string()}")
+    return f"Wrote to temp user store {payload=} {store_key=} in {perf_metrics.to_string()}"
+
+
+@router.get("/tus/read")
+async def get_tus_read_msg(
+    response: Response,
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    store_key: Annotated[str, Query(description="Key to write at")] = "sigKey",
+) -> str:
+
+    perf_metrics = ResponsePerfMetrics(response)
+
+    temp_user_store: TempUserStore = get_temp_user_store_for_user(authenticated_user)
+    perf_metrics.record_lap("get-store")
+
+    payload = await temp_user_store.get_pydantic_model_async(store_key, MyModel, "json")
+    perf_metrics.record_lap("read-store")
+
+    LOGGER.info(f"Read from temp user store {payload=} {store_key=} in {perf_metrics.to_string()}")
+    return f"Read from temp user store {payload=} {store_key=} in {perf_metrics.to_string()}"

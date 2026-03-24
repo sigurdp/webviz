@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"surface_query/utils"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +16,17 @@ import (
 )
 
 func main() {
+
+	tryDoingDummyBlobStoreWrite := false
+	if tryDoingDummyBlobStoreWrite {
+		redisUrl := "redis://redis-cache:6379"
+		azureStorageConnectionString := mustEnv("AZURE_STORAGE_CONNECTION_STRING")
+		tempUserStoreFactory := utils.NewTempUserStoreFactory(redisUrl, azureStorageConnectionString, 60*60)
+
+		tempUserStore := tempUserStoreFactory.ForUser("dummyUserId")
+		tempUserStore.PutBytes(context.Background(), "dummyGoKey", []byte("dummyValue"), "sigPrefixGo", "theExtension")
+	}
+
 	connStr := mustEnv("SERVICEBUS_CONNECTION_STRING")
 	queueName := "test-queue"
 
