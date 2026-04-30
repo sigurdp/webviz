@@ -316,6 +316,18 @@ async def get_ri_isect(
     return "OK"
 
 
+# Used for troubleshooting and testing, to what the client IP is as seen by this service
+# @router.get("/whoami")
+# async def whoami(request: Request) -> dict:
+#     return {
+#         "client_host": request.client.host if request.client else None,
+#         "xff": request.headers.get("x-forwarded-for"),
+#         "xreal": request.headers.get("x-real-ip"),
+#         "proto": request.headers.get("x-forwarded-proto"),
+#         "host": request.headers.get("host"),
+#     }
+
+
 from azure.servicebus import ServiceBusMessage
 from primary.utils.message_bus import MessageBusSingleton, MessageBus
 from primary.utils.temp_user_store import get_temp_user_store_for_user, TempUserStore
