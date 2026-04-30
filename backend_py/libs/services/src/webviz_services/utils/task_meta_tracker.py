@@ -49,6 +49,21 @@ class TaskMeta:
     expected_store_key: str | None = None
 
 
+# Extended version for actually tracking if we use a queue and manually implemented worker(s) to process tasks.
+# We then need to take full responsibility for updating/tracking the status/progress of the task.
+# class TaskMetaEx:
+#     task_system: str
+#     task_id: str
+#     status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+#     created_at_utc_s: float                 # When the job was accepted/and first registered in the tracker (i.e. when the task meta entry was created)
+#     updated_at_utc_s: float                 # Last time when the status/progresss of the task was updated
+#     started_at_utc_s: float | None          # When the task was picked up by a worker and started processing
+#     finished_at_utc_s: float | None         # When the task processing was finished (either with success or failure, or when it was cancelled)
+#     progress_message: str | None = None     # Optional message regarding the current progress of the task, to be shown to the user in the UI
+#     error_message: str | None = None        # In case of failure can contain an error message
+#     expected_store_key: str | None = None
+
+
 class TaskMetaTracker:
     def __init__(self, user_id: str, redis_client: redis.Redis):
         if not user_id:
