@@ -355,6 +355,27 @@ opentelemetry-sdk = "1.39"
 psutil = ">=5.9,<8"
 
 [[package]]
+name = "azure-storage-blob"
+version = "12.29.0"
+description = "Microsoft Azure Blob Storage Client Library for Python"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "azure_storage_blob-12.29.0-py3-none-any.whl", hash = "sha256:ccf8a1bcd5e49df83ab85aab793b579e5ba2eeea2ad8900b2f62ca3a37dc391f"},
+    {file = "azure_storage_blob-12.29.0.tar.gz", hash = "sha256:2824ddd7ebc9056034ebc76b17971a38e9aa5835abb0d565b9700493f2a6c657"},
+]
+
+[package.dependencies]
+azure-core = ">=1.37.0"
+cryptography = ">=2.1.4"
+isodate = ">=0.6.1"
+typing-extensions = ">=4.6.0"
+
+[package.extras]
+aio = ["azure-core[aio] (>=1.37.0)"]
+
+[[package]]
 name = "certifi"
 version = "2026.1.4"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -4458,4 +4479,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.13"
-content-hash = "df844f35d357bb46df7fb65e7be8c036043e9e2ff00fee9fe2363583fc462fda"
+content-hash = "0dd14b2bce882ab8a2519b3456f8ff1906f5baef414e5f78ca1bdb95c20335b2"

@@ -326,3 +326,132 @@ async def get_ri_isect(
 #         "proto": request.headers.get("x-forwarded-proto"),
 #         "host": request.headers.get("host"),
 #     }
+
+
+
+
+#####################################################
+#####################################################
+#####################################################
+
+import hashlib
+import uuid
+from webviz_services.sumo_access.sumo_client_factory import create_sumo_client
+from webviz_services.sumo_access.sumo_fingerprinter import get_sumo_fingerprinter_for_user
+from fmu.sumo.explorer.explorer import SumoClient, SearchContext
+from azure.storage.blob.aio import BlobClient
+
+
+@router.get("/cache/write")
+async def get_cache_write(
+    response: Response,
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query(description="Sumo case uuid")],
+    ensemble_name:  Annotated[str, Query(description="Ensemble name")],
+    param: Annotated[str, Query(description="Additional parameter to include in cache key")],
+    message: Annotated[str, Query(description="Message to write to cache")],
+) -> str:
+
+    LOGGER.info("!!!!!!!!!!!!!!!!!!!!!!!!!! get_cache_write() - start")
+    LOGGER.info(f"{case_uuid=}, {ensemble_name=}, {param=}, {message=}")
+
+    perf_metrics = ResponsePerfMetrics(response)
+
+    sumo_client: SumoClient = create_sumo_client(authenticated_user.get_sumo_access_token())
+
+    params_fp = await _make_full_params_fp_async(authenticated_user, case_uuid, ensemble_name, param)
+    LOGGER.info(f"{params_fp=}")
+    LOGGER.info(f"{message=}")
+
+    perf_metrics.record_lap("init")
+
+    sc_ensemble = SearchContext(sumo=sumo_client).filter(uuid=case_uuid, ensemble=ensemble_name)
+    sc_real_smry_tables = sc_ensemble.tables.filter(realization=True, content=["timeseries", "simulationtimeseries"])
+    table_names = await sc_real_smry_tables.names_async
+    LOGGER.info(f"{table_names=}")
+
+    table_uuids = await sc_real_smry_tables.uuids_async
+    LOGGER.info(f"{table_uuids=}")
+    LOGGER.info(f"{len(table_uuids)=}")
+
+    perf_metrics.record_lap("sumo-search")
+
+    cache_key = _shake128_uuid_str(params_fp.encode())
+    cache_metadata = {
+        "operation": "sigTestCacheWrite",
+        "inputids": table_uuids,
+        "objectsize": len(message),
+    }
+    post_resp = await sumo_client.post_async(f"/cache/webviz/{cache_key}", json=cache_metadata)
+    post_resp_dict = post_resp.json()
+    write_authuri = post_resp_dict["authuri"]
+    LOGGER.info(f"{write_authuri=}")
+
+    perf_metrics.record_lap("cache-write")
+
+    blobclient = BlobClient.from_blob_url(write_authuri)
+    await blobclient.upload_blob(data=message, blob_type="BlockBlob", length=len(message), overwrite=True)
+    await blobclient.close()
+    LOGGER.info("Blob upload done.")
+
+    perf_metrics.record_lap("blob-upload")
+
+    return f"Cache write done in {perf_metrics.to_string()}. Cache key: {cache_key}"
+
+
+@router.get("/cache/read")
+async def get_cache_read(
+    response: Response,
+    authenticated_user: Annotated[AuthenticatedUser, Depends(AuthHelper.get_authenticated_user)],
+    case_uuid: Annotated[str, Query(description="Sumo case uuid")],
+    ensemble_name:  Annotated[str, Query(description="Ensemble name")],
+    param: Annotated[str, Query(description="Additional parameter to include in cache key")],
+) -> str:
+
+    LOGGER.info("!!!!!!!!!!!!!!!!!!!!!!!!!! get_cache_read() - start")
+
+    perf_metrics = ResponsePerfMetrics(response)
+
+    sumo_client = create_sumo_client(authenticated_user.get_sumo_access_token())
+
+    params_fp = await _make_full_params_fp_async(authenticated_user, case_uuid, ensemble_name, param)
+    LOGGER.info(f"{params_fp=}")
+
+    cache_key = _shake128_uuid_str(params_fp.encode())
+
+    perf_metrics.record_lap("init")
+
+    try:
+        resp = await sumo_client.get_async(f"/cache/webviz/{cache_key}/blob/authuri")
+        read_authuri = resp.text
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Oops, that was a cache miss!")
+        else:
+            raise
+    LOGGER.info(f"{read_authuri=}")
+    perf_metrics.record_lap("cache-lookup")
+
+    blobclient = BlobClient.from_blob_url(read_authuri)
+    stream_downloader = await blobclient.download_blob()
+    blob = await stream_downloader.readall()
+    await blobclient.close()
+    perf_metrics.record_lap("get-blob")
+
+    message = blob.decode("utf-8")
+    LOGGER.info(f"Got message {message=} in {perf_metrics.to_string()}")
+
+    return f"Cache read done in {perf_metrics.to_string()}. Message: {message}"
+
+
+async def _make_full_params_fp_async(authenticated_user: AuthenticatedUser, case_uuid: str, ensemble_name: str, param: str) -> str:
+    fingerprinter = get_sumo_fingerprinter_for_user(authenticated_user=authenticated_user, cache_ttl_s=2 * 60)
+    ensemble_fp = await fingerprinter.get_or_calc_ensemble_fp_async(case_uuid, ensemble_name)
+    params_fp = f"case_uuid={case_uuid}__ensemble_name={ensemble_name}__param={param}__fp={ensemble_fp}"
+    return params_fp
+
+
+def _shake128_uuid_str(data: bytes) -> str:
+    digest: bytes = hashlib.shake_128(data).digest(16)  # 128 bits
+    hash_uuid = uuid.UUID(bytes=digest)
+    return str(hash_uuid)
