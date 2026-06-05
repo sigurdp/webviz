@@ -350,6 +350,7 @@ async def get_cache_write(
     ensemble_name:  Annotated[str, Query(description="Ensemble name")],
     param: Annotated[str, Query(description="Additional parameter to include in cache key")],
     message: Annotated[str, Query(description="Message to write to cache")],
+    include_ensemble_fp: Annotated[bool, Query(description="Whether to include ensemble fingerprint in cache key")] = False,
 ) -> str:
 
     LOGGER.info("!!!!!!!!!!!!!!!!!!!!!!!!!! get_cache_write() - start")
@@ -359,8 +360,12 @@ async def get_cache_write(
 
     sumo_client: SumoClient = create_sumo_client(authenticated_user.get_sumo_access_token())
 
-    params_fp = await _make_full_params_fp_async(authenticated_user, case_uuid, ensemble_name, param)
-    LOGGER.info(f"{params_fp=}")
+
+    if include_ensemble_fp:
+        signature_str = await _make_signature_str_with_ensemble_fp_async(authenticated_user, case_uuid, ensemble_name, param)
+    else:
+        signature_str = _make_signature_str(case_uuid, ensemble_name, param)
+    LOGGER.info(f"{signature_str=}")
     LOGGER.info(f"{message=}")
 
     perf_metrics.record_lap("init")
@@ -376,7 +381,7 @@ async def get_cache_write(
 
     perf_metrics.record_lap("sumo-search")
 
-    cache_key = _shake128_uuid_str(params_fp.encode())
+    cache_key = _shake128_uuid_str(signature_str.encode())
     cache_metadata = {
         "operation": "sigTestCacheWrite",
         "inputids": table_uuids,
@@ -396,7 +401,7 @@ async def get_cache_write(
 
     perf_metrics.record_lap("blob-upload")
 
-    return f"Cache write done in {perf_metrics.to_string()}. Cache key: {cache_key}"
+    return f"Cache write done in {perf_metrics.to_string()}. Cache key: {cache_key}  {include_ensemble_fp=}"
 
 
 @router.get("/cache/read")
@@ -406,6 +411,7 @@ async def get_cache_read(
     case_uuid: Annotated[str, Query(description="Sumo case uuid")],
     ensemble_name:  Annotated[str, Query(description="Ensemble name")],
     param: Annotated[str, Query(description="Additional parameter to include in cache key")],
+    include_ensemble_fp: Annotated[bool, Query(description="Whether to include ensemble fingerprint in cache key")] = False,
 ) -> str:
 
     LOGGER.info("!!!!!!!!!!!!!!!!!!!!!!!!!! get_cache_read() - start")
@@ -414,10 +420,13 @@ async def get_cache_read(
 
     sumo_client = create_sumo_client(authenticated_user.get_sumo_access_token())
 
-    params_fp = await _make_full_params_fp_async(authenticated_user, case_uuid, ensemble_name, param)
-    LOGGER.info(f"{params_fp=}")
+    if include_ensemble_fp:
+        signature_str = await _make_signature_str_with_ensemble_fp_async(authenticated_user, case_uuid, ensemble_name, param)
+    else:
+        signature_str = _make_signature_str(case_uuid, ensemble_name, param)
+    LOGGER.info(f"{signature_str=}")
 
-    cache_key = _shake128_uuid_str(params_fp.encode())
+    cache_key = _shake128_uuid_str(signature_str.encode())
 
     perf_metrics.record_lap("init")
 
@@ -441,10 +450,15 @@ async def get_cache_read(
     message = blob.decode("utf-8")
     LOGGER.info(f"Got message {message=} in {perf_metrics.to_string()}")
 
-    return f"Cache read done in {perf_metrics.to_string()}. Message: {message}"
+    return f"Cache read done in {perf_metrics.to_string()}. Message: {message}  {include_ensemble_fp=}"
 
 
-async def _make_full_params_fp_async(authenticated_user: AuthenticatedUser, case_uuid: str, ensemble_name: str, param: str) -> str:
+def _make_signature_str(case_uuid: str, ensemble_name: str, param: str) -> str:
+    params_fp = f"case_uuid={case_uuid}__ensemble_name={ensemble_name}__param={param}"
+    return params_fp
+
+
+async def _make_signature_str_with_ensemble_fp_async(authenticated_user: AuthenticatedUser, case_uuid: str, ensemble_name: str, param: str) -> str:
     fingerprinter = get_sumo_fingerprinter_for_user(authenticated_user=authenticated_user, cache_ttl_s=2 * 60)
     ensemble_fp = await fingerprinter.get_or_calc_ensemble_fp_async(case_uuid, ensemble_name)
     params_fp = f"case_uuid={case_uuid}__ensemble_name={ensemble_name}__param={param}__fp={ensemble_fp}"
