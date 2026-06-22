@@ -32,11 +32,35 @@ type TempUserStore struct {
 	userId          string
 }
 
+// maskRedisUrl returns a sanitized version of the Redis URL with the password masked
+func maskRedisUrl(redisUrl string) string {
+	// Replace the password part (between :// and @) with ***
+	// Format: redis://:password@host:port -> redis://:[***]@host:port
+	const prefix = "redis://:"
+	const suffix = "@"
+
+	startIdx := len(prefix)
+	endIdx := len(redisUrl)
+
+	// Find the @ symbol to locate where the password ends
+	for i := startIdx; i < len(redisUrl); i++ {
+		if redisUrl[i] == '@' {
+			endIdx = i
+			break
+		}
+	}
+
+	if startIdx < endIdx {
+		return redisUrl[:startIdx] + "[***]" + redisUrl[endIdx:]
+	}
+	return redisUrl
+}
+
 // Creates factory for later creation of TempUserStore instances
 // This is useful to avoid creating a new Redis client and Azure Blob Storage client for each user
 // Note that function will panic if it fails to create the Redis or Azure Blob Storage clients
 func NewTempUserStoreFactory(redisUrl string, storageAccountConnStr string, ttlInSeconds int) *TempUserStoreFactory {
-	slog.Info("Creating TempUserStoreFactory", "redisUrl", redisUrl, "blobContainerName", tus_blobContainerName, "ttl(s)", ttlInSeconds)
+	slog.Info("Creating TempUserStoreFactory", "redisUrl", maskRedisUrl(redisUrl), "blobContainerName", tus_blobContainerName, "ttl(s)", ttlInSeconds)
 
 	redisOpts, err := redis.ParseURL(redisUrl)
 	if err != nil {

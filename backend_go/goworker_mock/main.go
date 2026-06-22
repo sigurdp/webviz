@@ -19,7 +19,8 @@ func main() {
 
 	tryDoingDummyBlobStoreWrite := true
 	if tryDoingDummyBlobStoreWrite {
-		redisUrl := "redis://redis-cache:6379"
+		redisPassword := mustEnv("WEBVIZ_REDIS_CACHE_PASSWORD")
+		redisUrl := fmt.Sprintf("redis://:%s@redis-cache:6379", redisPassword)
 		azureStorageConnectionString := mustEnv("AZURE_STORAGE_CONNECTION_STRING")
 		tempUserStoreFactory := utils.NewTempUserStoreFactory(redisUrl, azureStorageConnectionString, 60*60)
 
