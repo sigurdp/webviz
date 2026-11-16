@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -15,6 +16,7 @@ from webviz_core_utils.perf_metrics import PerfMetrics
 from webviz_core_utils.radix_utils import is_running_on_radix_platform
 from webviz_services.utils.authenticated_user import AuthenticatedUser
 
+from primary.middleware.encrypted_redis_session_store import EncryptedRedisSessionStore
 from primary import config
 
 from .redirect_validation import is_safe_redirect_target
@@ -436,3 +438,57 @@ def _save_token_cache_in_session(request_with_session: Request, token_cache: msa
 
 def _decode_jwt(jwt_str: str) -> dict:
     return jwt.decode(jwt_str, algorithms=["RS256"], options={"verify_signature": False})
+
+
+async def get_sumo_access_token_for_session_id(
+    session_id: str,
+    session_store: EncryptedRedisSessionStore,
+) -> tuple[str, int] | None:
+    """
+    Load a user session by its ID and acquire a fresh Sumo access token using the stored MSAL token cache.
+
+    Intended for internal use by worker callback endpoints — the caller has already validated the
+    worker's identity and consumed a one-time dispatch token.
+
+    Returns (access_token, expires_at_unix_timestamp) on success, None if the session is gone or
+    the token cannot be acquired (e.g. user has logged out and the session has been deleted).
+
+    Note: if MSAL uses the refresh token to produce a new access token, the updated cache is not
+    written back to Redis here. The session will be refreshed on the next normal user request.
+    """
+    raw: bytes = await session_store.read(session_id=session_id, lifetime=0)  # type: ignore[attr-defined]
+    if not raw:
+        LOGGER.warning("get_sumo_access_token_for_session_id(): session not found or expired")
+        return None
+
+    try:
+        session_data: dict = json.loads(raw)
+    except Exception:  # pylint: disable=broad-except
+        LOGGER.error("get_sumo_access_token_for_session_id(): failed to deserialize session data")
+        return None
+
+    token_cache_str: str | None = session_data.get("token_cache")
+    if not token_cache_str:
+        LOGGER.warning("get_sumo_access_token_for_session_id(): no token cache in session")
+        return None
+
+    token_cache = msal.SerializableTokenCache()
+    token_cache.deserialize(token_cache_str)
+
+    cca = _create_msal_confidential_client_app(token_cache)
+    accounts = cca.get_accounts()
+    if not accounts:
+        LOGGER.warning("get_sumo_access_token_for_session_id(): no accounts in token cache")
+        return None
+
+    # The force is for testing!!!!!!
+    force_refresh = True
+    token_dict = cca.acquire_token_silent(
+        scopes=config.RESOURCE_SCOPES_DICT["sumo"], account=accounts[0], force_refresh=force_refresh
+    )
+    if not token_dict or "access_token" not in token_dict:
+        LOGGER.warning("get_sumo_access_token_for_session_id(): acquire_token_silent failed")
+        return None
+
+    expires_at = int(time.time()) + int(token_dict.get("expires_in", 0))
+    return token_dict["access_token"], expires_at

@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 from typing import List
 
@@ -51,6 +53,16 @@ class EnforceLoggedInMiddleware:
 
             await starsessions.load_session(request)
             perf_metrics.record_lap("load-session")
+
+            LOGGER.info("====================")
+            session_id = starsessions.get_session_id(request)
+            LOGGER.info(f"EnforceLoggedInMiddleware - session_id: {session_id}")
+            #LOGGER.info(json.dumps(request.session, indent=4))  # type: ignore[no-untyped-call]
+            #LOGGER.info(request.scope["session_handler"])
+            #LOGGER.info(request.scope)
+            LOGGER.info("====================")
+
+            
 
             authenticated_user = AuthHelper.get_authenticated_user(request)
             perf_metrics.record_lap("get-auth-user")
