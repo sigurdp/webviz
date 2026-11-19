@@ -32,7 +32,7 @@ def create_router_for_acquire_access_token(
             raise HTTPException(status_code=400, detail="Invalid request")
 
         dispatch_token_store: DispatchTokenStore = DispatchTokenStoreSingleton.get_instance()
-        session_id = await dispatch_token_store.consume_async(token_request.dispatch_token)
+        session_id = await dispatch_token_store.get_session_id_async(token_request.dispatch_token)
         if session_id is None:
             raise HTTPException(status_code=401, detail="Invalid or expired dispatch token")
 

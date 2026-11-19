@@ -358,8 +358,7 @@ async def get_send_sb_msg(
     for i in range(count):
         with tracer.start_as_current_span(f"SubmittingDevTestMessageToQueue_{i}", kind=trace.SpanKind.PRODUCER):
 
-            dispatch_token = dispatch_token_store.generate_token()
-            await dispatch_token_store.store_async(dispatch_token, session_id)
+            dispatch_token = await dispatch_token_store.create_token_async(session_id)
 
             msg = DevTestMsg(
                 text=msg_text,
