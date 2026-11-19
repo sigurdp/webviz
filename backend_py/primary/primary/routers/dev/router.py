@@ -26,7 +26,7 @@ from webviz_services.user_grid3d_service.user_grid3d_service import (
 from webviz_services.service_exceptions import Service, ServiceUnavailableError, ServiceRequestError
 from webviz_services.utils.otel_span_tracing import start_otel_span_async
 from webviz_services.utils.task_meta_tracker import TaskState, get_task_meta_tracker_for_user
-from webviz_services.utils.dispatch_token_store import DispatchTokenStore
+from webviz_services.utils.dispatch_token_store import DispatchTokenStoreSingleton, DispatchTokenStore
 from webviz_services.platform.message_bus import MessageBusSingleton, MessageBus
 
 from primary import config
@@ -347,8 +347,10 @@ async def get_send_sb_msg(
     message_bus: MessageBus = MessageBusSingleton.get_instance()
     fernet = Fernet(config.SERVICE_BUS_PAYLOAD_FERNET_KEY)
 
-    dispatch_token_store: DispatchTokenStore = request.app.state.dispatch_token_store
+    dispatch_token_store: DispatchTokenStore = DispatchTokenStoreSingleton.get_instance()
     session_id = starsessions.get_session_id(request)
+    if session_id is None:
+        raise HTTPException(status_code=401, detail="No valid session found")
 
     task_tracker = get_task_meta_tracker_for_user(authenticated_user)
     my_task_ids: list[str] = []
@@ -357,7 +359,7 @@ async def get_send_sb_msg(
         with tracer.start_as_current_span(f"SubmittingDevTestMessageToQueue_{i}", kind=trace.SpanKind.PRODUCER):
 
             dispatch_token = dispatch_token_store.generate_token()
-            await dispatch_token_store.store(dispatch_token, session_id)
+            await dispatch_token_store.store_async(dispatch_token, session_id)
 
             msg = DevTestMsg(
                 text=msg_text,

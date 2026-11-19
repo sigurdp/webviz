@@ -18,7 +18,7 @@ from webviz_services.utils.task_meta_tracker import TaskMetaTrackerFactory
 from webviz_services.platform.azure_credentials import create_azure_credential
 from webviz_services.platform.azure_credentials import log_azure_credential_env_var_status
 from webviz_services.platform.message_bus import MessageBusSingleton
-from webviz_services.utils.dispatch_token_store import DispatchTokenStore
+from webviz_services.utils.dispatch_token_store import DispatchTokenStoreSingleton
 
 from primary.auth.auth_helper import AuthHelper
 from primary.auth.enforce_logged_in_middleware import EnforceLoggedInMiddleware
@@ -50,9 +50,9 @@ from primary.routers.timeseries.router import router as timeseries_router
 from primary.routers.vfp.router import router as vfp_router
 from primary.routers.well.router import router as well_router
 from primary.routers.well_completions.router import router as well_completions_router
-from primary.routers.internal.router import router as internal_router
 from primary.routers.persistence.router import router as persistence_router
 from primary.routers.tutorials.router import router as tutorials_router
+from primary.routers.internal.router import create_router_for_acquire_access_token
 from primary.services.tutorial_media.tutorial_media_signer import TutorialMediaSignerSingleton
 from primary.utils.azure_monitor_setup import setup_azure_monitor_telemetry_for_primary
 from primary.utils.exception_handlers import configure_service_level_exception_handlers
@@ -134,6 +134,7 @@ async def lifespan_handler_async(_fastapi_app: FastAPI) -> AsyncGenerator[None]:
 
     TaskMetaTrackerFactory.initialize(redis_url=config.REDIS_CACHE_URL)
     SumoFingerprinterFactory.initialize(redis_url=config.REDIS_CACHE_URL)
+    DispatchTokenStoreSingleton.initialize(redis_url=config.REDIS_AUTH_STORE_URL)
     if azure_credential is not None:
         TutorialMediaSignerSingleton.initialize(credential=azure_credential)
 
@@ -192,8 +193,6 @@ app.include_router(dev_router, prefix="/dev", tags=["dev"], include_in_schema=Fa
 app.include_router(persistence_router, prefix="/persistence", tags=["persistence"])
 app.include_router(tutorials_router, prefix="/tutorials", tags=["tutorials"])
 
-app.include_router(internal_router, prefix="/internal", tags=["internal"], include_in_schema=False)
-
 auth_helper = AuthHelper()
 app.include_router(auth_helper.router)
 app.include_router(general_router)
@@ -218,7 +217,7 @@ if config.PSEUDONYM_HMAC_KEY is not None:
     app.add_middleware(OtelSpanEndUserEnrichmentMiddleware, hmac_secret_key=config.PSEUDONYM_HMAC_KEY)
 
 # Add our custom middleware to enforce that user is logged in
-unprotected_paths = ["/logout", "/alive", "/openapi.json", "/internal/dispatch_sumo_access_token"]
+unprotected_paths = ["/logout", "/alive", "/openapi.json", "/internal/acquire_access_token"]
 app.add_middleware(EnforceLoggedInMiddleware, unprotected_paths=unprotected_paths)
 
 encrypted_session_store = EncryptedRedisSessionStore(
@@ -228,9 +227,9 @@ encrypted_session_store = EncryptedRedisSessionStore(
 )
 app.add_middleware(SessionMiddleware, store=encrypted_session_store)
 
-# !!!!!
-app.state.session_store = encrypted_session_store
-app.state.dispatch_token_store = DispatchTokenStore(config.REDIS_AUTH_STORE_URL)
+
+internal_router = create_router_for_acquire_access_token(encrypted_session_store)
+app.include_router(internal_router, prefix="/internal", tags=["internal"], include_in_schema=False)
 
 
 # Enrich telemetry spans with client address information (must run after ProxyHeadersMiddleware)

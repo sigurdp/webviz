@@ -29,5 +29,5 @@ class UserTaskMsgHeader(BaseModel):
 class DevTestMsg(BaseModel):
     text: NonEmptyStr
     encrypted_text: NonEmptyBytes
-    dispatch_token: NonEmptyStr | None
+    dispatch_token: str | None
     sleep_duration_s: float

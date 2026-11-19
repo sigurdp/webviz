@@ -440,7 +440,7 @@ def _decode_jwt(jwt_str: str) -> dict:
     return jwt.decode(jwt_str, algorithms=["RS256"], options={"verify_signature": False})
 
 
-async def get_sumo_access_token_for_session_id(
+async def get_sumo_access_token_for_session_id_async(
     session_id: str,
     session_store: EncryptedRedisSessionStore,
 ) -> tuple[str, int] | None:

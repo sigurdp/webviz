@@ -20,7 +20,7 @@ from webviz_services.utils.task_meta_tracker import TaskMetaTrackerFactory
 
 from .process_message import process_message_async
 from .worker_config import WorkerConfig, load_worker_config_from_env
-from .utils import message_decryption
+from .utils.payload_encryption_singleton import PayloadEncryptionSingleton
 from .utils.abort_signal import AbortSignal
 from .utils.worker_logging import configure_logging
 
@@ -228,7 +228,7 @@ async def run_app_async() -> None:
 
     TaskMetaTrackerFactory.initialize(redis_url=worker_config.redis_cache_url)
     HTTPX_ASYNC_CLIENT_WRAPPER.start()
-    message_decryption.initialize(worker_config.sb_payload_fernet_key)
+    PayloadEncryptionSingleton.initialize(worker_config.sb_payload_fernet_key)
 
     shutdown_event = _create_shutdown_event()
 
