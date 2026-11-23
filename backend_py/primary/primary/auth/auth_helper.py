@@ -454,24 +454,18 @@ async def get_sumo_access_token_for_session_id_async(
     This is not optimal from a performance perspective, as it may result in unnecessary token acquisitions,
     but it avoids race conditions and potential inconsistencies with the session store.
     """
-    raw: bytes = await session_store.read(session_id=session_id, lifetime=0)  # type: ignore[attr-defined]
-    if not raw:
-        LOGGER.error("get_sumo_access_token_for_session_id() - Session not found or expired")
+    session_dict = await _read_session_dict_by_id_async(session_id, session_store)
+    if session_dict is None:
+        LOGGER.error("get_sumo_access_token_for_session_id() - Cannot acquire token without session data")
         return None
 
-    try:
-        session_data: dict = json.loads(raw)
-    except Exception:  # pylint: disable=broad-except
-        LOGGER.error("get_sumo_access_token_for_session_id() - Failed to deserialize session data")
-        return None
-
-    token_cache_str: str | None = session_data.get("token_cache")
-    if not token_cache_str:
-        LOGGER.error("get_sumo_access_token_for_session_id() - No token cache in session")
+    serialized_token_cache: str | None = session_dict.get("token_cache")
+    if not serialized_token_cache:
+        LOGGER.error("get_sumo_access_token_for_session_id() - No token cache in session data")
         return None
 
     token_cache = msal.SerializableTokenCache()
-    token_cache.deserialize(token_cache_str)
+    token_cache.deserialize(serialized_token_cache)
 
     # We may want to expose this as a configurable parameter in the future, but for now go for 20min
     min_validity_s = 20 * 60
@@ -483,6 +477,30 @@ async def get_sumo_access_token_for_session_id_async(
     )
 
     return token_entry
+
+
+async def _read_session_dict_by_id_async(session_id: str, session_store: EncryptedRedisSessionStore) -> dict | None:
+    """
+    Reads and returns the session dictionary for the given session ID directly from the session store.
+    Returns None if the session is missing, expired, failed to decrypt, or is not a valid JSON object.
+    """
+    # Reads and decrypts the raw session data. Empty data can mean it is missing, has expired, or failed to decrypt.
+    raw_session_data = await session_store.read(session_id=session_id, lifetime=0)
+    if not raw_session_data:
+        LOGGER.error("_read_session_dict_by_id_async() - Session data missing, expired, or failed to decrypt")
+        return None
+
+    try:
+        session_dict = json.loads(raw_session_data)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        LOGGER.error("_read_session_dict_by_id_async() - Failed to deserialize session data")
+        return None
+
+    if not isinstance(session_dict, dict):
+        LOGGER.error("_read_session_dict_by_id_async() - Session data is not a JSON object")
+        return None
+
+    return session_dict
 
 
 def _acquire_sumo_token_with_wanted_validity(token_cache: msal.TokenCache, wanted_validity_s: int) -> TokenEntry | None:

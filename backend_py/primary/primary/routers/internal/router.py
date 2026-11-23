@@ -28,8 +28,8 @@ def create_router_for_acquire_access_token(
 
         try:
             token_request = payload_encryption.decrypt_pydantic_model(encrypted_body, AccessTokenRequest, ttl_s=120)
-        except (InvalidToken, ValidationError):
-            raise HTTPException(status_code=400, detail="Invalid request")
+        except (InvalidToken, ValidationError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid request") from exc
 
         dispatch_token_store: DispatchTokenStore = DispatchTokenStoreSingleton.get_instance()
         session_id = await dispatch_token_store.get_session_id_async(token_request.dispatch_token)
