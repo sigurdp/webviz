@@ -8,7 +8,7 @@ from webviz_services.utils.dispatch_token_store import DispatchTokenStoreSinglet
 from webviz_services.utils.payload_encryption import PayloadEncryption
 
 from primary import config
-from primary.auth.auth_helper import get_sumo_access_token_for_session_id_async
+from primary.auth.auth_helper import get_sumo_access_token_for_session_id_async, TokenEntry
 from primary.middleware.encrypted_redis_session_store import EncryptedRedisSessionStore
 
 LOGGER = logging.getLogger(__name__)
@@ -36,21 +36,18 @@ def create_router_for_acquire_access_token(
         if session_id is None:
             raise HTTPException(status_code=401, detail="Invalid or expired dispatch token")
 
-        token_result = await get_sumo_access_token_for_session_id_async(
-            session_id=session_id,
-            session_store=session_store,
+        token_entry: TokenEntry | None = await get_sumo_access_token_for_session_id_async(
+            session_id=session_id, session_store=session_store
         )
-        if token_result is None:
+        if token_entry is None:
             # Session gone (user logged out) or token cache invalid — treat as auth failure
             raise HTTPException(status_code=401, detail="Could not acquire Sumo token — session may have expired")
-
-        sumo_token, expires_at = token_result
 
         token_response = AccessTokenResponse(
             request_id=token_request.request_id,
             target_service=token_request.target_service,
-            access_token=sumo_token,
-            expires_at=expires_at,
+            access_token=token_entry.token,
+            expires_at=token_entry.expires_at,
         )
 
         encrypted_response_body = payload_encryption.encrypt_pydantic_model(token_response)

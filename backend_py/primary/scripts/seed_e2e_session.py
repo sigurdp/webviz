@@ -19,7 +19,7 @@ import sys
 import time
 
 from primary import config
-from primary.auth.auth_helper import _TokenEntry, _UserAuthInfo
+from primary.auth.auth_helper import TokenEntry, _UserAuthInfo
 from primary.middleware.encrypted_redis_session_store import EncryptedRedisSessionStore
 from webviz_services.sumo_access.sumo_client_factory import SENTINEL_ACCESS_TOKEN_FOR_TESTING
 
@@ -34,7 +34,7 @@ def _build_user_auth_info() -> _UserAuthInfo:
         user_name="e2e-test-user@webviz.test",
         user_identity_expires_at=expires_at,
         access_tokens={
-            "sumo": _TokenEntry(token=SENTINEL_ACCESS_TOKEN_FOR_TESTING, expires_at=expires_at),
+            "sumo": TokenEntry(token=SENTINEL_ACCESS_TOKEN_FOR_TESTING, expires_at=expires_at),
         },
         earliest_expiry_time=expires_at,
     )

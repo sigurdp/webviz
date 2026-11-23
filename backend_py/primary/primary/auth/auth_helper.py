@@ -10,6 +10,7 @@ import msal
 import starsessions
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import PlainTextResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ValidationError
 
 from webviz_core_utils.perf_metrics import PerfMetrics
@@ -27,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 _ResourceName: TypeAlias = Literal["graph", "sumo", "smda", "ssdl", "pdm"]
 
 
-class _TokenEntry(BaseModel):
+class TokenEntry(BaseModel):
     token: str
     expires_at: int  # Unix timestamp, seconds since epoch UTC
 
@@ -36,7 +37,7 @@ class _UserAuthInfo(BaseModel):
     user_id: str
     user_name: str
     user_identity_expires_at: int  # Unix timestamp when the user identity above (extracted from ID token) expires
-    access_tokens: dict[_ResourceName, _TokenEntry]
+    access_tokens: dict[_ResourceName, TokenEntry]
     earliest_expiry_time: int  # Earliest expiry time for the user info and of all tokens
 
     def to_authenticated_user(self) -> AuthenticatedUser:
@@ -211,9 +212,9 @@ class AuthHelper:
         return authenticated_user
 
 
-def _acquire_access_token_for_resource_scopes(
-    cca: msal.ConfidentialClientApplication, resource_name: _ResourceName, account: dict
-) -> _TokenEntry | None:
+def _acquire_access_token_for_resource(
+    cca: msal.ConfidentialClientApplication, resource_name: _ResourceName, account: dict, force_refresh: bool
+) -> TokenEntry | None:
     scopes_list: list[str] | None = None
     if resource_name == "graph":
         scopes_list = config.GRAPH_SCOPES
@@ -225,14 +226,14 @@ def _acquire_access_token_for_resource_scopes(
 
     # Earlier we used acquire_token_silent() here, but it doesn't give any feedback on why a call failed,
     # so we switched to acquire_token_silent_with_error() instead and log errors.
-    token_dict = cca.acquire_token_silent_with_error(scopes=scopes_list, account=account)
+    token_dict = cca.acquire_token_silent_with_error(scopes=scopes_list, account=account, force_refresh=force_refresh)
     if token_dict is None:
-        LOGGER.error(f"No token found in cache when acquiring token silently ({resource_name=}, {scopes_list=})")
+        LOGGER.error(f"MSAL returned no result for silent token acquisition ({resource_name=}, {scopes_list=})")
         return None
 
     if "error" in token_dict:
         LOGGER.error(
-            f"Error acquiring token silently ({resource_name=}, {scopes_list=}), error: {token_dict['error']}, error_description: {token_dict.get('error_description')}"
+            f"MSAL returned error for silent token acquisition ({resource_name=}, {scopes_list=}), error: {token_dict['error']}, error_description: {token_dict.get('error_description')}"
         )
         return None
 
@@ -248,7 +249,7 @@ def _acquire_access_token_for_resource_scopes(
         LOGGER.error(f"Error getting expiration time claim (exp) from access token ({resource_name=})")
         return None
 
-    return _TokenEntry(token=access_token, expires_at=expires_at)
+    return TokenEntry(token=access_token, expires_at=expires_at)
 
 
 def _acquire_refreshed_identity_and_tokens(
@@ -339,7 +340,7 @@ def _acquire_refreshed_identity_and_tokens(
     # Iterate over the resource names and get the access tokens for each of them
     resource_name: _ResourceName
     for resource_name in get_args(_ResourceName):
-        token_entry = _acquire_access_token_for_resource_scopes(cca, resource_name, account)
+        token_entry = _acquire_access_token_for_resource(cca, resource_name, account, force_refresh=False)
         if token_entry:
             new_auth_info.access_tokens[resource_name] = token_entry
 
@@ -441,54 +442,95 @@ def _decode_jwt(jwt_str: str) -> dict:
 
 
 async def get_sumo_access_token_for_session_id_async(
-    session_id: str,
-    session_store: EncryptedRedisSessionStore,
-) -> tuple[str, int] | None:
+    session_id: str, session_store: EncryptedRedisSessionStore
+) -> TokenEntry | None:
     """
-    Load a user session by its ID and acquire a fresh Sumo access token using the stored MSAL token cache.
+    Acquire a SUMO access token using the MSAL cache from the specified user session.
 
-    Intended for internal use by worker callback endpoints — the caller has already validated the
-    worker's identity and consumed a one-time dispatch token.
+    The caller must validate the dispatch token and authorize access to the session.
+    Returns a TokenEntry, or None if the session or token is unavailable.
 
-    Returns (access_token, expires_at_unix_timestamp) on success, None if the session is gone or
-    the token cannot be acquired (e.g. user has logged out and the session has been deleted).
-
-    Note: if MSAL uses the refresh token to produce a new access token, the updated cache is not
-    written back to Redis here. The session will be refreshed on the next normal user request.
+    Any changes to the MSAL cache are intentionally not written back to the session store.
+    This is not optimal from a performance perspective, as it may result in unnecessary token acquisitions,
+    but it avoids race conditions and potential inconsistencies with the session store.
     """
     raw: bytes = await session_store.read(session_id=session_id, lifetime=0)  # type: ignore[attr-defined]
     if not raw:
-        LOGGER.warning("get_sumo_access_token_for_session_id(): session not found or expired")
+        LOGGER.error("get_sumo_access_token_for_session_id() - Session not found or expired")
         return None
 
     try:
         session_data: dict = json.loads(raw)
     except Exception:  # pylint: disable=broad-except
-        LOGGER.error("get_sumo_access_token_for_session_id(): failed to deserialize session data")
+        LOGGER.error("get_sumo_access_token_for_session_id() - Failed to deserialize session data")
         return None
 
     token_cache_str: str | None = session_data.get("token_cache")
     if not token_cache_str:
-        LOGGER.warning("get_sumo_access_token_for_session_id(): no token cache in session")
+        LOGGER.error("get_sumo_access_token_for_session_id() - No token cache in session")
         return None
 
     token_cache = msal.SerializableTokenCache()
     token_cache.deserialize(token_cache_str)
 
-    cca = _create_msal_confidential_client_app(token_cache)
-    accounts = cca.get_accounts()
-    if not accounts:
-        LOGGER.warning("get_sumo_access_token_for_session_id(): no accounts in token cache")
-        return None
+    # We may want to expose this as a configurable parameter in the future, but for now go for 20min
+    min_validity_s = 20 * 60
 
-    # The force is for testing!!!!!!
-    force_refresh = True
-    token_dict = cca.acquire_token_silent(
-        scopes=config.RESOURCE_SCOPES_DICT["sumo"], account=accounts[0], force_refresh=force_refresh
+    # The process of acquiring an access token via MSAL is currently synchronous, so run it in
+    # thread pool to avoid blocking the event loop.
+    token_entry: TokenEntry | None = await run_in_threadpool(
+        _acquire_sumo_token_with_wanted_validity, token_cache, min_validity_s
     )
-    if not token_dict or "access_token" not in token_dict:
-        LOGGER.warning("get_sumo_access_token_for_session_id(): acquire_token_silent failed")
+
+    return token_entry
+
+
+def _acquire_sumo_token_with_wanted_validity(token_cache: msal.TokenCache, wanted_validity_s: int) -> TokenEntry | None:
+    """
+    This method attempts to acquire a Sumo access token using the provided MSAL token cache, trying to ensure that the
+    token meets the desired validity period specified by wanted_validity_s. If the token from the cache does not
+    satisfy this requirement, the method will attempt to force a refresh to obtain a new token.
+
+    Note that the requested validity period is a "soft" requirement: the method will try to obtain a token that meets
+    it, but if it does not succeed, the method will still return the best token it could acquire.
+    """
+    perf_metrics = PerfMetrics()
+
+    cca = _create_msal_confidential_client_app(token_cache)
+    perf_metrics.record_lap("create-cca")
+
+    account_list = cca.get_accounts()
+    account = account_list[0] if account_list else None
+    if not account:
+        LOGGER.error("_acquire_sumo_token_with_wanted_validity() - No accounts found in MSAL token cache")
         return None
 
-    expires_at = int(time.time()) + int(token_dict.get("expires_in", 0))
-    return token_dict["access_token"], expires_at
+    token_entry: TokenEntry | None = _acquire_access_token_for_resource(cca, "sumo", account, force_refresh=False)
+    if not token_entry:
+        LOGGER.error("_acquire_sumo_token_with_wanted_validity() - Failed to acquire token for resource 'sumo'")
+        return None
+    perf_metrics.record_lap("acquire")
+
+    # Check if the acquired token meets the target minimum validity requirement
+    # If it doesn't, try to force a refresh
+    if wanted_validity_s > 0 and token_entry.expires_at <= time.time() + wanted_validity_s:
+        LOGGER.debug(
+            f"_acquire_sumo_token_with_wanted_validity() - Token does not meet wanted validity ({wanted_validity_s} seconds), trying force refresh"
+        )
+        token_entry = _acquire_access_token_for_resource(cca, "sumo", account, force_refresh=True)
+        if not token_entry:
+            LOGGER.error(
+                "_acquire_sumo_token_with_wanted_validity() - Failed to acquire token for resource 'sumo' with force_refresh"
+            )
+            return None
+
+        perf_metrics.record_lap("acquire-force")
+
+        if token_entry.expires_at <= time.time() + wanted_validity_s:
+            LOGGER.warning(
+                f"_acquire_sumo_token_with_wanted_validity() - Got token, but it does not meet wanted validity ({wanted_validity_s} seconds)"
+            )
+
+    LOGGER.debug(f"_acquire_sumo_token_with_wanted_validity() - Took: {perf_metrics.to_string()}")
+
+    return token_entry

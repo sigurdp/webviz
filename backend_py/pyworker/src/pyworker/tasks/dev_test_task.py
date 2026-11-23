@@ -40,7 +40,8 @@ async def dev_test_task_async(sb_msg: ServiceBusReceivedMessage) -> None:
     if msg.dispatch_token:
         sumo_token, expires_at = await fetch_sumo_access_token_async(payload_encryption, msg.dispatch_token)
         expires_at_human = datetime.datetime.fromtimestamp(expires_at, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        _logger.info(f"Got Sumo token for {sb_msg.sequence_number=}, token expires_at={expires_at} ({expires_at_human})")
+        current_time_human = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        _logger.info(f"Got Sumo token for {sb_msg.sequence_number=}, token expires_at={expires_at} ({expires_at_human}, current time={current_time_human})")
 
 
     # Sleep a bit to simulate work
