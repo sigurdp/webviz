@@ -4,6 +4,7 @@ import signal
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import httpx
 from azure.servicebus.aio import ServiceBusClient, ServiceBusReceiver, AutoLockRenewer
 from azure.servicebus import ServiceBusReceivedMessage
 from azure.servicebus.exceptions import ServiceBusError
@@ -16,11 +17,14 @@ from webviz_core_utils.service_bus_destination import ensure_fq_sb_namespace
 from webviz_services.platform.azure_credentials import log_azure_credential_env_var_status, create_azure_credential
 from webviz_services.services_config import ServicesConfig, init_services_config
 from webviz_services.utils.httpx_async_client_wrapper import HTTPX_ASYNC_CLIENT_WRAPPER
+from webviz_services.utils.payload_encryption import PayloadEncryption
 from webviz_services.utils.task_meta_tracker import TaskMetaTrackerFactory
 
 from .process_message import process_message_async
 from .worker_config import WorkerConfig, load_worker_config_from_env
-from .utils.payload_encryption_singleton import PayloadEncryptionSingleton
+from .task_services import TaskServices
+
+from .utils.sumo_access_token_fetcher import SumoAccessTokenFetcher
 from .utils.abort_signal import AbortSignal
 from .utils.worker_logging import configure_logging
 
@@ -75,6 +79,32 @@ async def _wait_for_emulator_ready_async(sb_client: ServiceBusClient, queue_name
     raise RuntimeError("Service Bus emulator did not become ready in time")
 
 
+async def _wait_for_primary_ready_async(primary_backend_url: str, shutdown_event: asyncio.Event) -> bool:
+    backend_alive_endpoint = f"{primary_backend_url.rstrip('/')}/api/alive"
+    attempt = 0
+
+    while not shutdown_event.is_set():
+        attempt += 1
+        try:
+            response = await HTTPX_ASYNC_CLIENT_WRAPPER.client.get(
+                backend_alive_endpoint,
+                timeout=2.0,
+            )
+            response.raise_for_status()
+            if not shutdown_event.is_set():
+                _logger.info(f"Primary backend is ready")
+                return True
+        except httpx.HTTPError as exc:
+            _logger.warning(f"Waiting for primary backend to become ready ({attempt=}): {repr(exc)}")
+
+        try:
+            await asyncio.wait_for(shutdown_event.wait(), timeout=5.0)
+        except TimeoutError:
+            pass
+
+    return False
+
+
 def _create_shutdown_event() -> asyncio.Event:
     shutdown_event = asyncio.Event()
 
@@ -120,7 +150,13 @@ async def _authenticated_sb_client_async(config: WorkerConfig) -> AsyncGenerator
             yield client
 
 
-async def _run_worker_loop_async(config: WorkerConfig, shutdown_event: asyncio.Event) -> None:
+async def _run_worker_loop_async(
+    config: WorkerConfig, task_services: TaskServices, shutdown_event: asyncio.Event
+) -> None:
+
+    if not await _wait_for_primary_ready_async(config.primary_backend_url, shutdown_event):
+        return
+
     max_concurrency = max(1, config.max_concurrent_tasks)
 
     _logger.info(f"Worker will receive messages from: queue={config.sb_queue_name}, namespace={config.sb_namespace}")
@@ -177,7 +213,7 @@ async def _run_worker_loop_async(config: WorkerConfig, shutdown_event: asyncio.E
 
                     # Spawn each message as its own task so they are processed concurrently.
                     for msg in messages:
-                        task = asyncio.create_task(process_message_async(sb_receiver, msg, abort_signal))
+                        task = asyncio.create_task(process_message_async(sb_receiver, msg, task_services, abort_signal))
                         in_flight_tasks.add(task)
 
                         # The discard callback is used to remove the task from the in_flight_tasks set when it is done
@@ -228,11 +264,17 @@ async def run_app_async() -> None:
 
     TaskMetaTrackerFactory.initialize(redis_url=worker_config.redis_cache_url)
     HTTPX_ASYNC_CLIENT_WRAPPER.start()
-    PayloadEncryptionSingleton.initialize(worker_config.sb_payload_fernet_key)
+
+    payload_encryption = PayloadEncryption(worker_config.sb_payload_fernet_key)
+    sumo_access_token_fetcher = SumoAccessTokenFetcher(worker_config.primary_backend_url, payload_encryption)
+    task_services = TaskServices(
+        payload_encryption=payload_encryption,
+        sumo_access_token_fetcher=sumo_access_token_fetcher,
+    )
 
     shutdown_event = _create_shutdown_event()
 
     try:
-        await _run_worker_loop_async(worker_config, shutdown_event)
+        await _run_worker_loop_async(worker_config, task_services, shutdown_event)
     finally:
         await HTTPX_ASYNC_CLIENT_WRAPPER.stop_async()

@@ -11,6 +11,7 @@ from webviz_server_schemas.pyworker.messages import WorkerOperation
 
 from .utils.worker_logging import LogScope
 from .utils.abort_signal import AbortSignal
+from .task_services import TaskServices
 from .task_exceptions import TaskFailedError, TaskDeferredError, TaskAbortedError, TaskInternalError
 from .tasks.dev_test_task import dev_test_task_async
 
@@ -20,7 +21,10 @@ _tracer = trace.get_tracer(__name__)
 
 # pylint: disable-next=too-many-statements
 async def process_message_async(
-    receiver: ServiceBusReceiver, msg: ServiceBusReceivedMessage, _abort_signal: AbortSignal
+    receiver: ServiceBusReceiver,
+    msg: ServiceBusReceivedMessage,
+    task_services: TaskServices,
+    _abort_signal: AbortSignal,
 ) -> None:
     """
     Processes a single Service Bus message, dispatching to the appropriate handler based on the
@@ -45,7 +49,7 @@ async def process_message_async(
             try:
                 match worker_op:
                     case WorkerOperation.DEV_TEST:
-                        await dev_test_task_async(msg)
+                        await dev_test_task_async(msg, task_services)
 
                     case _:
                         err_msg = f"Unknown worker operation: {worker_op}"
