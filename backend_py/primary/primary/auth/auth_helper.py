@@ -468,12 +468,12 @@ async def get_sumo_access_token_for_session_id_async(
     token_cache.deserialize(serialized_token_cache)
 
     # We may want to expose this as a configurable parameter in the future, but for now go for 20min
-    min_validity_s = 20 * 60
+    wanted_validity_s = 20 * 60
 
     # The process of acquiring an access token via MSAL is currently synchronous, so run it in
     # thread pool to avoid blocking the event loop.
     token_entry: TokenEntry | None = await run_in_threadpool(
-        _acquire_sumo_token_with_wanted_validity, token_cache, min_validity_s
+        _acquire_token_with_validity, token_cache, "sumo", wanted_validity_s
     )
 
     return token_entry
@@ -503,7 +503,9 @@ async def _read_session_dict_by_id_async(session_id: str, session_store: Encrypt
     return session_dict
 
 
-def _acquire_sumo_token_with_wanted_validity(token_cache: msal.TokenCache, wanted_validity_s: int) -> TokenEntry | None:
+def _acquire_token_with_validity(
+    token_cache: msal.TokenCache, resource_name: _ResourceName, wanted_validity_s: int
+) -> TokenEntry | None:
     """
     This method attempts to acquire a Sumo access token using the provided MSAL token cache, trying to ensure that the
     token meets the desired validity period specified by wanted_validity_s. If the token from the cache does not
@@ -520,35 +522,36 @@ def _acquire_sumo_token_with_wanted_validity(token_cache: msal.TokenCache, wante
     account_list = cca.get_accounts()
     account = account_list[0] if account_list else None
     if not account:
-        LOGGER.error("_acquire_sumo_token_with_wanted_validity() - No accounts found in MSAL token cache")
+        LOGGER.error("_acquire_token_with_validity() - No accounts found in MSAL token cache")
         return None
 
-    token_entry: TokenEntry | None = _acquire_access_token_for_resource(cca, "sumo", account, force_refresh=False)
-    if not token_entry:
-        LOGGER.error("_acquire_sumo_token_with_wanted_validity() - Failed to acquire token for resource 'sumo'")
+    token: TokenEntry | None = _acquire_access_token_for_resource(cca, resource_name, account, force_refresh=False)
+    if not token:
+        LOGGER.error(f"_acquire_token_with_validity() - Failed to acquire token for '{resource_name}'")
         return None
+
     perf_metrics.record_lap("acquire")
 
     # Check if the acquired token meets the target minimum validity requirement
     # If it doesn't, try to force a refresh
-    if wanted_validity_s > 0 and token_entry.expires_at <= time.time() + wanted_validity_s:
+    if wanted_validity_s > 0 and token.expires_at <= time.time() + wanted_validity_s:
         LOGGER.debug(
-            f"_acquire_sumo_token_with_wanted_validity() - Token does not meet wanted validity ({wanted_validity_s} seconds), trying force refresh"
+            f"_acquire_token_with_validity() - Token for '{resource_name}' does not meet wanted validity ({wanted_validity_s}s), trying force refresh"
         )
-        token_entry = _acquire_access_token_for_resource(cca, "sumo", account, force_refresh=True)
-        if not token_entry:
-            LOGGER.error(
-                "_acquire_sumo_token_with_wanted_validity() - Failed to acquire token for resource 'sumo' with force_refresh"
-            )
-            return None
-
+        forced_token_entry = _acquire_access_token_for_resource(cca, resource_name, account, force_refresh=True)
         perf_metrics.record_lap("acquire-force")
-
-        if token_entry.expires_at <= time.time() + wanted_validity_s:
+        if forced_token_entry:
+            token = forced_token_entry
+        else:
             LOGGER.warning(
-                f"_acquire_sumo_token_with_wanted_validity() - Got token, but it does not meet wanted validity ({wanted_validity_s} seconds)"
+                f"_acquire_token_with_validity() - Force refresh failed for '{resource_name}', using the initial token"
             )
 
-    LOGGER.debug(f"_acquire_sumo_token_with_wanted_validity() - Took: {perf_metrics.to_string()}")
+        if token.expires_at <= time.time() + wanted_validity_s:
+            LOGGER.warning(
+                f"_acquire_token_with_validity() - Got token for '{resource_name}', but it does not meet wanted validity ({wanted_validity_s}s)"
+            )
 
-    return token_entry
+    LOGGER.debug(f"_acquire_token_with_validity() - Got token for '{resource_name}' in: {perf_metrics.to_string()}")
+
+    return token

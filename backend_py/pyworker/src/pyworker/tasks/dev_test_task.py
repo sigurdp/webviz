@@ -32,9 +32,13 @@ async def dev_test_task_async(sb_msg: ServiceBusReceivedMessage, services: TaskS
     sumo_token: str | None = None
     if msg.dispatch_token:
         sumo_token, expires_at = await services.sumo_access_token_fetcher.fetch_token_async(msg.dispatch_token)
-        expires_at_human = datetime.datetime.fromtimestamp(expires_at, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        current_time_human = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        _logger.info(f"Got Sumo token for {sb_msg.sequence_number=}, token expires_at={expires_at} ({expires_at_human}, current time={current_time_human})")
+
+        fmt = "%Y-%m-%d %H:%M:%S UTC"
+        expires_at_human = datetime.datetime.fromtimestamp(expires_at, tz=datetime.timezone.utc).strftime(fmt)
+        current_time_human = datetime.datetime.now(datetime.timezone.utc).strftime(fmt)
+        _logger.info(
+            f"Got Sumo token for {sb_msg.sequence_number=}, token expires_at={expires_at} ({expires_at_human}, current time={current_time_human})"
+        )
 
     # Sleep a bit to simulate work
     _logger.info(f"dev_test_task_async(): Sleeping {msg.sleep_duration_s} seconds to simulate fake processing...")
@@ -44,4 +48,6 @@ async def dev_test_task_async(sb_msg: ServiceBusReceivedMessage, services: TaskS
         _logger.info("dev_test_task_async(): Crashing as requested by message")
         raise RuntimeError("Intentional crash triggered by 'crash' message text")
 
-    _logger.info(f"dev_test_task_async(): Fake processing done {sb_msg.sequence_number=}, had_sumo_token={sumo_token is not None}")
+    _logger.info(
+        f"dev_test_task_async(): Fake processing done {sb_msg.sequence_number=}, had_sumo_token={sumo_token is not None}"
+    )
