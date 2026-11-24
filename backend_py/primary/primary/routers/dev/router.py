@@ -358,7 +358,11 @@ async def get_send_sb_msg(
     for i in range(count):
         with tracer.start_as_current_span(f"SubmittingDevTestMessageToQueue_{i}", kind=trace.SpanKind.PRODUCER):
 
-            dispatch_token = await dispatch_token_store.create_token_async(session_id)
+            message_ttl_s = 60
+            dispatch_ttl_s = message_ttl_s + 10
+            task_ttl_s = 2 # Intentionally short to trigger timeout for testing
+
+            dispatch_token = await dispatch_token_store.create_token_async(session_id, dispatch_ttl_s)
 
             msg = DevTestMsg(
                 text=msg_text,
@@ -367,13 +371,13 @@ async def get_send_sb_msg(
                 sleep_duration_s=5,
             )
 
-            sb_msg = ServiceBusMessage(subject=WorkerOperation.DEV_TEST, body=msg.model_dump_json())
+            sb_msg = ServiceBusMessage(subject=WorkerOperation.DEV_TEST, body=msg.model_dump_json(), time_to_live=message_ttl_s)
             await message_bus.send_to_queue_async(queue_name=queue_name, message=sb_msg)
 
             task_id = task_tracker.generate_task_id("testTaskId")
             my_task_ids.append(task_id)
 
-            task_meta = await task_tracker.register_task_async(task_id, ttl_s=2)
+            task_meta = await task_tracker.register_task_async(task_id, ttl_s=task_ttl_s)
             if task_meta.state != TaskState.PENDING:
                 LOGGER.error(f"Task {task_id} is not in PENDING state ({task_meta.state=})")
 

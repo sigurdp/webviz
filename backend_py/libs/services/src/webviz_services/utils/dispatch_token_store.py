@@ -7,7 +7,6 @@ from redis.asyncio import Redis
 LOGGER = logging.getLogger(__name__)
 
 _REDIS_KEY_PREFIX = "dispatch_token"
-_DISPATCH_TOKEN_TTL_SECONDS = 4 * 3600  # Must cover expected queue wait, execution and retries.
 
 
 class DispatchTokenStore:
@@ -24,12 +23,12 @@ class DispatchTokenStore:
     def __init__(self, redis_url: str) -> None:
         self._redis: Redis = Redis.from_url(redis_url)
 
-    async def create_token_async(self, session_id: str) -> str:
+    async def create_token_async(self, session_id: str, ttl_s: int) -> str:
         new_dispatch_token = secrets.token_urlsafe(32)
         data = json.dumps({"session_id": session_id})
 
         redis_key = f"{_REDIS_KEY_PREFIX}:{new_dispatch_token}"
-        await self._redis.set(redis_key, data, ex=_DISPATCH_TOKEN_TTL_SECONDS)
+        await self._redis.set(redis_key, data, ex=ttl_s)
 
         return new_dispatch_token
 
