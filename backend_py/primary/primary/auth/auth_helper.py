@@ -460,7 +460,7 @@ async def get_sumo_access_token_for_session_id_async(
         return None
 
     serialized_token_cache: str | None = session_dict.get("token_cache")
-    if not serialized_token_cache:
+    if not isinstance(serialized_token_cache, str) or not serialized_token_cache:
         LOGGER.error("get_sumo_access_token_for_session_id() - No token cache in session data")
         return None
 

@@ -6,7 +6,7 @@ from redis.asyncio import Redis
 
 LOGGER = logging.getLogger(__name__)
 
-_REDIS_KEY_PREFIX = "dispatch-token"
+_REDIS_KEY_PREFIX = "dispatch_token"
 _DISPATCH_TOKEN_TTL_SECONDS = 4 * 3600  # Must cover expected queue wait, execution and retries.
 
 
