@@ -360,7 +360,7 @@ async def get_send_sb_msg(
 
             message_ttl_s = 60
             dispatch_ttl_s = message_ttl_s + 10
-            task_ttl_s = 2 # Intentionally short to trigger timeout for testing
+            task_ttl_s = 2  # Intentionally short to trigger timeout for testing
 
             dispatch_token = await dispatch_token_store.create_token_async(session_id, dispatch_ttl_s)
 
@@ -371,7 +371,11 @@ async def get_send_sb_msg(
                 sleep_duration_s=5,
             )
 
-            sb_msg = ServiceBusMessage(subject=WorkerOperation.DEV_TEST, body=msg.model_dump_json(), time_to_live=message_ttl_s)
+            sb_msg = ServiceBusMessage(
+                subject=WorkerOperation.DEV_TEST,
+                body=msg.model_dump_json(),
+                time_to_live=datetime.timedelta(seconds=message_ttl_s),
+            )
             await message_bus.send_to_queue_async(queue_name=queue_name, message=sb_msg)
 
             task_id = task_tracker.generate_task_id("testTaskId")
